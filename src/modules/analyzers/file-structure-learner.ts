@@ -125,6 +125,7 @@ export class FileStructureLearner {
     // 根据目录名判断
     if (dirName.includes("component")) return "组件";
     if (dirName.includes("hook")) return "Hooks";
+    if (dirName.includes("composable")) return "逻辑复用（Vue）";
     if (dirName.includes("util") || dirName.includes("helper")) return "工具";
     if (dirName.includes("type") || dirName.includes("interface")) return "类型";
     if (dirName.includes("style") || dirName.includes("css")) return "样式";
@@ -136,6 +137,9 @@ export class FileStructureLearner {
     if (dirName.includes("config")) return "配置";
     if (dirName.includes("script")) return "脚本";
     if (dirName.includes("test") || dirName.includes("__tests__")) return "测试";
+    if (dirName.includes("directive")) return "自定义指令";
+    if (dirName.includes("plugin")) return "插件注册";
+    if (dirName.includes("guard")) return "路由守卫";
 
     // 根据文件内容判断
     const extensions = files.map((f) => path.extname(f));

@@ -404,10 +404,16 @@ export class DeepDirectoryAnalyzer {
     const dirParts = dirPath.split(path.sep).filter(Boolean);
     const parentDir = dirParts.length >= 2 ? dirParts[dirParts.length - 2] : null;
 
+    // ========== 如果目录名本身就是明确的类别词，优先识别（在容器目录检查之前） ==========
+    const directCategory = this.getCategoryName(dirName);
+    if (directCategory) {
+      return directCategory;
+    }
+
     // ========== 容器目录处理（不进行职能分析，但仍保留在目录树中） ==========
-    // v1.9: src、app、source 等容器目录不标识职能，但文件夹结构要分析
-    // 注意：lib 不在此列表中，lib 目录会进行正常的职能分析
-    const containerDirs = ["src", "source", "sources", "app", "apps"];
+    // v1.9: app、source 等容器目录不标识职能，但文件夹结构要分析
+    // 注意：src 和 lib 不在此列表中，它们会进行正常的职能分析
+    const containerDirs = ["source", "sources", "app", "apps"];
     if (containerDirs.includes(dirName)) {
       return ""; // 返回空字符串，表示不标识职能
     }
@@ -440,12 +446,6 @@ export class DeepDirectoryAnalyzer {
     }
     if (normalizedPath.includes("/assets/") && normalizedPath.includes("/public/")) {
       return "资源文件";
-    }
-
-    // 如果目录名本身就是明确的类别词，直接返回类别含义，避免被业务/依赖覆盖
-    const directCategory = this.getCategoryName(dirName);
-    if (directCategory) {
-      return directCategory;
     }
 
     // ========== 第一阶段：依赖关联判断（最高优先级） ==========
@@ -683,14 +683,14 @@ export class DeepDirectoryAnalyzer {
       view: "页面",
       utils: "工具",
       utilities: "工具",
-      helpers: "工具",
-      helper: "工具",
-      scripts: "脚本",
-      script: "脚本",
-      api: "API",
-      apis: "API",
-      services: "API 服务",
-      service: "API 服务",
+      helpers: "辅助函数",
+      helper: "辅助函数",
+      scripts: "自动化脚本",
+      script: "自动化脚本",
+      api: "接口文件",
+      apis: "接口文件",
+      services: "服务封装",
+      service: "服务封装",
       i18n: "国际化",
       locale: "国际化",
       locales: "国际化",
@@ -715,28 +715,37 @@ export class DeepDirectoryAnalyzer {
       repositories: "数据仓库",
       repository: "数据仓库",
       repo: "数据仓库",
-      routes: "路由",
-      route: "路由",
-      routers: "路由",
-      router: "路由",
+      routes: "路由配置",
+      route: "路由配置",
+      routers: "路由配置",
+      router: "路由配置",
+      composables: "逻辑复用工具",
+      composable: "逻辑复用工具",
+      plugins: "插件注册",
+      plugin: "插件注册",
+      directives: "自定义指令",
+      directive: "自定义指令",
+      guards: "路由守卫",
+      guard: "路由守卫",
       middleware: "中间件",
       middlewares: "中间件",
+      src: "源代码",
       layouts: "布局",
       layout: "布局",
-      features: "功能模块",
-      feature: "功能模块",
-      modules: "功能模块",
-      module: "功能模块",
+      features: "业务模块",
+      feature: "业务模块",
+      modules: "业务模块",
+      module: "业务模块",
       shared: "共享",
       common: "公共文件",
       commons: "公共文件",
-      config: "配置",
-      configs: "配置",
+      config: "配置文件",
+      configs: "配置文件",
       test: "测试",
       tests: "测试",
       __tests__: "测试",
-      consts: "常量",
-      constants: "常量",
+      consts: "固定常量",
+      constants: "固定常量",
       lib: "库",
       libs: "库",
       public: "公共资源",
@@ -782,7 +791,12 @@ export class DeepDirectoryAnalyzer {
       "controllers", "controller",
       "repositories", "repository", "repo",
       "routes", "route", "routers", "router",
+      "composables", "composable",
+      "plugins", "plugin",
+      "directives", "directive",
+      "guards", "guard",
       "middleware", "middlewares",
+      "src",
       "layouts", "layout",
       "features", "feature", "modules", "module",
       "shared", "common", "commons",
@@ -810,14 +824,23 @@ export class DeepDirectoryAnalyzer {
       views: "页面",
       utils: "工具",
       utilities: "工具",
-      helpers: "工具",
-      helper: "工具",
-      scripts: "脚本",
-      script: "脚本",
-      api: "API",
-      apis: "API",
-      services: "API 服务",
+      helpers: "辅助函数",
+      helper: "辅助函数",
+      scripts: "自动化脚本",
+      script: "自动化脚本",
+      api: "接口文件",
+      apis: "接口文件",
+      services: "服务封装",
+      service: "服务封装",
       hooks: "Hooks",
+      composables: "逻辑复用工具",
+      composable: "逻辑复用工具",
+      plugins: "插件注册",
+      plugin: "插件注册",
+      directives: "自定义指令",
+      directive: "自定义指令",
+      guards: "路由守卫",
+      guard: "路由守卫",
       style: "样式",
       styles: "样式",
       store: "状态管理",
@@ -826,16 +849,22 @@ export class DeepDirectoryAnalyzer {
       models: "数据模型",
       controllers: "控制器",
       repositories: "数据仓库",
-      routes: "路由",
+      routes: "路由配置",
+      route: "路由配置",
+      routers: "路由配置",
+      router: "路由配置",
       middleware: "中间件",
+      middlewares: "中间件",
       layouts: "布局",
-      features: "功能模块",
-      modules: "功能模块",
+      features: "业务模块",
+      modules: "业务模块",
       shared: "共享",
       common: "公共文件",
       commons: "公共文件",
-      consts: "常量",
-      constants: "常量",
+      consts: "固定常量",
+      constants: "固定常量",
+      config: "配置文件",
+      configs: "配置文件",
       lib: "库",
       libs: "库",
       public: "公共资源",
@@ -848,6 +877,7 @@ export class DeepDirectoryAnalyzer {
       protos: "协议定义",
       projects: "项目",
       project: "项目",
+      src: "源代码",
     };
 
     return categoryMap[dirName.toLowerCase()] || null;
