@@ -672,100 +672,151 @@ export class DeepDirectoryAnalyzer {
    * 第一阶段辅助：基于类别名称推断
    */
   private inferByCategoryName(dirName: string, dirPath: string): string | null {
-    // 通用类别词映射
+    // 通用类别词映射（与 getCategoryName 保持一致）
     const categoryMap: Record<string, string> = {
-      components: "组件",
-      component: "组件",
-      cmp: "组件",
+      // 基础目录
+      src: "源码",
+      app: "应用入口",
+      public: "公共资源",
+      static: "静态资源",
+      assets: "构建资源",
+      // 组件和页面
+      components: "通用组件",
+      component: "通用组件",
+      cmp: "通用组件",
       pages: "页面",
       page: "页面",
-      views: "页面",
-      view: "页面",
-      utils: "工具",
-      utilities: "工具",
-      helpers: "辅助函数",
-      helper: "辅助函数",
-      scripts: "自动化脚本",
-      script: "自动化脚本",
-      api: "接口文件",
-      apis: "接口文件",
-      services: "服务封装",
-      service: "服务封装",
-      i18n: "国际化",
-      locale: "国际化",
-      locales: "国际化",
-      hooks: "Hooks",
-      hook: "Hooks",
-      style: "样式",
-      styles: "样式",
-      css: "样式",
-      scss: "样式",
-      store: "状态管理",
-      stores: "状态管理",
-      state: "状态管理",
-      types: "类型定义",
-      type: "类型定义",
-      interfaces: "类型定义",
-      models: "数据模型",
-      model: "数据模型",
-      entities: "数据模型",
-      entity: "数据模型",
-      controllers: "控制器",
-      controller: "控制器",
-      repositories: "数据仓库",
-      repository: "数据仓库",
-      repo: "数据仓库",
-      routes: "路由配置",
-      route: "路由配置",
-      routers: "路由配置",
-      router: "路由配置",
-      composables: "逻辑复用工具",
-      composable: "逻辑复用工具",
-      plugins: "插件注册",
-      plugin: "插件注册",
-      directives: "自定义指令",
-      directive: "自定义指令",
-      guards: "路由守卫",
-      guard: "路由守卫",
-      middleware: "中间件",
-      middlewares: "中间件",
-      src: "源代码",
+      views: "视图",
+      view: "视图",
       layouts: "布局",
       layout: "布局",
-      features: "业务模块",
-      feature: "业务模块",
+      // 样式
+      styles: "样式",
+      style: "样式",
+      css: "样式",
+      scss: "样式",
+      // 逻辑复用
+      hooks: "逻辑复用",
+      hook: "逻辑复用",
+      composables: "组合逻辑",
+      composable: "组合逻辑",
+      // 工具和辅助
+      utils: "工具函数",
+      utilities: "工具函数",
+      helpers: "辅助函数",
+      helper: "辅助函数",
+      tools: "工具",
+      // 常量和配置
+      constants: "常量",
+      consts: "常量",
+      config: "配置",
+      configs: "配置",
+      // 服务和接口
+      services: "服务层",
+      service: "服务层",
+      api: "接口定义",
+      apis: "接口定义",
+      // 状态管理
+      store: "状态管理",
+      stores: "状态管理",
+      state: "状态",
+      // 路由
+      router: "路由",
+      routers: "路由",
+      routes: "路由表",
+      route: "路由表",
+      // 业务模块
       modules: "业务模块",
       module: "业务模块",
+      features: "功能模块",
+      feature: "功能模块",
+      // 数据模型
+      models: "数据模型",
+      model: "数据模型",
+      entities: "领域实体",
+      entity: "领域实体",
+      // 类型定义
+      types: "类型定义",
+      type: "类型定义",
+      interfaces: "接口定义",
+      interface: "接口定义",
+      enums: "枚举",
+      enum: "枚举",
+      // 后端相关
+      controllers: "控制层",
+      controller: "控制层",
+      middlewares: "中间件",
+      middleware: "中间件",
+      guards: "权限校验",
+      guard: "权限校验",
+      policies: "权限策略",
+      policy: "权限策略",
+      providers: "服务提供",
+      provider: "服务提供",
+      adapters: "适配层",
+      adapter: "适配层",
+      repositories: "数据访问",
+      repository: "数据访问",
+      repo: "数据访问",
+      // Web 相关
+      directives: "指令",
+      directive: "指令",
+      plugins: "插件",
+      plugin: "插件",
+      // 结构定义和校验
+      schemas: "结构定义",
+      schema: "结构定义",
+      validators: "校验",
+      validator: "校验",
+      dto: "传输对象",
+      // 测试相关
+      tests: "测试",
+      test: "测试",
+      __tests__: "测试",
+      e2e: "端到端测试",
+      mocks: "模拟数据",
+      mock: "模拟数据",
+      __mocks__: "模拟数据",
+      fixtures: "测试数据",
+      fixture: "测试数据",
+      // 脚本和文档
+      scripts: "脚本",
+      script: "脚本",
+      docs: "文档",
+      doc: "文档",
+      // 日志和临时
+      logs: "日志",
+      log: "日志",
+      tmp: "临时文件",
+      temp: "临时文件",
+      // 构建产物
+      build: "构建产物",
+      dist: "发布产物",
+      // 其他
       shared: "共享",
       common: "公共文件",
       commons: "公共文件",
-      config: "配置文件",
-      configs: "配置文件",
-      test: "测试",
-      tests: "测试",
-      __tests__: "测试",
-      consts: "固定常量",
-      constants: "固定常量",
       lib: "库",
       libs: "库",
-      public: "公共资源",
-      assets: "资源文件",
-      static: "静态资源",
-      mocks: "Mock 数据",
-      mock: "Mock 数据",
-      __mocks__: "Mock 数据",
       proto: "协议定义",
       protos: "协议定义",
+      projects: "项目",
+      project: "项目",
+      // 国际化（保留原有）
+      i18n: "国际化",
+      locale: "国际化",
+      locales: "国际化",
     };
 
     // 精确匹配
-    if (categoryMap[dirName]) {
-      return categoryMap[dirName];
+    if (categoryMap[dirName.toLowerCase()]) {
+      return categoryMap[dirName.toLowerCase()];
     }
 
     // 部分匹配
+    const lowerDirName = dirName.toLowerCase();
     for (const [key, value] of Object.entries(categoryMap)) {
-      if (dirName.includes(key) || dirPath.includes(`/${key}/`)) {
+      if (lowerDirName.includes(key) || dirPath.toLowerCase().includes(`/${key}/`)) {
         return value;
       }
     }
@@ -778,25 +829,71 @@ export class DeepDirectoryAnalyzer {
    */
   private isCategoryName(dirName: string): boolean {
     const categoryNames = [
+      // 基础目录
+      "src", "app", "public", "static", "assets",
+      // 组件和页面
       "components", "component", "cmp",
       "pages", "page", "views", "view",
-      "utils", "utilities", "helpers", "helper",
-      "scripts", "script",
-      "api", "apis", "services", "service",
+      "layouts", "layout",
+      // 样式
+      "styles", "style", "css", "scss",
+      // 逻辑复用
       "hooks", "hook",
-      "style", "styles", "css", "scss",
-      "store", "stores", "state",
-      "types", "type", "interfaces",
-      "models", "model", "entities", "entity",
-      "controllers", "controller",
-      "repositories", "repository", "repo",
-      "routes", "route", "routers", "router",
       "composables", "composable",
-      "plugins", "plugin",
-      "directives", "directive",
+      // 工具和辅助
+      "utils", "utilities", "helpers", "helper", "tools",
+      // 常量和配置
+      "constants", "consts",
+      "config", "configs",
+      // 服务和接口
+      "api", "apis", "services", "service",
+      // 状态管理
+      "store", "stores", "state",
+      // 路由
+      "routes", "route", "routers", "router",
+      // 业务模块
+      "modules", "module",
+      "features", "feature",
+      // 数据模型
+      "models", "model",
+      "entities", "entity",
+      // 类型定义
+      "types", "type",
+      "interfaces", "interface",
+      "enums", "enum",
+      // 后端相关
+      "controllers", "controller",
+      "middlewares", "middleware",
       "guards", "guard",
-      "middleware", "middlewares",
-      "src",
+      "policies", "policy",
+      "providers", "provider",
+      "adapters", "adapter",
+      "repositories", "repository", "repo",
+      // Web 相关
+      "directives", "directive",
+      "plugins", "plugin",
+      // 结构定义和校验
+      "schemas", "schema",
+      "validators", "validator",
+      "dto",
+      // 测试相关
+      "tests", "test", "__tests__",
+      "e2e",
+      "mocks", "mock", "__mocks__",
+      "fixtures", "fixture",
+      // 脚本和文档
+      "scripts", "script",
+      "docs", "doc",
+      // 日志和临时
+      "logs", "log",
+      "tmp", "temp",
+      // 构建产物
+      "build", "dist",
+      // 其他
+      "shared", "common", "commons",
+      "lib", "libs",
+      "proto", "protos",
+      "projects", "project",
       "layouts", "layout",
       "features", "feature", "modules", "module",
       "shared", "common", "commons",
@@ -817,67 +914,132 @@ export class DeepDirectoryAnalyzer {
    */
   private getCategoryName(dirName: string): string | null {
     const categoryMap: Record<string, string> = {
-      components: "组件",
-      component: "组件",
+      // 基础目录
+      src: "源码",
+      app: "应用入口",
+      public: "公共资源",
+      static: "静态资源",
+      assets: "构建资源",
+      // 组件和页面
+      components: "通用组件",
+      component: "通用组件",
       pages: "页面",
       page: "页面",
-      views: "页面",
-      utils: "工具",
-      utilities: "工具",
+      views: "视图",
+      view: "视图",
+      layouts: "布局",
+      layout: "布局",
+      // 样式
+      styles: "样式",
+      style: "样式",
+      css: "样式",
+      // 逻辑复用
+      hooks: "逻辑复用",
+      hook: "逻辑复用",
+      composables: "组合逻辑",
+      composable: "组合逻辑",
+      // 工具和辅助
+      utils: "工具函数",
+      utilities: "工具函数",
       helpers: "辅助函数",
       helper: "辅助函数",
-      scripts: "自动化脚本",
-      script: "自动化脚本",
-      api: "接口文件",
-      apis: "接口文件",
-      services: "服务封装",
-      service: "服务封装",
-      hooks: "Hooks",
-      composables: "逻辑复用工具",
-      composable: "逻辑复用工具",
-      plugins: "插件注册",
-      plugin: "插件注册",
-      directives: "自定义指令",
-      directive: "自定义指令",
-      guards: "路由守卫",
-      guard: "路由守卫",
-      style: "样式",
-      styles: "样式",
+      tools: "工具",
+      // 常量和配置
+      constants: "常量",
+      consts: "常量",
+      config: "配置",
+      configs: "配置",
+      // 服务和接口
+      services: "服务层",
+      service: "服务层",
+      api: "接口定义",
+      apis: "接口定义",
+      // 状态管理
       store: "状态管理",
       stores: "状态管理",
-      types: "类型定义",
-      models: "数据模型",
-      controllers: "控制器",
-      repositories: "数据仓库",
-      routes: "路由配置",
-      route: "路由配置",
-      routers: "路由配置",
-      router: "路由配置",
-      middleware: "中间件",
-      middlewares: "中间件",
-      layouts: "布局",
-      features: "业务模块",
+      state: "状态",
+      // 路由
+      router: "路由",
+      routers: "路由",
+      routes: "路由表",
+      route: "路由表",
+      // 业务模块
       modules: "业务模块",
+      module: "业务模块",
+      features: "功能模块",
+      feature: "功能模块",
+      // 数据模型
+      models: "数据模型",
+      model: "数据模型",
+      entities: "领域实体",
+      entity: "领域实体",
+      // 类型定义
+      types: "类型定义",
+      type: "类型定义",
+      interfaces: "接口定义",
+      interface: "接口定义",
+      enums: "枚举",
+      enum: "枚举",
+      // 后端相关
+      controllers: "控制层",
+      controller: "控制层",
+      middlewares: "中间件",
+      middleware: "中间件",
+      guards: "权限校验",
+      guard: "权限校验",
+      policies: "权限策略",
+      policy: "权限策略",
+      providers: "服务提供",
+      provider: "服务提供",
+      adapters: "适配层",
+      adapter: "适配层",
+      repositories: "数据访问",
+      repository: "数据访问",
+      repo: "数据访问",
+      // Web 相关
+      directives: "指令",
+      directive: "指令",
+      plugins: "插件",
+      plugin: "插件",
+      // 结构定义和校验
+      schemas: "结构定义",
+      schema: "结构定义",
+      validators: "校验",
+      validator: "校验",
+      dto: "传输对象",
+      // 测试相关
+      tests: "测试",
+      test: "测试",
+      __tests__: "测试",
+      e2e: "端到端测试",
+      mocks: "模拟数据",
+      mock: "模拟数据",
+      __mocks__: "模拟数据",
+      fixtures: "测试数据",
+      fixture: "测试数据",
+      // 脚本和文档
+      scripts: "脚本",
+      script: "脚本",
+      docs: "文档",
+      doc: "文档",
+      // 日志和临时
+      logs: "日志",
+      log: "日志",
+      tmp: "临时文件",
+      temp: "临时文件",
+      // 构建产物
+      build: "构建产物",
+      dist: "发布产物",
+      // 其他
       shared: "共享",
       common: "公共文件",
       commons: "公共文件",
-      consts: "固定常量",
-      constants: "固定常量",
-      config: "配置文件",
-      configs: "配置文件",
       lib: "库",
       libs: "库",
-      public: "公共资源",
-      assets: "资源文件",
-      static: "静态资源",
-      mocks: "Mock 数据",
-      mock: "Mock 数据",
-      __mocks__: "Mock 数据",
       proto: "协议定义",
       protos: "协议定义",
       projects: "项目",
       project: "项目",
-      src: "源代码",
     };
 
     return categoryMap[dirName.toLowerCase()] || null;
@@ -1071,6 +1233,10 @@ export class DeepDirectoryAnalyzer {
       return `${keywordCN} 数据模型`;
     } else if (primaryTypes.includes("hook")) {
       return `${keywordCN} Hooks`;
+    } else if (primaryTypes.includes("type")) {
+      return `${keywordCN} 数据类型`;
+    } else if (primaryTypes.includes("enum")) {
+      return `${keywordCN} 枚举`;
     } else {
       return keywordCN;
     }
@@ -1089,7 +1255,7 @@ export class DeepDirectoryAnalyzer {
       hook: dirName !== "hooks" ? `${dirName} Hooks` : "Hooks",
       utility: dirName !== "utils" ? `${dirName} 工具` : "工具",
       service: dirName !== "services" ? `${dirName} API 服务` : "API 服务",
-      type: "类型定义",
+      type: "数据类型",
       enum: "枚举",
       constant: "常量",
       config: "配置",
@@ -1126,13 +1292,27 @@ export class DeepDirectoryAnalyzer {
     } else if (primaryTypes.includes("model")) {
       return "数据模型";
     } else if (primaryTypes.includes("type")) {
-      return "类型定义";
+      return "数据类型";
+    } else if (primaryTypes.includes("enum")) {
+      return "枚举";
+    } else if (primaryTypes.includes("constant")) {
+      return "常量";
+    } else if (primaryTypes.includes("config")) {
+      return "配置";
+    } else if (primaryTypes.includes("test")) {
+      return "测试";
+    } else if (primaryTypes.includes("style")) {
+      return "样式";
     } else if (primaryTypes.includes("route")) {
       return "路由";
     } else if (primaryTypes.includes("middleware")) {
       return "中间件";
     } else if (primaryTypes.includes("layout")) {
       return "布局";
+    } else if (primaryTypes.includes("repository")) {
+      return "数据仓库";
+    } else if (primaryTypes.includes("controller")) {
+      return "控制器";
     }
     return "";
   }
