@@ -49,13 +49,16 @@ Cursor Rules Generators 针对这些痛点，把“分析 + 生成 + 校验”�
 4. **提取项目实践**：观察变量/函数风格、组件导出方式、错误处理习惯。
 5. **检测自定义资产**：收集 Hooks、工具函数、API Client 并在规则中引用。
 6. **学习文件组织**：根据真实目录生成命名约定、存放位置、目录语义。
-7. **路由识别**：依赖 + 文件双重检测，支持 Next.js App Router / React Router / NestJS / Express 等。
-8. **动态路由分析**：脚本、命令、生成文件多角度判定是否需要人工确认。
-9. **规则生成 & 一致性检查**：整合 Context7 最佳实践 + 项目特征，必要时更新 README。
-10. **写入规则文件**：Markdown formatter + markdownlint 双重校验，失败不中断其他文件。
-11. **生成 instructions.md**：把所有步骤和注意事项串成工作流，让团队统一使用方式。
+7. **深度目录分析**（新增）：五阶段分析（依赖驱动 → 语义 → 业务 → 继承 → 内容），智能推断目录职能。
+8. **路由识别**：依赖 + 文件双重检测，支持 Next.js App Router / React Router / NestJS / Express 等。
+9. **动态路由分析**：脚本、命令、生成文件多角度判定是否需要人工确认。
+10. **规则生成 & 一致性检查**：整合 Context7 最佳实践 + 项目特征，必要时更新 README。
+11. **写入规则文件**：Markdown formatter + markdownlint 双重校验，失败不中断其他文件。
+12. **生成 instructions.md**：把所有步骤和注意事项串成工作流，让团队统一使用方式。
 
 > **详细的规则生成顺序与依赖关系**，请参考 `docs/RULES_GENERATION_LOGIC.md`。
+> 
+> **深度目录分析的五阶段逻辑**，请参考 `docs/DIRECTORY_PURPOSE_DETECTION.md`。
 
 ---
 
@@ -108,10 +111,22 @@ Cursor Rules Generators 针对这些痛点，把“分析 + 生成 + 校验”�
 
 ## 8. 相关资源
 
+### 核心文档
 - `README.md` / `README.zh-CN.md`：功能介绍与安装配置
-- `docs/RULES_GENERATION_LOGIC.md`：完整的规则生成顺序、依赖、条件触发说明
-- `docs/PROJECT_REFACTORING.md`：2025 年 11 月的结构优化纪要
-- `docs/guides/PREVENT_AI_MODIFICATION.md`：如何防止 AI 错误修改关键文件
-- `PROBLEM_ANALYSIS.md`：当前仓库的风险与后续优化建议（持续更新）
+- `CHANGELOG.md`：版本变更记录
 
-让 Cursor Rules Generators 帮你把“项目上下文”变成“可维护的资产”，让 AI 真正成为团队的合作伙伴。EOF
+### 架构文档
+- `docs/RULES_GENERATION_LOGIC.md`：完整的规则生成顺序、依赖、条件触发说明
+- `docs/DIRECTORY_PURPOSE_DETECTION.md`：深度目录分析的五阶段判断逻辑
+- `docs/PROJECT_REFACTORING.md`：2025 年 11 月的结构优化纪要
+
+### 指南文档
+- `docs/TEST_PROMPTS.md`：测试 prompt 示例，用于验证规则生成效果
+- `docs/guides/PREVENT_AI_MODIFICATION.md`：如何防止 AI 错误修改关键文件（设计方案）
+
+### 脚本文档
+- `scripts/README.md`：开发工具和发布脚本说明
+
+---
+
+让 Cursor Rules Generators 帮你把"项目上下文"变成"可维护的资产"，让 AI 真正成为团队的合作伙伴。

@@ -16,37 +16,93 @@
 ### 阶段 1: 准备阶段（Pre-Generation）
 
 ```text
-1. 框架匹配
+1. 框架匹配（Framework Matching）
    └─> findBestFrameworkMatch() - 找到最相似的框架规则格式
+       - 匹配 awesome-cursorrules 中的框架规则
+       - 计算相似度（基于技术栈重叠）
+       - 返回最佳匹配（similarity > 0.3）
    
-2. 多类别技术栈匹配
-   └─> findBestTechStackMatches() - 支持所有类别的规则匹配
+2. 多类别技术栈匹配（Multi-Category Tech Stack Matching）
+   └─> findBestTechStackMatches() - 支持 11 个类别的规则匹配
+       - 类别：frontend, backend, mobile, styling, state, database, 
+               testing, hosting, build, language, other
+       - 返回所有类别的匹配规则
+       - 识别主要匹配（primary match）
    
-3. 最佳实践提取和对比
+3. 最佳实践提取和对比（Best Practice Extraction & Comparison）
    ├─> extractFromMultiCategoryMatch() - 从匹配的规则中提取最佳实践
+   │   - 解析匹配规则的内容
+   │   - 提取框架特定的最佳实践
    ├─> compare() - 对比项目实际使用与最佳实践
+   │   - 识别缺失的实践
+   │   - 识别模糊的实践
+   │   - 生成改进建议
    └─> 识别缺失的技术栈和最佳实践
+       - 对比项目技术栈与规则覆盖
+       - 可选：网络搜索缺失技术栈的最佳实践
    
-4. 规则需求分析
+4. 规则需求分析（Rule Requirements Analysis）
    └─> analyzeRequirements() - 分析项目需要哪些规则文件
+       - 基于依赖检测需要的规则
+       - 基于文件结构检测需要的规则
+       - 基于配置检测需要的规则
+       - 为每个规则提供生成原因说明
 ```
 
 ### 阶段 2: 规则生成阶段（Generation）
 
+```text
 按照固定顺序生成规则文件（见下方详细列表）
+
+生成过程：
+1. 必需规则（4个）- 无条件生成
+   - global-rules.mdc
+   - code-style.mdc
+   - project-structure.mdc（带 fallback）
+   - architecture.mdc
+
+2. 条件规则（7个）- 根据需求分析结果生成
+   - custom-tools.mdc
+   - error-handling.mdc
+   - state-management.mdc
+   - ui-ux.mdc
+   - frontend-routing.mdc
+   - api-routing.mdc
+   - testing.mdc
+
+3. 模块规则（N个）- 多模块项目时生成
+   - {module}-rules.mdc（每个模块一个）
+```
 
 ### 阶段 3: 文件写入阶段（Writing）
 
 ```text
-1. 规则文件写入
+1. 规则文件写入（Rule File Writing）
    ├─> 验证规则对象完整性
-   ├─> 确认生成位置
-   ├─> Markdown 格式化
-   ├─> markdownlint 验证和修复
-   └─> 写入文件系统
+   │   - 检查 fileName 和 content 是否存在
+   │   - 检查规则类型和优先级
+   ├─> 确认生成位置（Generation Location Confirmation）
+   │   - coordinator.confirmGenerationLocation()
+   │   - 检查目录是否存在
+   │   - 评估是否符合项目结构
+   ├─> Markdown 格式化（Markdown Formatting）
+   │   - MarkdownFormatter.format()
+   │   - 修复常见格式问题
+   ├─> markdownlint 验证和修复（Markdownlint Validation）
+   │   - MarkdownlintValidator.validateAndFix()
+   │   - 验证 Markdown 规范
+   │   - 自动修复问题
+   └─> 写入文件系统（File System Writing）
+       - FileUtils.writeFile()
+       - 自动创建目录（如果不存在）
+       - 错误处理：单个文件失败不影响其他文件
    
-2. instructions.md 生成
-   └─> 生成工作流指导文件
+2. instructions.md 生成（Instructions Generation）
+   └─> generateInstructions() - 生成工作流指导文件
+       - 包含规则使用说明
+       - 包含工作流程指导
+       - 包含注意事项
+       - 单独写入（不在 rules 数组中）
 ```
 
 ---

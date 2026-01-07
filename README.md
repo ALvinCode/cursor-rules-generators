@@ -4,20 +4,36 @@ An intelligent MCP Server that automatically analyzes your project and generates
 
 ## ✨ Features
 
-- ✅ **Smart Project Analysis**: Automatically scans project files and identifies tech stack and dependencies
+### Core Capabilities
+- ✅ **Smart Project Analysis**: Automatically scans project files (up to 10 levels deep) and identifies tech stack and dependencies
 - ✅ **Tech Stack Detection**: Supports 20+ mainstream tech stacks including Node.js, Python, Go, Rust, Java
 - ✅ **Multi-Module Support**: Automatically detects monorepo, microservices, and other multi-module architectures
+- ✅ **Deep Directory Analysis**: Intelligently infers directory purposes using 5-stage analysis (dependency-driven, semantic, business context, inheritance, content analysis)
+
+### Code Understanding
 - ✅ **Code Feature Analysis**: Identifies component structures, API routes, state management patterns
+- ✅ **Custom Pattern Detection**: Discovers custom hooks, utility functions, and API clients
+- ✅ **File Organization Learning**: Learns project-specific naming conventions and directory structures
+- ✅ **Router Detection**: Dual-detection (dependencies + file structure) for frontend and backend routing systems
+
+### Quality & Consistency
 - ✅ **Consistency Checking**: Compares project documentation with actual implementation
-- ✅ **Best Practices Integration**: Generates rules based on framework best practices
+- ✅ **Best Practices Integration**: Integrates framework best practices from Context7 and awesome-cursorrules
+- ✅ **Multi-Category Tech Stack Matching**: Matches rules across 11 categories (frontend, backend, mobile, styling, state, database, testing, hosting, build, language, other)
+- ✅ **Rule Validation**: Validates generated rules with markdownlint and format checking
+
+### Rule Generation
 - ✅ **Automatic Rule Generation**: Generates `.mdc` format rule files in `.cursor/rules/` directory
 - ✅ **Modular Rules**: Supports global rules + module-specific rules
 - ✅ **Dependency-Driven Rules**: Automatically generates rules based on project dependencies (routing, state management, etc.)
 - ✅ **Rule Requirements Analysis**: Intelligently analyzes which rule files are needed and explains why
 - ✅ **Generation Location Confirmation**: Automatically detects rule file generation locations to match project structure
 - ✅ **Structured Output**: Provides detailed generation summaries and explanations
+- ✅ **Instructions Generation**: Creates comprehensive `instructions.md` with workflow guidance
 
 ## 🚀 Quick Start
+
+> 💡 **New to this tool?** Check out our comprehensive [Getting Started Guide](./docs/GETTING_STARTED.md) for a complete walkthrough from zero to hero!
 
 ### Step 1: Configure Cursor (No Installation Required!)
 
@@ -218,33 +234,51 @@ Show tool information
 
 ## 📋 How It Works
 
+The tool follows an 11-task pipeline to analyze your project and generate rules:
+
 ```
-1. Collect project files (max 10 levels deep)
-   ↓
-2. Detect tech stack and dependencies
-   ↓
-3. Identify multi-module structure
-   ↓
-4. Analyze code features
-   ↓
-5. Identify routing systems (from dependencies and file structure)
-   ↓
-6. Get best practices (via Context7 if configured)
-   ↓
-7. Analyze rule requirements (determine which rules are needed)
-   ↓
-8. Check documentation consistency
-   ↓
-9. (Optional) Prompt user to update description files
-   ↓
-10. Confirm generation locations (check directory structure)
-   ↓
-11. Generate global + module rules (based on requirements analysis)
-   ↓
-12. Write .cursor/rules/*.mdc files
-   ↓
-13. Return structured summary
+Task 1: Collect Project Files
+   └─> Recursive scan (10 levels), file type statistics
+   
+Task 2: Analyze Tech Stack & Module Architecture
+   └─> Detect languages, frameworks, dependencies, modules
+   
+Task 3: Check Project Configuration
+   └─> Parse Prettier, ESLint, TypeScript, npm scripts
+   
+Task 4: Analyze Project Practices
+   └─> Extract error handling, code style, component patterns
+   
+Task 5: Detect Custom Tools & Patterns
+   └─> Discover custom hooks, utilities, API clients
+   
+Task 6: Learn File Organization
+   └─> Analyze directory structure, naming conventions
+   
+Task 6.5: Deep Directory Analysis (NEW)
+   └─> 5-stage analysis: dependency-driven → semantic → business → inheritance → content
+   
+Task 7: Identify Routing Systems
+   └─> Dual-detection: dependencies + file structure
+   
+Task 8: Evaluate Dynamic Routing
+   └─> Analyze routing generation methods (scripts, commands, files)
+   
+Task 9: Generate Rules & Check Consistency
+   └─> Integrate best practices, check doc-code consistency
+   
+Task 10: Write Rule Files & Instructions
+   └─> Generate .mdc files with validation
+   
+Task 11: Return Structured Summary
+   └─> Provide detailed analysis and generation report
 ```
+
+**Key Features:**
+- **Fallback Mechanisms**: Critical rules always generate (with simplified versions if needed)
+- **Error Isolation**: Module/file failures don't affect others
+- **Preview Mode**: See the plan before generating files
+- **Structured Output**: Detailed summaries for PR review and documentation
 
 ## 🔧 Supported Tech Stacks
 
@@ -274,62 +308,105 @@ Show tool information
 
 ## 📁 Generated File Structure
 
-### Single Module Project
+### Required Rules (Always Generated)
 
 ```
 your-project/
 ├── .cursor/
+│   ├── instructions.md           # Workflow guidance
 │   └── rules/
-│       ├── global-rules.mdc      # Global rules
-│       ├── code-style.mdc        # Code style rules
-│       └── architecture.mdc       # Architecture rules
-├── src/
-├── package.json
-└── README.md
+│       ├── global-rules.mdc      # Project overview & core principles (Priority: 100)
+│       ├── code-style.mdc        # Code style guidelines (Priority: 90)
+│       ├── project-structure.mdc # File organization reference (Priority: 85)
+│       └── architecture.mdc      # Architecture patterns (Priority: 90)
+```
+
+### Conditional Rules (Generated Based on Project Features)
+
+```
+├── .cursor/rules/
+│   ├── custom-tools.mdc          # If custom hooks/utils detected (Priority: 95)
+│   ├── error-handling.mdc        # If error handling patterns found (Priority: 80)
+│   ├── state-management.mdc      # If Redux/Zustand/etc detected (Priority: 85)
+│   ├── ui-ux.mdc                 # If React/Vue/Angular detected (Priority: 75)
+│   ├── frontend-routing.mdc      # If frontend router detected (Priority: 85)
+│   ├── api-routing.mdc           # If backend router detected (Priority: 85)
+│   └── testing.mdc               # If test framework detected (Priority: 70)
 ```
 
 ### Multi-Module Project
 
 ```
-your-multi-module-project/
+your-monorepo/
 ├── .cursor/
+│   ├── instructions.md           # Global workflow guidance
 │   └── rules/
-│       └── global-rules.mdc      # Global rules
+│       └── global-rules.mdc      # Global rules for entire project
 ├── frontend/
 │   ├── .cursor/
 │   │   └── rules/
-│   │       └── frontend-rules.mdc   # Frontend module rules
+│   │       └── frontend-rules.mdc   # Frontend-specific rules (Priority: 50)
 │   └── src/
 ├── backend/
 │   ├── .cursor/
 │   │   └── rules/
-│   │       └── backend-rules.mdc    # Backend module rules
+│   │       └── backend-rules.mdc    # Backend-specific rules (Priority: 50)
 │   └── src/
 └── shared/
     ├── .cursor/
     │   └── rules/
-    │       └── shared-rules.mdc     # Shared module rules
+    │       └── shared-rules.mdc     # Shared module rules (Priority: 50)
     └── src/
 ```
 
 **Smart Features:**
 
-- ✅ Global rules in project root affect the entire project
-- ✅ Module rules in their respective directories affect only that module
-- ✅ Cursor automatically loads relevant rules based on current file location
-- ✅ Module rules can override global rule configurations
+- ✅ **Priority-Based Loading**: Cursor loads rules by priority (100 → 50)
+- ✅ **Dependency-Aware**: Rules reference each other using `@filename.mdc`
+- ✅ **Scope-Specific**: Global rules affect entire project, module rules affect only that module
+- ✅ **Fallback Protection**: Critical rules always generate (with simplified versions if needed)
+- ✅ **Validation**: All rules validated with markdownlint before writing
 
-## 📝 Example Output
+## 📝 What Gets Generated
 
-Generated rules include:
+### Global Rules (Always)
 
-- **Project Overview**: Tech stack, languages, frameworks
-- **Project Structure**: Module organization and responsibilities
-- **Core Features**: Components, APIs, state management, etc.
-- **Development Guidelines**: Framework-specific development guides
-- **Code Style**: Naming conventions, formatting, best practices
-- **File Organization**: Directory structure and file naming conventions
-- **Important Notes**: Common pitfalls and important reminders
+| Rule File | Content | Lines |
+|-----------|---------|-------|
+| `global-rules.mdc` | Project overview, tech stack, core principles | ~280 |
+| `code-style.mdc` | Naming conventions, formatting, code patterns | ~200 |
+| `project-structure.mdc` | Directory structure, file organization, naming rules | ~300 |
+| `architecture.mdc` | Architecture patterns, design principles | ~200 |
+
+### Conditional Rules (Based on Features)
+
+| Rule File | Generated When | Lines |
+|-----------|----------------|-------|
+| `custom-tools.mdc` | Custom hooks/utilities detected | ~150 |
+| `error-handling.mdc` | Error handling patterns found | ~180 |
+| `state-management.mdc` | State management library detected | ~200 |
+| `ui-ux.mdc` | Frontend framework detected | ~250 |
+| `frontend-routing.mdc` | Frontend router detected | ~300 |
+| `api-routing.mdc` | Backend router detected | ~300 |
+| `testing.mdc` | Test framework detected | ~220 |
+
+### Instructions File
+
+| File | Content | Purpose |
+|------|---------|---------|
+| `instructions.md` | Workflow guidance, rule usage, best practices | Unified team AI usage manual |
+
+### Rule Content Includes
+
+- **Tech Stack Analysis**: Detected languages, frameworks, dependencies
+- **Directory Structure**: Complete project structure with purpose annotations
+- **Code Patterns**: Actual patterns extracted from your codebase
+- **Best Practices**: Framework-specific best practices from Context7 and awesome-cursorrules
+- **Custom Assets**: Your custom hooks, utilities, API clients
+- **Routing Information**: Router configuration and examples
+- **File Organization**: Where to put components, utils, pages, etc.
+- **Naming Conventions**: Learned from your existing files
+- **Important Notes**: Common pitfalls and project-specific reminders
 
 ## 🤝 Context7 Integration
 

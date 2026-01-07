@@ -6,6 +6,13 @@
 
 提升目录职能识别的精准度与业务语义能力，让目录识别更加智能、具体、符合项目业务语义，而不是笼统归类为"工具函数"或"组件"。
 
+## 📦 相关模块
+
+- **DeepDirectoryAnalyzer** (`src/modules/analyzers/deep-directory-analyzer.ts`): 深度目录分析器，协调整个分析流程
+- **FileTypeIdentifier** (`src/modules/analyzers/file-type-identifier.ts`): 文件类型识别器
+- **DependencyAnalyzer** (`src/modules/analyzers/dependency-analyzer.ts`): 依赖分析器
+- **FileContentAnalyzer** (`src/modules/analyzers/file-content-analyzer.ts`): 文件内容分析器
+
 ## 判断流程概览（五阶段逻辑）
 
 文件夹职能判断采用**五阶段、多维度**的分析策略，严格按顺序执行：
