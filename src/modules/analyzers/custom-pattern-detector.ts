@@ -186,19 +186,23 @@ export class CustomPatternDetector {
   }
 
   /**
-   * 统计在项目中的使用次数
+   * 统计在项目中的使用次数（只扫描源码文件，排除 dist/node_modules）
    */
   private async countUsageInProject(
     name: string,
     files: string[]
   ): Promise<number> {
     let count = 0;
-    const sampleSize = Math.min(50, files.length);
-    const sampleFiles = files.slice(0, sampleSize);
+    const sourceFiles = files.filter(
+      (f) =>
+        /\.(ts|tsx|js|jsx|vue|svelte)$/.test(f) &&
+        !/[\\/](dist|build|node_modules|\.cache)[\\/]/.test(f)
+    );
+    const sampleSize = Math.min(300, sourceFiles.length);
+    const sampleFiles = sourceFiles.slice(0, sampleSize);
 
     for (const file of sampleFiles) {
       const content = await FileUtils.readFile(file);
-      // 简单统计：查找名称出现次数
       const matches = content.match(new RegExp(`\\b${name}\\b`, "g"));
       if (matches) {
         count += matches.length;

@@ -124,19 +124,20 @@ export class RuleRequirementsAnalyzer {
       });
     }
 
-    // 后端路由
-    const backendRouterDeps = routingDeps.filter((d) =>
-      [
-        "express",
-        "fastify",
-        "koa",
-        "hapi",
-        "nestjs",
-        "django",
-        "flask",
-        "gin",
-      ].some((name) => d.name.toLowerCase().includes(name))
-    );
+    // 后端路由（精确匹配，避免子字符串误匹配如 originjs → gin）
+    const isBackendFramework = (name: string): boolean => {
+      const n = name.toLowerCase();
+      return (
+        n === "express" || n.startsWith("express/") || n.startsWith("express-") ||
+        n === "fastify" || n.startsWith("fastify/") || n.startsWith("fastify-") ||
+        n === "koa" || n.startsWith("koa/") || n.startsWith("koa-") ||
+        n === "hapi" || n === "@hapi/hapi" || n.startsWith("@hapi/") ||
+        n === "nestjs" || n === "@nestjs/core" || n.startsWith("@nestjs/") ||
+        n === "django" || n === "flask" || n === "gin" ||
+        n === "spring-boot" || n.startsWith("spring-")
+      );
+    };
+    const backendRouterDeps = routingDeps.filter((d) => isBackendFramework(d.name));
 
     if (backendRouterDeps.length > 0 || context.backendRouter) {
       requirements.push({

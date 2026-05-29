@@ -483,10 +483,24 @@ export class RulesGenerator {
     }
 
     // 10. 后端路由规则（按需，约 300 行）
-    // v1.7: 基于需求分析器结果，即使没有路由文件，只要有依赖就生成
+    // 纯前端项目（无后端框架依赖且无 backendRouter 检测结果）不生成
+    // 使用精确名称匹配，避免 "originjs" 误命中 "gin" 等子字符串
+    const backendFrameworkMatchers: Array<(name: string) => boolean> = [
+      (n) => n === "express" || n.startsWith("express/") || n.startsWith("express-"),
+      (n) => n === "fastify" || n.startsWith("fastify/") || n.startsWith("fastify-"),
+      (n) => n === "koa" || n.startsWith("koa/") || n.startsWith("koa-"),
+      (n) => n === "hapi" || n === "@hapi/hapi" || n.startsWith("@hapi/"),
+      (n) => n === "nestjs" || n === "@nestjs/core" || n.startsWith("@nestjs/"),
+      (n) => n === "django" || n === "flask" || n === "gin",
+      (n) => n === "spring-boot" || n.startsWith("spring-"),
+    ];
+    const hasBackendDeps = context.techStack.dependencies.some((d) => {
+      const name = d.name.toLowerCase();
+      return backendFrameworkMatchers.some((match) => match(name));
+    });
     const needsBackendRouting = requirements.some(
       (r) => r.ruleType === "backend-routing"
-    );
+    ) && (hasBackendDeps || !!context.backendRouter);
     if (needsBackendRouting) {
       // 如果没有检测到路由信息，创建一个基础的路由信息
       if (!context.backendRouter) {
@@ -559,6 +573,12 @@ export class RulesGenerator {
     if (needsTesting || this.featureExists(context, "testing")) {
       const testingRule = this.generateTestingRule(context);
       rules.push(testingRule);
+    }
+
+    // 11b. Feature Recipe（端到端功能创建模板，前端项目必生成）
+    if (this.isFrontendProject(context)) {
+      const featureRecipeRule = this.generateFeatureRecipeRule(context);
+      rules.push(featureRecipeRule);
     }
 
     // 12. 模块规则（如果是多模块项目）
@@ -671,7 +691,7 @@ ${
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
-${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${this.featureExists(context, "testing") ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${this.isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${this.featureExists(context, "testing") ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -1092,10 +1112,17 @@ ${this.generateDetailedStructureContent(context)}
     const buildTree = (
       dir: any,
       prefix: string,
-      isLast: boolean
+      isLast: boolean,
+      currentDepth = 1
     ) => {
       const connector = isLast ? "└── " : "├── ";
       const dirName = path.basename(dir.path);
+
+      // 深度超过 4 时折叠，不再展开
+      if (currentDepth > 4) {
+        tree.push(`${prefix}${connector}${dirName}/`);
+        return;
+      }
 
       // 找到所有子目录
       const children = deepAnalysis.filter(
@@ -1145,7 +1172,7 @@ ${this.generateDetailedStructureContent(context)}
         functionalChildren.forEach((child, index) => {
           const isLastChild = index === functionalChildren.length - 1 && businessChildren.length === 0;
         const childPrefix = prefix + (isLast ? "    " : "│   ");
-        buildTree(child, childPrefix, isLastChild);
+        buildTree(child, childPrefix, isLastChild, currentDepth + 1);
       });
         
         // 如果有业务子目录，在最后显示折叠提示
@@ -1446,19 +1473,11 @@ ${this.generateDetailedStructureContent(context)}
     
     let content = "";
     
-    content += `项目共有 **${deepAnalysis.length}** 个目录，以下显示 **${keyDirectories.length}** 个职能文件夹的说明：\n\n`;
-    content += `> 💡 **提示**: 命名规范和代码风格请参考 @code-style.mdc\n`;
-    content += `> 📝 **说明**: 此处仅显示职能文件夹（如 components、utils、hooks 等），不包含具体的业务类页面和组件目录。详细目录结构请参考上方的目录结构树。\n\n`;
+    content += `> 💡 命名规范和代码风格请参考 @code-style.mdc\n\n`;
 
     for (const dir of keyDirectories) {
       content += `### \`${dir.path}/\`\n\n`;
-      content += `**职能**: ${dir.purpose || '未标识'}`;
-      
-      // 只显示文件数量（作为重要性指标）
-      if (dir.fileCount > 0) {
-        content += ` (${dir.fileCount} 个文件)`;
-      }
-      content += `\n\n`;
+      content += `**职能**: ${dir.purpose || '未标识'}\n\n`;
       
       // 只保留真正有价值的信息
       
@@ -1571,50 +1590,60 @@ ${this.generateDetailedStructureContent(context)}
   private generateNewFileGuidelines(
     context: RuleGenerationContext
   ): string {
-    let content = "";
+    const org = context.fileOrganization;
+    const isTS = context.techStack.languages.includes("TypeScript");
+    const ext = isTS ? "ts" : "js";
+    const extx = isTS ? "tsx" : "jsx";
+    const isFrontend = this.isFrontendProject(context);
 
-    content += `### 确定文件位置\n\n`;
-    content += `在创建新文件前，请按以下步骤确定位置：\n\n`;
-    content += `1. **查看目录职能说明** - 参考上方的目录职能说明，找到最合适的目录\n`;
-    content += `2. **检查现有文件** - 查看类似功能的文件放在哪里\n`;
-    content += `3. **遵循命名规范** - 使用项目统一的命名约定\n\n`;
+    let content = `### 文件位置决策表\n\n`;
+    content += `> 创建新文件时，先查此表找到正确目录，不确定则参考相似现有文件。\n\n`;
+    content += `| 要创建的文件类型 | 放到哪里 | 示例文件名 |\n`;
+    content += `|-----------------|---------|----------|\n`;
 
-    if (context.fileOrganization) {
-      const org = context.fileOrganization;
-      
-      if (org.componentLocation.length > 0) {
-        content += `### 新建组件\n\n`;
-        content += `**位置**: \`${org.componentLocation[0]}/\`\n\n`;
-        if (org.namingConvention.useIndexFiles) {
-          content += `**结构**: 每个组件一个目录，使用 index 文件导出\n`;
-          content += `\`\`\`\n`;
-          content += `${org.componentLocation[0]}/Button/\n`;
-          content += `  ├── index.tsx\n`;
-          content += `  ├── Button.tsx\n`;
-          content += `  └── Button.module.css\n`;
-          content += `\`\`\`\n\n`;
-        }
+    if (org) {
+      if (isFrontend && org.componentLocation.length > 0) {
+        const loc = org.componentLocation[0];
+        content += `| 页面组件 | \`${loc}/\` | \`UserList.${extx}\` |\n`;
+        content += `| 可复用 UI 组件 | \`${loc}/\` | \`Button.${extx}\` |\n`;
       }
-
       if (org.utilsLocation.length > 0) {
-        content += `### 新建工具函数\n\n`;
-        content += `**位置**: \`${org.utilsLocation[0]}/\`\n\n`;
-        content += `**组织方式**: 按功能分类，如 \`date.ts\`, \`validation.ts\`, \`format.ts\`\n\n`;
+        const loc = org.utilsLocation[0];
+        content += `| 工具函数 | \`${loc}/\` | \`format.${ext}\`, \`validate.${ext}\` |\n`;
+      }
+      if (org.hooksLocation && org.hooksLocation.length > 0) {
+        const loc = org.hooksLocation[0];
+        content += `| 自定义 Hook | \`${loc}/\` | \`useXxx.${ext}\` |\n`;
+      }
+      if (org.typesLocation && org.typesLocation.length > 0) {
+        const loc = org.typesLocation[0];
+        content += `| 类型定义 | \`${loc}/\` | \`user.types.${ext}\` |\n`;
+      }
+      if (org.apiLocation && org.apiLocation.length > 0) {
+        const loc = org.apiLocation[0];
+        content += `| API / Service | \`${loc}/\` | \`user.api.${ext}\` |\n`;
       }
     }
+    content += `\n`;
 
-    // 路径别名（精简版，详细规范在 code-style.mdc）
+    if (isFrontend && org?.namingConvention?.useIndexFiles) {
+      content += `### 组件目录结构\n\n`;
+      const compLoc = org.componentLocation[0] || 'src/components';
+      content += `\`\`\`\n`;
+      content += `${compLoc}/ComponentName/\n`;
+      content += `  ├── index.${extx}       # 导出入口\n`;
+      content += `  ├── ComponentName.${extx} # 实现文件\n`;
+      content += `  └── ComponentName.test.${ext} # 测试文件\n`;
+      content += `\`\`\`\n\n`;
+    }
+
     if (
       context.projectConfig?.pathAliases &&
       Object.keys(context.projectConfig.pathAliases).length > 0
     ) {
-      content += `### 导入规范\n\n`;
-      content += `> 💡 **详细规范**: 完整的导入规范请参考 **@code-style.mdc**\n\n`;
-      content += `**必须使用路径别名**，不要使用相对路径。\n\n`;
       const aliases = Object.keys(context.projectConfig.pathAliases);
-      if (aliases.length > 0) {
-        content += `项目配置的路径别名：${aliases.map(a => `\`${a}\``).join(", ")}\n\n`;
-      }
+      content += `### 导入路径别名\n\n`;
+      content += `使用别名代替相对路径：${aliases.map(a => `\`${a}\``).join(", ")}\n\n`;
     }
 
     return content;
@@ -1712,23 +1741,22 @@ ${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices
     const features = context.codeFeatures;
     if (!features || Object.keys(features).length === 0) return "";
 
-    const lines: string[] = ["\n## Code Features\n"];
-    for (const [key, feature] of Object.entries(features)) {
-      lines.push(`### ${key}`);
-      lines.push(`${feature.description} (frequency: ${feature.frequency})`);
-      if (feature.examples.length > 0) {
-        const shown = feature.examples.slice(0, 3);
-        lines.push(`Files: ${shown.map(e => `\`${e}\``).join(", ")}`);
+    const coreFeatures: string[] = [];
+    for (const [, feature] of Object.entries(features)) {
+      if (feature.frequency > 0) {
+        coreFeatures.push(`- ${feature.description}`);
       }
-      lines.push("");
     }
-    return lines.join("\n");
+    if (coreFeatures.length === 0) return "";
+
+    return `\n## Core Code Patterns\n\n${coreFeatures.join("\n")}\n`;
   }
 
   /**
    * v1.3: 生成自定义工具规则（约 150 行）
    */
   private generateCustomToolsRule(context: RuleGenerationContext): CursorRule {
+    const hookGlobs = this.getHookGlobs(context);
     const metadata = this.generateRuleMetadata(
       "项目自定义工具",
       "Consult before implementing features — lists project-specific hooks, utilities, and API clients that MUST be reused",
@@ -1736,7 +1764,8 @@ ${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices
       context.techStack.primary,
       ["custom-tools", "reference"],
       "reference",
-      ["global-rules"]
+      ["global-rules"],
+      hookGlobs ? { globs: hookGlobs } : undefined
     );
 
     const content =
@@ -1829,6 +1858,7 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
       )
     );
 
+    const storeGlobs = this.getStoreGlobs(context);
     const metadata = this.generateRuleMetadata(
       "状态管理规范",
       `Consult when implementing state management, data flow, or ${stateLib?.name || "store"}-related code`,
@@ -1836,7 +1866,8 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
       context.techStack.primary,
       ["state-management", "practice"],
       "practice",
-      ["global-rules"]
+      ["global-rules"],
+      storeGlobs ? { globs: storeGlobs } : undefined
     );
 
     const content =
@@ -2382,6 +2413,226 @@ ${this.generateConditionalTestingRules(context)}
       priority: 70,
       type: hasTests ? "practice" : "suggestion",
       depends: ["global-rules"],
+    };
+  }
+
+  /**
+   * Feature Recipe — 端到端功能创建指南
+   * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
+   */
+  private generateFeatureRecipeRule(context: RuleGenerationContext): CursorRule {
+    const metadata = this.generateRuleMetadata(
+      "端到端功能创建指南",
+      "Step-by-step recipe for adding a complete feature: types → API → store → component → route",
+      88,
+      context.techStack.primary,
+      ["feature", "workflow", "recipe"],
+      "guideline",
+      ["global-rules", "project-structure", "architecture"]
+    );
+
+    const isTS = context.techStack.languages.includes("TypeScript");
+    const ext = isTS ? "ts" : "js";
+    const extx = isTS ? "tsx" : "jsx";
+    const org = context.fileOrganization;
+
+    const stateLib = context.techStack.dependencies.find((d) =>
+      ["redux", "mobx", "zustand", "pinia", "vuex"].some((lib) =>
+        d.name.toLowerCase().includes(lib)
+      )
+    );
+    const hasMobX = stateLib?.name?.toLowerCase().includes("mobx");
+    const hasRedux = stateLib?.name?.toLowerCase().includes("redux");
+    const hasZustand = stateLib?.name?.toLowerCase().includes("zustand");
+
+    const apiClient = context.customPatterns?.apiClient;
+    const apiClientName = apiClient?.name || "apiClient";
+    const hasAxios = context.techStack.dependencies.some((d) => d.name === "axios");
+
+    const typeDir = org?.typesLocation?.[0] || `src/types`;
+    const apiDir = org?.apiLocation?.[0] || `src/api`;
+    const storeDir = `src/store`;
+    const compDir = org?.componentLocation?.[0] || `src/components`;
+    const routeDir = (context.frontendRouter?.info?.location?.[0] || `src/routes`).replace(/\/$/, '');
+    const hookDir = org?.hooksLocation?.[0] || `src/hooks`;
+
+    let storeStep = "";
+    if (hasMobX) {
+      storeStep = `
+### 3. Store（MobX）
+
+\`\`\`${ext}
+// ${storeDir}/featureStore.${ext}
+import { makeAutoObservable } from "mobx";
+import type { FeatureItem } from "@/types/feature";
+
+class FeatureStore {
+  items: FeatureItem[] = [];
+  loading = false;
+  error: string | null = null;
+
+  constructor() { makeAutoObservable(this); }
+
+  async fetchItems() {
+    this.loading = true;
+    try {
+      this.items = await fetchFeatureList();
+    } catch (err) {
+      this.error = String(err);
+    } finally {
+      this.loading = false;
+    }
+  }
+}
+export const featureStore = new FeatureStore();
+\`\`\`
+`;
+    } else if (hasRedux) {
+      storeStep = `
+### 3. Store（Redux Toolkit）
+
+\`\`\`${ext}
+// ${storeDir}/featureSlice.${ext}
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import type { FeatureItem } from "@/types/feature";
+
+export const loadFeatures = createAsyncThunk("feature/load", fetchFeatureList);
+
+const featureSlice = createSlice({
+  name: "feature",
+  initialState: { items: [] as FeatureItem[], loading: false, error: null as string | null },
+  reducers: {},
+  extraReducers: (b) => {
+    b.addCase(loadFeatures.pending, (s) => { s.loading = true; });
+    b.addCase(loadFeatures.fulfilled, (s, a) => { s.loading = false; s.items = a.payload; });
+    b.addCase(loadFeatures.rejected, (s, a) => { s.loading = false; s.error = a.error.message ?? null; });
+  },
+});
+export default featureSlice.reducer;
+\`\`\`
+`;
+    } else if (hasZustand) {
+      storeStep = `
+### 3. Store（Zustand）
+
+\`\`\`${ext}
+// ${storeDir}/featureStore.${ext}
+import { create } from "zustand";
+import type { FeatureItem } from "@/types/feature";
+
+interface FeatureStore {
+  items: FeatureItem[];
+  loading: boolean;
+  fetchItems: () => Promise<void>;
+}
+
+export const useFeatureStore = create<FeatureStore>((set) => ({
+  items: [],
+  loading: false,
+  fetchItems: async () => {
+    set({ loading: true });
+    const items = await fetchFeatureList();
+    set({ items, loading: false });
+  },
+}));
+\`\`\`
+`;
+    }
+
+    const content = metadata + `
+# 端到端功能创建指南
+
+> 新增一个完整功能时，按此顺序创建文件，避免缺漏。
+
+## 标准步骤
+
+### 1. 类型定义
+
+\`\`\`${ext}
+// ${typeDir}/feature.${ext}
+export interface FeatureItem {
+  id: string;
+  name: string;
+  // ...项目实际字段
+}
+
+export interface FeatureListParams {
+  page: number;
+  pageSize: number;
+}
+\`\`\`
+
+### 2. API 函数
+
+\`\`\`${ext}
+// ${apiDir}/feature.${ext}
+import type { FeatureItem, FeatureListParams } from "@/types/feature";
+${hasAxios ? `import { ${apiClientName} } from "@/${apiDir.replace(/^src\//, '')}";` : ""}
+
+export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
+  const { data } = await ${hasAxios ? apiClientName : "fetch"}${hasAxios ? `.get("/api/features", { params })` : '(`/api/features?page=${params.page}`)'};
+  return data;
+}
+
+export async function fetchFeatureById(id: string): Promise<FeatureItem> {
+  const { data } = await ${hasAxios ? `${apiClientName}.get(\`/api/features/\${id}\`)` : `fetch(\`/api/features/\${id}\`)`};
+  return data;
+}
+\`\`\`
+${storeStep}
+### ${stateLib ? "4" : "3"}. 可复用 Hook（可选）
+
+\`\`\`${ext}
+// ${hookDir}/useFeature.${ext}
+export function useFeature(id: string) {
+  // 封装数据获取、loading 状态、错误处理
+  // 组件直接调用，不重复写 fetch 逻辑
+}
+\`\`\`
+
+### ${stateLib ? "5" : "4"}. 页面组件
+
+\`\`\`${extx}
+// ${compDir}/FeatureList/FeatureList.${extx}
+// 只负责渲染，业务逻辑在 Hook / Store 中
+export function FeatureList() {
+  // 1. 从 store/hook 获取数据
+  // 2. 处理 loading / error 状态
+  // 3. 渲染列表
+}
+\`\`\`
+
+### ${stateLib ? "6" : "5"}. 路由注册
+
+\`\`\`${extx}
+// ${routeDir}/index.${extx} 或路由配置文件
+{ path: "/features", element: <FeatureList /> }
+{ path: "/features/:id", element: <FeatureDetail /> }
+\`\`\`
+
+## 文件检查清单
+
+新建功能后确认以下文件已创建/更新：
+
+- [ ] \`${typeDir}/feature.${ext}\` — 类型定义
+- [ ] \`${apiDir}/feature.${ext}\` — API 函数
+${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/useFeature.${ext}\` — 数据 Hook（可选）
+- [ ] \`${compDir}/FeatureList/\` — 页面组件
+- [ ] 路由配置已更新
+
+---
+
+*遵循此模式保持项目一致性。参考 @project-structure.mdc 确认各类文件的实际目录位置。*
+`;
+
+    return {
+      scope: "specialized",
+      modulePath: context.projectPath,
+      content,
+      fileName: "feature-recipe.mdc",
+      priority: 88,
+      type: "guideline",
+      depends: ["global-rules", "project-structure", "architecture"],
     };
   }
 
@@ -3695,13 +3946,47 @@ ${entries.join("\n")}\n`;
   }
 
   private getRouteGlobs(router: any, type: "frontend" | "backend"): string {
-    const locations: string[] = router?.info?.location || [];
+    const locations: string[] = (router?.info?.location || [])
+      .filter((loc: string) => !path.isAbsolute(loc));
     if (locations.length > 0) {
       return locations.map((loc: string) => `${loc}**`).join(", ");
     }
     return type === "frontend"
       ? "**/routes/**, **/pages/**, **/app/**"
       : "**/routes/**, **/api/**, **/controllers/**";
+  }
+
+  private getHookGlobs(context: RuleGenerationContext): string | null {
+    const hookDirs = (context.customPatterns?.customHooks ?? [])
+      .map((h) => {
+        const parts = h.relativePath.split('/');
+        return parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : null;
+      })
+      .filter((d): d is string => d !== null && !path.isAbsolute(d));
+    const uniqueDirs = [...new Set(hookDirs)].slice(0, 3);
+    if (uniqueDirs.length > 0) {
+      return uniqueDirs.map((d) => `${d}**`).join(', ');
+    }
+    return '**/hooks/**';
+  }
+
+  private getStoreGlobs(context: RuleGenerationContext): string | null {
+    const stateLib = context.techStack.dependencies.find((d) =>
+      ['redux', 'mobx', 'zustand', 'pinia', 'vuex'].some((lib) =>
+        d.name.toLowerCase().includes(lib)
+      )
+    );
+    if (!stateLib) return null;
+    // 从 structure 中找 store/slice 相关目录
+    const sliceDirs = (context.fileOrganization?.structure ?? [])
+      .filter((d) => /store|stores|slice|state|reducer/i.test(d.path.split('/').pop() ?? ''))
+      .map((d) => d.path.replace(/^\//, '') + '/')
+      .filter((p) => !path.isAbsolute(p));
+    const uniqueDirs = [...new Set(sliceDirs)].slice(0, 3);
+    if (uniqueDirs.length > 0) {
+      return uniqueDirs.map((d) => `${d}**`).join(', ');
+    }
+    return '**/store/**, **/stores/**, **/slice/**';
   }
 
   /**
@@ -4268,9 +4553,12 @@ export const UserProfile = observer(() => {
       const style = context.projectPractice.codeStyle;
       rules += `### 项目当前实践（分析得出）\n\n`;
       rules += `通过分析项目代码，发现以下风格模式：\n\n`;
-      rules += `- **变量声明**: 主要使用 ${
-        style.variableDeclaration === "const-let" ? "const/let" : "var"
-      }\n`;
+      // TypeScript/modern JS 项目不可能以 var 为主，若检测为 var 优先使用 const/let 作为保底
+      const isTS = context.techStack.languages.includes("TypeScript");
+      const varDisplay = (isTS && style.variableDeclaration === "var")
+        ? "const/let（TypeScript 项目标准）"
+        : style.variableDeclaration === "const-let" ? "const/let" : style.variableDeclaration === "var" ? "var" : "const/let（混合）";
+      rules += `- **变量声明**: 主要使用 ${varDisplay}\n`;
       rules += `- **函数风格**: ${
         style.functionStyle === "arrow" ? "箭头函数" : "function 声明"
       }\n`;
@@ -4400,39 +4688,52 @@ export const UserProfile = observer(() => {
     }
 
     const eh = context.projectPractice.errorHandling;
-    let rules = `## 错误处理规范\n\n`;
-    
-    // v1.9: 添加引用说明，避免重复基础规范
-    rules += `> 💡 **基础规范**: 错误处理的基本语法和最佳实践请参考 **@code-style.mdc**\n\n`;
+    const isTS = context.techStack.languages.includes("TypeScript");
+    const logMethod = eh.loggingMethod === "logger-library" && eh.loggerLibrary
+      ? eh.loggerLibrary
+      : "console";
+    const logCall = logMethod === "console" ? "console.error" : `${logMethod}.error`;
 
-    // 第一段：项目当前实践
-    rules += `### 项目当前实践\n\n`;
+    let rules = `## 项目错误处理规范\n\n`;
 
     if (eh.type === "none" || eh.frequency === 0) {
-      rules += `⚠️ 项目当前未实施系统的错误处理。建议参考 @code-style.mdc 中的错误处理规范。\n\n`;
+      rules += `⚠️ 项目尚未建立系统的错误处理模式，请遵循以下约定。\n\n`;
     } else {
       rules += `项目主要使用 **${
         eh.type === "try-catch" ? "try-catch" : "Promise.catch()"
-      }** 处理错误（发现 ${eh.frequency} 处）\n\n`;
-
+      }** 处理错误`;
       if (eh.customErrorTypes.length > 0) {
-        rules += `**自定义错误类型**：\n`;
-        rules +=
-          eh.customErrorTypes.map((t: string) => `- \`${t}\``).join("\n") +
-          "\n\n";
+        rules += `，自定义错误类型：${eh.customErrorTypes.map((t: string) => `\`${t}\``).join("、")}`;
       }
-
-      rules += `**日志方式**：${
-        eh.loggingMethod === "console"
-          ? "console.log/error"
-          : eh.loggingMethod === "logger-library"
-          ? `日志库 (${eh.loggerLibrary})`
-          : "未检测到"
-      }\n\n`;
+      rules += `。\n\n`;
     }
 
-    // 移除所有建议，改为收集到 SuggestionCollector
-    // 建议将在生成完成后单独输出，供用户确认
+    rules += `### Do ✅\n\n`;
+    rules += `\`\`\`${isTS ? "typescript" : "javascript"}\n`;
+    rules += `// 异步操作：捕获并记录，向上层暴露有意义的错误\n`;
+    rules += `async function fetchData(id: string) {\n`;
+    rules += `  try {\n`;
+    rules += `    return await api.get(id);\n`;
+    rules += `  } catch (err) {\n`;
+    rules += `    ${logCall}('[fetchData] failed', { id, err });\n`;
+    rules += `    throw err; // 让调用方决定如何展示\n`;
+    rules += `  }\n`;
+    rules += `}\n`;
+    rules += `\`\`\`\n\n`;
+
+    rules += `### Don't ❌\n\n`;
+    rules += `\`\`\`${isTS ? "typescript" : "javascript"}\n`;
+    rules += `// 吞掉错误 — 导致静默失败，难以排查\n`;
+    rules += `try { await doSomething(); } catch (_) {}\n\n`;
+    rules += `// 记录但不抛出 — 上层不知道操作失败\n`;
+    rules += `try { await doSomething(); } catch (err) { ${logCall}(err); }\n`;
+    rules += `\`\`\`\n\n`;
+
+    rules += `### 规则\n\n`;
+    rules += `- **catch 块不能为空**：必须 log + re-throw 或显式处理。\n`;
+    rules += `- **日志包含上下文**：\`${logCall}('[scope]', { ...params, err })\`\n`;
+    rules += `- **区分错误类型**：业务错误（可恢复）vs 系统错误（不可恢复），后者直接 throw。\n`;
+    rules += `- **用户提示友好**：展示给用户的消息不含技术细节，记录原始错误到日志。\n`;
 
     return rules;
   }

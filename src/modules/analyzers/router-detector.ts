@@ -110,7 +110,7 @@ export class RouterDetector {
           exists: true,
           type: "config-based",
           framework: "React Router",
-          location: [path.dirname(reactRouterConfig)],
+          location: [this.relDir(projectPath, reactRouterConfig)],
         };
       }
     }
@@ -126,7 +126,7 @@ export class RouterDetector {
           exists: true,
           type: "config-based",
           framework: "Vue Router",
-          location: [path.dirname(vueRouterConfig)],
+          location: [this.relDir(projectPath, vueRouterConfig)],
         };
       }
     }
@@ -286,7 +286,7 @@ export class RouterDetector {
           type: "programmatic",
           framework: "Express",
           location: expressRoutes
-            .map((f) => path.dirname(f))
+            .map((f) => this.relDir(projectPath, f))
             .filter((v, i, a) => a.indexOf(v) === i)
             .slice(0, 3),
         };
@@ -320,7 +320,7 @@ export class RouterDetector {
           exists: true,
           type: "programmatic",
           framework: "NestJS",
-          location: nestControllers.map((f) => path.dirname(f)).slice(0, 3),
+          location: nestControllers.map((f) => this.relDir(projectPath, f)).slice(0, 3),
         };
       }
     }
@@ -332,7 +332,7 @@ export class RouterDetector {
         exists: true,
         type: "config-based",
         framework: "Django",
-        location: djangoUrls.map((f) => path.dirname(f)),
+        location: djangoUrls.map((f) => this.relDir(projectPath, f)),
       };
     }
 
@@ -435,6 +435,15 @@ export class RouterDetector {
     }
 
     return null;
+  }
+
+  /**
+   * 将文件绝对路径转为相对于项目根的目录路径（以 / 结尾）
+   */
+  private relDir(projectPath: string, filePath: string): string {
+    const dir = path.dirname(filePath);
+    const rel = path.relative(projectPath, dir);
+    return rel ? `${rel}/` : '';
   }
 
   /**
