@@ -17,18 +17,22 @@ export interface FrameworkMatch {
  * awesome-cursorrules 中的框架规则映射
  * 基于提取的 30 个规则文件分析
  */
-const FRAMEWORK_RULES_MAP: Record<string, {
+interface FrameworkRuleEntry {
   files: string[];
   format: 'persona-first' | 'title-first' | 'mixed' | 'code-comment';
   techStack: string[];
-}> = {
+  requiredTech?: string[];
+}
+
+const FRAMEWORK_RULES_MAP: Record<string, FrameworkRuleEntry> = {
   'react-typescript': {
     files: [
       'react-components-creation-cursorrules-prompt-file',
       'cursor-ai-react-typescript-shadcn-ui-cursorrules-p'
     ],
     format: 'persona-first',
-    techStack: ['React', 'TypeScript', 'Shadcn', 'Tailwind']
+    techStack: ['React', 'TypeScript', 'Shadcn', 'Tailwind'],
+    requiredTech: ['React']
   },
   'nextjs-typescript': {
     files: [
@@ -37,7 +41,8 @@ const FRAMEWORK_RULES_MAP: Record<string, {
       'nextjs-typescript-tailwind-cursorrules-prompt-file'
     ],
     format: 'persona-first',
-    techStack: ['Next.js', 'TypeScript', 'React', 'Tailwind']
+    techStack: ['Next.js', 'TypeScript', 'React', 'Tailwind'],
+    requiredTech: ['Next.js']
   },
   'nextjs-app-router': {
     files: [
@@ -45,21 +50,24 @@ const FRAMEWORK_RULES_MAP: Record<string, {
       'cursorrules-cursor-ai-nextjs-14-tailwind-seo-setup'
     ],
     format: 'title-first',
-    techStack: ['Next.js', 'React', 'TypeScript', 'Tailwind']
+    techStack: ['Next.js', 'React', 'TypeScript', 'Tailwind'],
+    requiredTech: ['Next.js']
   },
   'nextjs-15-react-19': {
     files: [
       'nextjs15-react19-vercelai-tailwind-cursorrules-prompt-file'
     ],
     format: 'persona-first',
-    techStack: ['Next.js', 'React', 'TypeScript', 'Tailwind', 'Vercel']
+    techStack: ['Next.js', 'React', 'TypeScript', 'Tailwind', 'Vercel'],
+    requiredTech: ['Next.js']
   },
   'vue-typescript': {
     files: [
       'vue3-composition-api-cursorrules-prompt-file'
     ],
     format: 'persona-first',
-    techStack: ['Vue', 'TypeScript']
+    techStack: ['Vue', 'TypeScript'],
+    requiredTech: ['Vue']
   },
   'angular-typescript': {
     files: [
@@ -67,7 +75,8 @@ const FRAMEWORK_RULES_MAP: Record<string, {
       'angular-novo-elements-cursorrules-prompt-file'
     ],
     format: 'persona-first',
-    techStack: ['Angular', 'TypeScript']
+    techStack: ['Angular', 'TypeScript'],
+    requiredTech: ['Angular']
   },
   'sveltekit-typescript': {
     files: [
@@ -75,7 +84,8 @@ const FRAMEWORK_RULES_MAP: Record<string, {
       'sveltekit-tailwindcss-typescript-cursorrules-promp'
     ],
     format: 'persona-first',
-    techStack: ['Svelte', 'TypeScript', 'Tailwind']
+    techStack: ['Svelte', 'TypeScript', 'Tailwind'],
+    requiredTech: ['Svelte']
   },
   'typescript-react': {
     files: [
@@ -83,7 +93,8 @@ const FRAMEWORK_RULES_MAP: Record<string, {
       'typescript-nextjs-react-cursorrules-prompt-file'
     ],
     format: 'persona-first',
-    techStack: ['TypeScript', 'React', 'Next.js']
+    techStack: ['TypeScript', 'React', 'Next.js'],
+    requiredTech: ['React']
   }
 };
 
@@ -114,6 +125,8 @@ function calculateSimilarity(
 
 /**
  * 匹配最相似的框架规则
+ * 前置条件：候选框架的 requiredTech 必须全部出现在项目技术栈中，
+ * 防止纯后端项目（如 Node.js + TypeScript）误匹配到前端框架模板。
  */
 export function findBestFrameworkMatch(techStack: TechStack): FrameworkMatch | null {
   const projectStack = [
@@ -121,6 +134,7 @@ export function findBestFrameworkMatch(techStack: TechStack): FrameworkMatch | n
     ...techStack.frameworks,
     ...techStack.languages
   ];
+  const projectLower = new Set(projectStack.map(s => s.toLowerCase()));
 
   logger.debug('开始框架匹配', { projectStack });
 
@@ -128,6 +142,14 @@ export function findBestFrameworkMatch(techStack: TechStack): FrameworkMatch | n
   let bestSimilarity = 0;
 
   for (const [key, rule] of Object.entries(FRAMEWORK_RULES_MAP)) {
+    if (rule.requiredTech) {
+      const missing = rule.requiredTech.filter(t => !projectLower.has(t.toLowerCase()));
+      if (missing.length > 0) {
+        logger.debug(`跳过 ${key}：缺少必需技术 ${missing.join(', ')}`);
+        continue;
+      }
+    }
+
     const similarity = calculateSimilarity(projectStack, rule.techStack);
     
     logger.debug(`匹配 ${key}`, { similarity, ruleStack: rule.techStack });
@@ -143,7 +165,7 @@ export function findBestFrameworkMatch(techStack: TechStack): FrameworkMatch | n
     }
   }
 
-  if (bestMatch && bestMatch.similarity > 0.3) {
+  if (bestMatch && bestMatch.similarity > 0.4) {
     logger.info('找到匹配的框架规则', {
       framework: bestMatch.framework,
       similarity: Math.round(bestMatch.similarity * 100) + '%',

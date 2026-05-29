@@ -10,7 +10,7 @@ import { BestPracticeComparator } from '../generators/best-practice-comparator.j
 import { BestPracticeExtractor } from '../generators/best-practice-extractor.js';
 import { BestPracticeWebSearcher } from '../integrations/best-practice-web-searcher.js';
 import {
-    findBestFrameworkMatch, FrameworkMatch, getFrameworkFormatTemplate
+    findBestFrameworkMatch, FrameworkMatch
 } from '../generators/framework-matcher.js';
 import { RuleRequirementsAnalyzer } from '../generators/rule-requirements-analyzer.js';
 import { SuggestionCollector } from '../generators/suggestion-collector.js';
@@ -542,154 +542,52 @@ export class RulesGenerator {
   ): CursorRule {
     const metadata = this.generateRuleMetadata(
       `${this.getProjectName(context.projectPath)} - 全局规则`,
-      "项目级通用规范和开发原则",
+      "Project-wide conventions, tech stack, and core development principles. Always loaded.",
       100,
       context.techStack.primary,
       ["global", "overview"],
-      "overview"
+      "overview",
+      undefined,
+      { alwaysApply: true }
     );
 
-    // 生成角色定义（基于框架匹配）
     const persona = this.generatePersona(context);
-    const frameworkReference = this.frameworkMatch
-      ? `\n> 💡 **格式参考**: 本规则参考了 [awesome-cursorrules](https://github.com/PatrickJS/awesome-cursorrules) 中的 **${
-          this.frameworkMatch.framework
-        }** 格式（相似度: ${Math.round(
-          this.frameworkMatch.similarity * 100
-        )}%），采用 **${this.frameworkMatch.format}** 格式风格。\n`
-      : "";
+
+    const techVersions = this.generateVersionedTechStack(context);
+    const commandsSection = this.generateCommandsSection(context);
 
     const content =
       metadata +
-      `
-# 项目概述
+      `# ${this.getProjectName(context.projectPath)}
 
 ${persona}
 
-这是一个基于 **${context.techStack.primary.join(", ")}** 的项目。${frameworkReference}
+## Tech Stack
 
-## 技术栈
+${techVersions}
+${commandsSection}
+## Hard Constraints
 
-**主要技术**: ${context.techStack.primary.join(", ")}  
-**语言**: ${context.techStack.languages.join(", ")}  
-**包管理器**: ${context.techStack.packageManagers.join(", ")}  
+- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.
+- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
+- NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
+- NEVER generate markdown documentation files — express intent through code, types, and naming.
+- Before creating files, consult @project-structure.mdc for correct location.
+- Reuse existing project tools — do not re-implement what already exists.
+- Follow the project's established patterns and conventions.
 ${
   context.techStack.frameworks.length > 0
-    ? `**框架**: ${context.techStack.frameworks.join(", ")}`
+    ? `\n${this.generateFrameworkPrinciples(context)}\n`
     : ""
 }
+## Rule Index
 
-## 开发规范文件
-
-本项目的开发规范分布在以下专题文件中，请根据工作内容参考：
-
-- **@code-style.mdc** - 代码风格和格式化规范
-- **@project-structure.mdc** - 项目目录结构和职能说明（**新建文件前必读**）
-- **@architecture.mdc** - 项目架构和模块结构规范
-${
-  this.hasCustomTools(context)
-    ? "- **@custom-tools.mdc** - 项目自定义工具（必须优先使用）\n"
-    : ""
-}${
-        this.hasErrorHandling(context)
-          ? "- **@error-handling.mdc** - 错误处理规范\n"
-          : ""
-      }${
-        this.hasStateManagement(context)
-          ? "- **@state-management.mdc** - 状态管理规范\n"
-          : ""
-      }${
-        context.frontendRouter
-          ? "- **@frontend-routing.mdc** - 前端路由规范\n"
-          : ""
-      }${
-        context.backendRouter ? "- **@api-routing.mdc** - API 路由规范\n" : ""
-      }${
-        this.isFrontendProject(context)
-          ? "- **@ui-ux.mdc** - UI/UX 设计规范\n"
-          : ""
-      }${
-        this.featureExists(context, "testing")
-          ? "- **@testing.mdc** - 测试规范\n"
-          : ""
-      }- **@custom-rules.mdc** - 自定义规则（可选，用户可自行填写）
-
-**工作流程**: 详见 @../instructions.md
-
-> 💡 **提示**: \`custom-rules.mdc\` 是一个可选文件，用于添加项目特定的自定义规则。如果未填写或已删除，不影响其他规则的执行。
-
-## 核心开发原则
-
-- **保持一致性** - 遵循项目现有代码风格和架构
-- **优先使用项目工具** - 不要重新实现已有的工具函数和 Hooks
-- **遵循路径别名** - 使用配置的路径别名，不使用相对路径
-- **渐进式改进** - 在现有基础上小步优化，不破坏架构
-- **类型安全** - 充分利用 TypeScript 的类型系统
-- **代码质量** - 编写简洁、可维护、高性能的代码
-
-## ⚠️ 文件生成限制
-
-**严格禁止**：
-- ❌ 禁止生成任何 '.md' 文件（除了 '.cursor/instructions.md' 和 '.cursor/rules/*.mdc' 规则文件）
-- ❌ 禁止生成过程记录、总结、日志等文档文件
-- ❌ 禁止生成与项目无关的文档文件
-
-**允许的文件**：
-- ✅ '.cursor/instructions.md' - Cursor 工作流程说明
-- ✅ '.cursor/rules/*.mdc' - Cursor 规则文件
-
-**说明**：生成代码时，不要创建任何 Markdown 文档文件。所有文档都应该通过代码注释、类型定义和清晰的命名来表达。
-
-${
-  context.techStack.frameworks.length > 0
-    ? `
-## 框架特定原则
-
-${this.generateFrameworkPrinciples(context)}
-`
-    : ""
-}
-
-## ⚠️ 开始任务前（必须严格执行）
-
-**CRITICAL**: 在开始任何开发任务之前，Agent **必须**执行以下步骤：
-
-### 步骤 1: 理解任务（必须执行）
-
-**必须**让 Cursor 确认理解任务：
-\`\`\`
-请确认你理解了以下任务：[描述任务]
-需要创建哪些文件？需要使用哪些项目工具？
-\`\`\`
-
-### 步骤 2: 查阅规则文件（必须执行）
-
-**必须**参考相关的专题规则文件：
-
-1. **首先阅读** @global-rules.mdc - 了解项目概述和核心原则
-2. **新建文件前必须查看** @project-structure.mdc - 确定正确的目录位置和命名规范
-3. **根据任务类型查阅**：
-   - 代码风格相关 → @code-style.mdc
-   - 架构设计相关 → @architecture.mdc
-   - 路由相关 → @frontend-routing.mdc 或 @api-routing.mdc
-   - 状态管理相关 → @state-management.mdc
-   - 错误处理相关 → @error-handling.mdc
-   - 测试相关 → @testing.mdc
-
-### 步骤 3: 确认文件位置（必须执行）
-
-**新建文件前必须**：
-1. 查看 @project-structure.mdc 中的目录结构树
-2. 根据目录职能说明确定正确的文件位置
-3. 遵循项目的命名规范
-
-**违反以上步骤将导致代码生成错误，必须严格遵守！**
-
-> 💡 **重要提示**: 新建文件前，**必须先查看 @project-structure.mdc** 确定正确的目录位置和命名规范。
-
----
-
-*这是规则文件的入口，详细规范请参考上述专题文件。*
+| Rule | Scope |
+|------|-------|
+| @code-style.mdc | Formatting and naming conventions |
+| @project-structure.mdc | Directory layout and file placement |
+| @architecture.mdc | Module structure and design patterns |
+${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${this.featureExists(context, "testing") ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -710,14 +608,16 @@ ${this.generateFrameworkPrinciples(context)}
     context: RuleGenerationContext,
     missingPractices?: any[]
   ): CursorRule {
+    const langGlobs = this.getLanguageGlobs(context);
     const metadata = this.generateRuleMetadata(
       "代码风格规范",
-      "基于项目配置的代码格式化和命名约定",
+      "Code style, formatting, and naming conventions derived from project config",
       90,
       context.techStack.primary,
       ["style", "formatting"],
       "guideline",
-      ["global-rules"]
+      ["global-rules"],
+      { globs: langGlobs }
     );
 
     // 补充缺失的最佳实践
@@ -728,16 +628,7 @@ ${this.generateFrameworkPrinciples(context)}
     const content =
       metadata +
       `
-# 代码风格规范
-
-参考: @global-rules.mdc
-
-## 核心原则
-
-- 编写简洁、可读、可维护的代码
-- 遵循项目现有的代码风格
-- 使用描述性的变量名和函数名
-- 优先使用函数式编程模式
+# Code Style
 
 ${
   context.projectConfig
@@ -745,11 +636,32 @@ ${
     : this.generateCodeStyleGuidelines(context)
 }
 
-${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n` : ""}
+## Do / Don't
 
----
+\`\`\`typescript
+// DON'T: swallow errors
+try { await fetchData(); } catch (e) {}
 
-*代码风格会被编辑器自动应用，重点是理解和遵循命名约定。*
+// DO: handle errors explicitly
+try {
+  await fetchData();
+} catch (error: unknown) {
+  logger.error("fetchData failed", { error });
+  throw error;
+}
+\`\`\`
+
+\`\`\`typescript
+// DON'T: use any
+function process(data: any) { return data.value; }
+
+// DO: use explicit types
+function process(data: ProcessInput): ProcessOutput {
+  return data.value;
+}
+\`\`\`
+
+${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}
 `;
 
     return {
@@ -777,7 +689,7 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
     
     const metadata = this.generateRuleMetadata(
       "项目结构",
-      "目录结构和职能说明，用于指导文件创建位置",
+      "Consult when creating new files or directories to determine correct location and naming conventions",
       85,
       context.techStack.primary,
       ["structure", "directory", "file-organization"],
@@ -818,7 +730,7 @@ ${this.generateDetailedStructureContent(context)}
   ): CursorRule {
     const metadata = this.generateRuleMetadata(
       "项目结构",
-      "目录结构和职能说明，用于指导文件创建位置",
+      "Consult when creating new files or directories to determine correct location and naming conventions",
       85,
       context.techStack.primary,
       ["structure", "directory", "file-organization"],
@@ -1808,7 +1720,7 @@ ${this.generateDetailedStructureContent(context)}
   ): CursorRule {
     const metadata = this.generateRuleMetadata(
       "项目架构",
-      "模块结构和架构设计规范",
+      "Consult when designing features, adding modules, or making architectural decisions",
       90,
       context.techStack.primary,
       ["architecture", "modules"],
@@ -1823,16 +1735,16 @@ ${this.generateDetailedStructureContent(context)}
       architecturePractices
     );
 
+    const codeFeaturesSection = this.generateCodeFeaturesSection(context);
+
     const content =
       metadata +
       `
-# 项目架构
+# Project Architecture
 
-参考: @global-rules.mdc, @project-structure.mdc
+See also: @global-rules.mdc, @project-structure.mdc
 
-> 💡 **提示**: 关于文件组织、目录结构和新建文件位置，请参考 **@project-structure.mdc**。
-
-## 架构模式
+## Architecture Pattern
 
 ${
   context.architecturePattern
@@ -1844,19 +1756,15 @@ ${
       })
 }
 
-## 模块结构
+## Module Structure
 
 ${this.generateModuleStructureSection(context)}
-
-## 架构设计原则
+${codeFeaturesSection}
+## Design Principles
 
 ${this.generateArchitecturePrinciples(context)}
 
-${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n` : ""}
-
----
-
-*架构设计应保持清晰、可维护和可扩展。*
+${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices}\n` : ""}
 `;
 
     return {
@@ -1870,13 +1778,30 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
     };
   }
 
+  private generateCodeFeaturesSection(context: RuleGenerationContext): string {
+    const features = context.codeFeatures;
+    if (!features || Object.keys(features).length === 0) return "";
+
+    const lines: string[] = ["\n## Code Features\n"];
+    for (const [key, feature] of Object.entries(features)) {
+      lines.push(`### ${key}`);
+      lines.push(`${feature.description} (frequency: ${feature.frequency})`);
+      if (feature.examples.length > 0) {
+        const shown = feature.examples.slice(0, 3);
+        lines.push(`Files: ${shown.map(e => `\`${e}\``).join(", ")}`);
+      }
+      lines.push("");
+    }
+    return lines.join("\n");
+  }
+
   /**
    * v1.3: 生成自定义工具规则（约 150 行）
    */
   private generateCustomToolsRule(context: RuleGenerationContext): CursorRule {
     const metadata = this.generateRuleMetadata(
       "项目自定义工具",
-      "必须优先使用的自定义 Hooks 和工具函数",
+      "Consult before implementing features — lists project-specific hooks, utilities, and API clients that MUST be reused",
       95,
       context.techStack.primary,
       ["custom-tools", "reference"],
@@ -1916,14 +1841,16 @@ ${this.generateCustomToolsRules(context)}
     context: RuleGenerationContext,
     missingPractices?: any[]
   ): CursorRule {
+    const langGlobsForErr = this.getLanguageGlobs(context);
     const metadata = this.generateRuleMetadata(
       "错误处理规范",
-      "基于项目实践的错误处理和日志规范",
+      "Error handling patterns, logging, and recovery strategies based on project conventions",
       80,
       context.techStack.primary,
       ["error-handling", "practice"],
       "practice",
-      ["global-rules", "custom-tools"]
+      ["global-rules", "custom-tools"],
+      { globs: langGlobsForErr }
     );
 
     // 补充缺失的最佳实践
@@ -1974,7 +1901,7 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
 
     const metadata = this.generateRuleMetadata(
       "状态管理规范",
-      `${stateLib?.name || "状态管理"} 使用规范`,
+      `Consult when implementing state management, data flow, or ${stateLib?.name || "store"}-related code`,
       85,
       context.techStack.primary,
       ["state-management", "practice"],
@@ -2011,14 +1938,16 @@ ${this.generateStateManagementContent(context, stateLib?.name)}
    * v1.3: 生成 UI/UX 规则（约 250 行）
    */
   private generateUIUXRule(context: RuleGenerationContext): CursorRule {
+    const uiGlobs = "**/*.{tsx,jsx,vue,svelte}";
     const metadata = this.generateRuleMetadata(
       "UI/UX 设计规范",
-      "用户界面和用户体验设计规范",
+      "UI component patterns, accessibility, and UX best practices for frontend code",
       75,
       context.techStack.primary,
       ["ui-ux", "frontend"],
       "guideline",
-      ["global-rules", "code-style"]
+      ["global-rules", "code-style"],
+      { globs: uiGlobs }
     );
 
     const content =
@@ -2053,14 +1982,16 @@ ${this.generateUIUXGuidelines(context)}
     context: RuleGenerationContext
   ): CursorRule {
     const router = context.frontendRouter!;
+    const routeGlobs = this.getRouteGlobs(router, "frontend");
     const metadata = this.generateRuleMetadata(
       "前端路由规范",
-      `${router.info.framework} 路由组织和使用规范`,
+      `${router.info.framework} routing organization, navigation patterns, and URL conventions`,
       85,
       context.techStack.primary,
       ["routing", "frontend", "navigation"],
       "practice",
-      ["global-rules", "architecture"]
+      ["global-rules", "architecture"],
+      { globs: routeGlobs }
     );
 
     const content =
@@ -2103,14 +2034,16 @@ ${this.generateFrontendRouterContent(router, context)}
     context: RuleGenerationContext
   ): CursorRule {
     const router = context.backendRouter!;
+    const apiRouteGlobs = this.getRouteGlobs(router, "backend");
     const metadata = this.generateRuleMetadata(
       "API 路由规范",
-      `${router.info.framework} API 路由组织和使用规范`,
+      `${router.info.framework} API route handlers, middleware, and endpoint conventions`,
       85,
       context.techStack.primary,
       ["api", "routing", "backend"],
       "practice",
-      ["global-rules", "architecture"]
+      ["global-rules", "architecture"],
+      { globs: apiRouteGlobs }
     );
 
     const content =
@@ -2482,32 +2415,33 @@ ${this.generateBackendRouterContent(router, context)}
   private generateTestingRule(context: RuleGenerationContext): CursorRule {
     const hasTests = this.featureExists(context, "testing");
 
+    const testGlobs = "**/*.{test,spec}.{ts,tsx,js,jsx}";
     const metadata = this.generateRuleMetadata(
       "测试规范",
-      hasTests ? "测试组织和最佳实践" : "测试建议",
+      hasTests ? "Testing patterns, organization, and best practices" : "Testing recommendations for the project",
       70,
       context.techStack.primary,
       ["testing"],
       hasTests ? "practice" : "suggestion",
-      ["global-rules"]
+      ["global-rules"],
+      { globs: testGlobs }
     );
+
+    const testFramework = this.detectTestFramework(context);
+    const testCmd = context.projectConfig?.commands?.test;
+    const frameworkSection = testFramework
+      ? `**Framework**: ${testFramework.name}${testFramework.version ? ` ${testFramework.version}` : ""}\n`
+      : "";
+    const cmdSection = testCmd ? `**Run tests**: \`${testCmd}\`\n` : "";
 
     const content =
       metadata +
       `
-# 测试规范
+# Testing
 
-参考: @global-rules.mdc
+${frameworkSection}${cmdSection}
 
 ${this.generateConditionalTestingRules(context)}
-
----
-
-${
-  hasTests
-    ? "*测试是代码质量的保证，保持良好的测试覆盖率。*"
-    : "*当前项目未配置测试，按需添加。*"
-}
 `;
 
     return {
@@ -2521,16 +2455,50 @@ ${
     };
   }
 
+  private detectTestFramework(context: RuleGenerationContext): { name: string; version?: string } | null {
+    const deps = context.techStack.dependencies || [];
+    const testLibs = [
+      { pkg: "vitest", name: "Vitest" },
+      { pkg: "jest", name: "Jest" },
+      { pkg: "mocha", name: "Mocha" },
+      { pkg: "@testing-library/react", name: "React Testing Library" },
+      { pkg: "cypress", name: "Cypress" },
+      { pkg: "playwright", name: "Playwright" },
+    ];
+    for (const lib of testLibs) {
+      const dep = deps.find(d => d.name === lib.pkg);
+      if (dep) return { name: lib.name, version: dep.version };
+    }
+    return null;
+  }
+
+  private generateMockExample(context: RuleGenerationContext): string {
+    const fw = this.detectTestFramework(context);
+    const mockFn = fw?.name === "Vitest" ? "vi.fn" : "jest.fn";
+    return `\`\`\`typescript
+// ✅ Good mock usage
+const mockApiClient = {
+  fetchUser: ${mockFn}().mockResolvedValue({ id: 1, name: 'John' })
+};
+
+// ❌ Over-mocking
+const mockEverything = ${mockFn}(() => ${mockFn}(() => ${mockFn}()));
+\`\`\``;
+  }
+
   /**
    * v1.3: 旧的 generateGlobalRule 重命名保留（用于向后兼容）
    */
   private generateGlobalRule(context: RuleGenerationContext): CursorRule {
     const metadata = this.generateRuleMetadata(
       `${this.getProjectName(context.projectPath)} - 全局开发规则`,
-      "基于项目实际情况和最佳实践自动生成的 Cursor Rules",
+      "Project-wide conventions and best practices. Always loaded.",
       100,
       context.techStack.primary,
-      ["global", "best-practices"]
+      ["global", "best-practices"],
+      undefined,
+      undefined,
+      { alwaysApply: true }
     );
 
     let content =
@@ -2627,12 +2595,16 @@ ${this.generateCautions(context)}
     module: Module
   ): CursorRule {
     const tags = [module.type, "module"];
+    const moduleGlobs = `${module.path}/**`;
     const metadata = this.generateRuleMetadata(
       `${module.name} 模块规则`,
-      module.description || module.name + " 模块的开发规则",
+      module.description || `Development rules for the ${module.name} module`,
       50,
       context.techStack.primary,
-      tags
+      tags,
+      undefined,
+      undefined,
+      { globs: moduleGlobs }
     );
 
     const content =
@@ -3526,20 +3498,12 @@ class ResourceNotFoundError(Exception):
   - 第三方库的功能
   - 纯 UI 布局（可以用 E2E 测试）
 
-### Mock 和 Stub
-- 使用 Mock 隔离外部依赖
-- 不要过度 Mock，保持测试有意义
-- 为 API 调用、数据库操作等 I/O 创建 Mock
+### Mock and Stub
+- Use mocks to isolate external dependencies
+- Do not over-mock; keep tests meaningful
+- Create mocks for API calls, database operations, and other I/O
 
-\`\`\`typescript
-// ✅ 好的 Mock 使用
-const mockApiClient = {
-  fetchUser: jest.fn().mockResolvedValue({ id: 1, name: 'John' })
-};
-
-// ❌ 过度 Mock
-const mockEverything = jest.fn(() => jest.fn(() => jest.fn()));
-\`\`\`
+${this.generateMockExample(context)}
 
 ### 测试类型
 - **单元测试**：测试单个函数或类的行为
@@ -4018,95 +3982,141 @@ ${p.content}
    * 生成规则元数据（v1.3 增强）
    */
   private generateRuleMetadata(
-    title: string,
+    _title: string,
     description: string,
-    priority: number,
-    techStack: string[],
-    tags: string[],
-    type?: string,
-    depends?: string[]
+    _priority: number,
+    _techStack: string[],
+    _tags: string[],
+    _type?: string,
+    _depends?: string[],
+    activation?: {
+      alwaysApply?: boolean;
+      globs?: string | string[];
+    }
   ): string {
-    const now = new Date();
-    const version = "1.3.0";
+    let metadata = `---\ndescription: ${description}\n`;
 
-    let metadata = `---
-title: ${title}
-description: ${description}
-priority: ${priority}
-version: ${version}
-generatedAt: ${now.toISOString().split("T")[0]}
-techStack: ${JSON.stringify(techStack)}
-generator: cursor-rules-generators
-tags: ${JSON.stringify(tags)}`;
-
-    if (type) {
-      metadata += `\ntype: ${type}`;
+    if (activation?.alwaysApply) {
+      metadata += `alwaysApply: true\n`;
+    } else if (activation?.globs) {
+      metadata += `alwaysApply: false\n`;
+      const globsValue = Array.isArray(activation.globs)
+        ? activation.globs.join(", ")
+        : activation.globs;
+      metadata += `globs: ${globsValue}\n`;
+    } else {
+      metadata += `alwaysApply: false\n`;
     }
 
-    if (depends && depends.length > 0) {
-      metadata += `\ndepends: ${JSON.stringify(depends)}`;
-    }
-
-    metadata += `\n---\n\n`;
-
+    metadata += `---\n\n`;
     return metadata;
+  }
+
+  private generateVersionedTechStack(context: RuleGenerationContext): string {
+    const lines: string[] = [];
+    const deps = context.techStack.dependencies || [];
+
+    const primaryWithVersions = context.techStack.primary.map((tech) => {
+      const dep = deps.find(
+        (d) => d.name.toLowerCase() === tech.toLowerCase() ||
+          d.name.toLowerCase().includes(tech.toLowerCase())
+      );
+      return dep ? `${tech} ${dep.version}` : tech;
+    });
+
+    lines.push(`**Primary**: ${primaryWithVersions.join(", ")}`);
+    lines.push(`**Languages**: ${context.techStack.languages.join(", ")}`);
+    lines.push(`**Package Manager**: ${context.techStack.packageManagers.join(", ")}`);
+    if (context.techStack.frameworks.length > 0) {
+      const fwWithVersions = context.techStack.frameworks.map((fw) => {
+        const dep = deps.find(
+          (d) => d.name.toLowerCase() === fw.toLowerCase() ||
+            d.name.toLowerCase().includes(fw.toLowerCase())
+        );
+        return dep ? `${fw} ${dep.version}` : fw;
+      });
+      lines.push(`**Frameworks**: ${fwWithVersions.join(", ")}`);
+    }
+
+    return lines.join("  \n");
+  }
+
+  private generateCommandsSection(context: RuleGenerationContext): string {
+    const cmds = context.projectConfig?.commands;
+    if (!cmds) return "";
+
+    const entries: string[] = [];
+    if (cmds.build) entries.push(`| Build | \`${cmds.build}\` |`);
+    if (cmds.dev) entries.push(`| Dev | \`${cmds.dev}\` |`);
+    if (cmds.start) entries.push(`| Start | \`${cmds.start}\` |`);
+    if (cmds.test) entries.push(`| Test | \`${cmds.test}\` |`);
+    if (cmds.lint) entries.push(`| Lint | \`${cmds.lint}\` |`);
+    if (cmds.lintFix) entries.push(`| Lint Fix | \`${cmds.lintFix}\` |`);
+    if (cmds.format) entries.push(`| Format | \`${cmds.format}\` |`);
+    if (cmds.typeCheck) entries.push(`| Type Check | \`${cmds.typeCheck}\` |`);
+
+    if (entries.length === 0) return "";
+
+    return `\n## Commands\n\n| Task | Command |\n|------|---------|
+${entries.join("\n")}\n`;
+  }
+
+  private getLanguageGlobs(context: RuleGenerationContext): string {
+    const langs = context.techStack.languages.map((l) => l.toLowerCase());
+    const exts: string[] = [];
+    if (langs.includes("typescript") || langs.includes("javascript")) {
+      exts.push("ts", "tsx", "js", "jsx");
+    }
+    if (langs.includes("python")) exts.push("py");
+    if (langs.includes("go")) exts.push("go");
+    if (langs.includes("rust")) exts.push("rs");
+    if (langs.includes("java")) exts.push("java");
+    if (langs.includes("ruby")) exts.push("rb");
+    if (langs.includes("php")) exts.push("php");
+    if (exts.length === 0) exts.push("ts", "tsx", "js", "jsx");
+    return `**/*.{${exts.join(",")}}`;
+  }
+
+  private getRouteGlobs(router: any, type: "frontend" | "backend"): string {
+    const locations: string[] = router?.info?.location || [];
+    if (locations.length > 0) {
+      return locations.map((loc: string) => `${loc}**`).join(", ");
+    }
+    return type === "frontend"
+      ? "**/routes/**, **/pages/**, **/app/**"
+      : "**/routes/**, **/api/**, **/controllers/**";
   }
 
   /**
    * 生成角色定义（Persona）
    */
   private generatePersona(context: RuleGenerationContext): string {
-    const techStack = [
+    const allTech = [
       ...context.techStack.primary,
       ...context.techStack.frameworks.filter(
         (f) => !context.techStack.primary.includes(f)
       ),
-    ].join(", ");
+    ];
 
-    if (this.frameworkMatch) {
-      const template = getFrameworkFormatTemplate(this.frameworkMatch);
-      if (template.persona) {
-        return template.persona;
-      }
-    }
-
-    // 根据技术栈动态生成角色
     const isFrontend = this.isFrontendProject(context);
-    const isBackend = context.techStack.primary.some(
-      (tech) =>
-        tech.toLowerCase().includes("express") ||
-        tech.toLowerCase().includes("fastify") ||
-        tech.toLowerCase().includes("koa") ||
-        tech.toLowerCase().includes("nestjs") ||
-        tech.toLowerCase().includes("django") ||
-        tech.toLowerCase().includes("flask")
-    );
+    const backendIndicators = ["express", "fastify", "koa", "nestjs", "django", "flask", "spring"];
+    const isBackend = [
+      ...context.techStack.primary,
+      ...context.techStack.frameworks
+    ].some((tech) => backendIndicators.some(b => tech.toLowerCase().includes(b)));
 
-    let role = "";
+    let role: string;
     if (isFrontend && isBackend) {
-      role = "全栈开发专家";
+      role = "full-stack development";
     } else if (isFrontend) {
-      role = "前端开发专家";
+      role = "frontend development";
     } else if (isBackend) {
-      role = "后端开发专家";
+      role = "backend development";
     } else {
-      role = "软件开发专家";
+      role = "software engineering";
     }
 
-    // 根据主要语言生成
-    const primaryLanguage = context.techStack.languages[0] || "TypeScript";
-    let languageDesc = "";
-    if (primaryLanguage === "TypeScript") {
-      languageDesc = "精通 TypeScript";
-    } else if (primaryLanguage === "JavaScript") {
-      languageDesc = "精通 JavaScript";
-    } else if (primaryLanguage === "Python") {
-      languageDesc = "精通 Python";
-    } else {
-      languageDesc = `精通 ${primaryLanguage}`;
-    }
-
-    return `你是一位${role}，${languageDesc}，专注于使用 ${techStack} 构建高质量的应用。`;
+    return `You are an expert in ${allTech.join(", ")} with deep knowledge of ${role} best practices.`;
   }
 
   /**
@@ -4590,14 +4600,16 @@ ${this.generateKeyFileReferences(context)}
     context: RuleGenerationContext,
     module: Module
   ): Promise<CursorRule> {
+    const moduleOverviewGlobs = `${module.path}/**`;
     const metadata = this.generateRuleMetadata(
       `${module.name} 模块规则`,
-      module.description || `${module.name} 模块开发规范`,
+      module.description || `Development conventions for the ${module.name} module`,
       50,
       context.techStack.primary,
       [module.type, "module"],
       "overview",
-      ["global-rules"]
+      ["global-rules"],
+      { globs: moduleOverviewGlobs }
     );
 
     // 分析模块结构和业务信息

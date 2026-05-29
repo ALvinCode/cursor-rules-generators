@@ -14,6 +14,7 @@ import { PracticeAnalyzer } from "../src/modules/analyzers/practice-analyzer.js"
 import { CustomPatternDetector } from "../src/modules/analyzers/custom-pattern-detector.js";
 import { RulesGenerator } from "../src/modules/core/rules-generator.js";
 import { FileWriter } from "../src/modules/core/file-writer.js";
+import { ConfigParser } from "../src/modules/core/config-parser.js";
 import { logger } from "../src/utils/logger.js";
 
 /**
@@ -87,6 +88,12 @@ async function main() {
     const customPatterns = { customHooks, customUtils, apiClient };
     console.log(`✅ 发现 ${customHooks.length} 个 Hooks, ${customUtils.length} 个工具函数\n`);
 
+    // 解析项目配置（commands, prettier, eslint 等）
+    console.log("🔧 解析项目配置...");
+    const configParser = new ConfigParser();
+    const projectConfig = await configParser.parseProjectConfig(resolvedPath);
+    console.log(`✅ 项目配置已解析\n`);
+
     // 6. 深度目录分析
     console.log("📂 步骤 6/7: 深度目录分析...");
     const dependencies = techStack.dependencies.map((d) => ({
@@ -121,6 +128,7 @@ async function main() {
       files,
       projectPractice,
       customPatterns,
+      projectConfig,
     };
 
     const rules = await rulesGenerator.generate(ruleContext, {});

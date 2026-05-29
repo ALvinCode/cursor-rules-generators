@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "cursor-rules-generators": "dist/index.js"
+    "cursor-rules-generators": "dist/index.js",
+    "cursor-rules-gen": "dist/cli.js"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -14,13 +15,14 @@
   "packageManager": "pnpm@7.27.1",
   "files": [
     "dist",
+    "skill",
     "README.md",
     "README.zh-CN.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
+    "build": "tsc && chmod +x dist/index.js && echo '#!/usr/bin/env node\nimport \"./src/cli.js\";' > dist/cli.js && chmod +x dist/cli.js",
     "watch": "tsc --watch",
     "dev": "npm run build && node dist/index.js",
     "prepare": "npm run build",

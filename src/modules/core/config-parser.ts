@@ -47,8 +47,11 @@ export interface ProjectConfig {
     eslint: boolean;
     typescript: boolean;
   };
-  // v1.3.4 新增：格式化命令
   commands?: {
+    build?: string;
+    dev?: string;
+    start?: string;
+    test?: string;
     format?: string;
     lint?: string;
     lintFix?: string;
@@ -95,6 +98,10 @@ export class ConfigParser {
    * 检测项目的格式化和 lint 命令
    */
   private async detectFormattingCommands(projectPath: string): Promise<{
+    build?: string;
+    dev?: string;
+    start?: string;
+    test?: string;
     format?: string;
     lint?: string;
     lintFix?: string;
@@ -112,31 +119,17 @@ export class ConfigParser {
       return {};
     }
 
-    const commands: any = {};
+    const runPrefix = await this.detectRunPrefix(projectPath);
+    const commands: Record<string, string | undefined> = {};
 
-    // 查找格式化命令
-    commands.format = this.findCommand(pkg.scripts, [
-      "format",
-      "prettier",
-      "fmt",
-    ]);
-
-    // 查找 lint 命令
-    commands.lint = this.findCommand(pkg.scripts, ["lint", "eslint"]);
-
-    // 查找 lint fix 命令
-    commands.lintFix = this.findCommand(pkg.scripts, [
-      "lint:fix",
-      "eslint:fix",
-      "fix",
-    ]);
-
-    // 查找类型检查命令
-    commands.typeCheck = this.findCommand(pkg.scripts, [
-      "type-check",
-      "typecheck",
-      "tsc",
-    ]);
+    commands.build = this.findCommand(pkg.scripts, ["build", "compile"], runPrefix);
+    commands.dev = this.findCommand(pkg.scripts, ["dev", "serve", "watch"], runPrefix);
+    commands.start = this.findCommand(pkg.scripts, ["start", "preview"], runPrefix);
+    commands.test = this.findCommand(pkg.scripts, ["test", "vitest", "jest"], runPrefix);
+    commands.format = this.findCommand(pkg.scripts, ["format", "prettier", "fmt"], runPrefix);
+    commands.lint = this.findCommand(pkg.scripts, ["lint", "eslint"], runPrefix);
+    commands.lintFix = this.findCommand(pkg.scripts, ["lint:fix", "eslint:fix", "fix"], runPrefix);
+    commands.typeCheck = this.findCommand(pkg.scripts, ["type-check", "typecheck", "tsc"], runPrefix);
 
     return commands;
   }
@@ -146,22 +139,36 @@ export class ConfigParser {
    */
   private findCommand(
     scripts: Record<string, string>,
-    keywords: string[]
+    keywords: string[],
+    runPrefix = "npm run"
   ): string | undefined {
     for (const keyword of keywords) {
       if (scripts[keyword]) {
-        return `npm run ${keyword}`;
+        return `${runPrefix} ${keyword}`;
       }
     }
 
-    // 检查命令值中是否包含关键词
     for (const [key, value] of Object.entries(scripts)) {
       if (keywords.some((kw) => value.toLowerCase().includes(kw))) {
-        return `npm run ${key}`;
+        return `${runPrefix} ${key}`;
       }
     }
 
     return undefined;
+  }
+
+  private async detectRunPrefix(projectPath: string): Promise<string> {
+    const lockFiles: [string, string][] = [
+      ["pnpm-lock.yaml", "pnpm"],
+      ["yarn.lock", "yarn"],
+      ["bun.lockb", "bun"],
+    ];
+    for (const [file, prefix] of lockFiles) {
+      if (await FileUtils.fileExists(path.join(projectPath, file))) {
+        return `${prefix} run`;
+      }
+    }
+    return "npm run";
   }
 
   /**
