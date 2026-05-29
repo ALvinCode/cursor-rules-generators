@@ -1,29 +1,25 @@
 #!/usr/bin/env node
 /**
  * CLI entry point for cursor-rules-generators.
+ *
+ * Wraps the shared {@link AnalysisPipeline} so the CLI delivers the same
+ * analysis depth as the MCP server (router detection, Context7 best
+ * practices, consistency checking, etc.).
+ *
  * Usage:
  *   cursor-rules-gen generate [path]   — Analyze a project and write .cursor/rules/*.mdc
  *   cursor-rules-gen analyze  [path]   — Analyze only, print summary to stdout
  *   cursor-rules-gen --help
  */
 
-import * as path from "path";
 import { readFileSync } from "fs";
-import { dirname, join } from "path";
+import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 
-import { ProjectAnalyzer } from "./modules/core/project-analyzer.js";
-import { TechStackDetector } from "./modules/analyzers/tech-stack-detector.js";
-import { ModuleDetector } from "./modules/analyzers/module-detector.js";
-import { CodeAnalyzer } from "./modules/analyzers/code-analyzer.js";
-import { DeepDirectoryAnalyzer } from "./modules/analyzers/deep-directory-analyzer.js";
-import { PracticeAnalyzer } from "./modules/analyzers/practice-analyzer.js";
-import { CustomPatternDetector } from "./modules/analyzers/custom-pattern-detector.js";
+import { AnalysisPipeline, AnalysisProgress } from "./modules/core/analysis-pipeline.js";
 import { RulesGenerator } from "./modules/core/rules-generator.js";
 import { FileWriter } from "./modules/core/file-writer.js";
-import { ConfigParser } from "./modules/core/config-parser.js";
 import { logger } from "./utils/logger.js";
-import { RuleGenerationContext } from "./types.js";
 
 function getVersion(): string {
   try {
@@ -62,116 +58,64 @@ Examples:
 `);
 }
 
-async function buildContext(resolvedPath: string): Promise<RuleGenerationContext> {
-  const projectAnalyzer = new ProjectAnalyzer();
-  const techStackDetector = new TechStackDetector();
-  const moduleDetector = new ModuleDetector();
-  const codeAnalyzer = new CodeAnalyzer();
-  const practiceAnalyzer = new PracticeAnalyzer();
-  const customPatternDetector = new CustomPatternDetector();
-  const deepAnalyzer = new DeepDirectoryAnalyzer();
-  const configParser = new ConfigParser();
-
-  console.log("📋 [1/7] Collecting project files...");
-  const files = await projectAnalyzer.collectFiles(resolvedPath);
-  console.log(`   ${files.length} files collected`);
-
-  console.log("🔍 [2/7] Detecting tech stack...");
-  const techStack = await techStackDetector.detect(resolvedPath, files);
-  console.log(`   Primary: ${techStack.primary.join(", ") || "none detected"}`);
-
-  console.log("📦 [3/7] Detecting modules...");
-  const modules = await moduleDetector.detectModules(resolvedPath, files);
-  console.log(`   ${modules.length} module(s): ${modules.map(m => m.name).join(", ")}`);
-
-  console.log("💻 [4/7] Analyzing code features...");
-  const codeFeatures = await codeAnalyzer.analyzeFeatures(resolvedPath, files, techStack);
-  console.log(`   ${Object.keys(codeFeatures).length} feature(s) found`);
-
-  console.log("🔍 [5/7] Analyzing practices & patterns...");
-  const errorHandling = await practiceAnalyzer.analyzeErrorHandling(resolvedPath, files);
-  const codeStyle = await practiceAnalyzer.analyzeCodeStyle(resolvedPath, files);
-  const componentPattern = await practiceAnalyzer.analyzeComponentPatterns(resolvedPath, files);
-  const projectPractice = { errorHandling, codeStyle, componentPattern };
-
-  const customHooks = await customPatternDetector.detectCustomHooks(resolvedPath, files);
-  const customUtils = await customPatternDetector.detectCustomUtils(resolvedPath, files);
-  const apiClient = await customPatternDetector.detectAPIClient(resolvedPath, files);
-  const customPatterns = { customHooks, customUtils, apiClient };
-
-  console.log("🔧 [6/7] Parsing project config...");
-  const projectConfig = await configParser.parseProjectConfig(resolvedPath);
-
-  console.log("📂 [7/7] Deep directory analysis...");
-  const dependencies = techStack.dependencies.map((d) => ({
-    name: d.name,
-    version: d.version,
-    type: d.type || ("dependency" as const),
-    category: d.category,
-  }));
-  await deepAnalyzer.setDependencies(dependencies);
-  const deepAnalysis = await deepAnalyzer.analyzeProjectStructure(
-    resolvedPath,
-    files,
-    modules,
-    dependencies
-  );
-  console.log(`   ${deepAnalysis.length} directories analyzed`);
-
-  return {
-    projectPath: resolvedPath,
-    techStack,
-    modules,
-    codeFeatures,
-    bestPractices: [],
-    includeModuleRules: modules.length > 1,
-    fileOrganization: undefined,
-    deepAnalysis,
-    architecturePattern: undefined,
-    files,
-    projectPractice,
-    customPatterns,
-    projectConfig,
-  } as RuleGenerationContext;
+function makeProgressLogger(): (p: AnalysisProgress) => void {
+  return (p) => {
+    const prefix = `[${p.step}/${p.total}]`;
+    console.log(`${prefix} ${p.message}`);
+    if (p.details) {
+      for (const detail of p.details) {
+        console.log(`   ${detail}`);
+      }
+    }
+  };
 }
 
 async function cmdGenerate(projectPath: string) {
-  const resolvedPath = path.resolve(projectPath);
-  console.log(`\n🚀 Generating Cursor Rules for: ${resolvedPath}\n`);
+  const resolvedPath = resolve(projectPath);
+  console.log(`\nGenerating Cursor Rules for: ${resolvedPath}\n`);
+
+  const pipeline = new AnalysisPipeline();
+  const { context } = await pipeline.run(resolvedPath, {
+    onProgress: makeProgressLogger(),
+  });
 
   const fileWriter = new FileWriter();
   const rulesGenerator = new RulesGenerator();
 
-  const context = await buildContext(resolvedPath);
-
-  // Clean old rules
-  const modulePaths = context.modules.map(m => m.path);
+  const modulePaths = context.modules.map((m) => m.path);
   await fileWriter.cleanOldRules(resolvedPath, modulePaths);
 
-  // Generate
-  console.log("\n📝 Generating rules...");
+  console.log("\nGenerating rules...");
   const rules = await rulesGenerator.generate(context, {});
   console.log(`   ${rules.length} rule file(s) generated`);
 
-  const instructions = await rulesGenerator.generateInstructions(context);
+  console.log("\nWriting files...");
+  const writeResult = await fileWriter.writeRules(
+    resolvedPath,
+    rules,
+    context.fileOrganization
+  );
 
-  // Write
-  console.log("\n💾 Writing files...");
-  const writeResult = await fileWriter.writeRules(resolvedPath, rules);
-  await fileWriter.writeInstructions(instructions);
-
-  const allFiles = [...writeResult.writtenFiles, ".cursor/instructions.md"];
+  const allFiles = [...writeResult.writtenFiles];
   console.log("");
-  allFiles.forEach(f => console.log(`   ✅ ${f}`));
+  allFiles.forEach((f) => console.log(`   ${f}`));
 
-  console.log(`\n✨ Done! ${allFiles.length} files written to ${path.join(resolvedPath, ".cursor")}\n`);
+  console.log(
+    `\nDone. ${allFiles.length} files written to ${join(
+      resolvedPath,
+      ".cursor"
+    )}\n`
+  );
 }
 
 async function cmdAnalyze(projectPath: string) {
-  const resolvedPath = path.resolve(projectPath);
-  console.log(`\n🔍 Analyzing project: ${resolvedPath}\n`);
+  const resolvedPath = resolve(projectPath);
+  console.log(`\nAnalyzing project: ${resolvedPath}\n`);
 
-  const context = await buildContext(resolvedPath);
+  const pipeline = new AnalysisPipeline();
+  const { context, consistencyReport } = await pipeline.run(resolvedPath, {
+    onProgress: makeProgressLogger(),
+  });
 
   console.log("\n═══════════════════════════════════════");
   console.log("  Project Analysis Summary");
@@ -179,10 +123,32 @@ async function cmdAnalyze(projectPath: string) {
 
   console.log(`Tech Stack:     ${context.techStack.primary.join(", ")}`);
   console.log(`Languages:      ${context.techStack.languages.join(", ")}`);
-  console.log(`Frameworks:     ${context.techStack.frameworks.join(", ") || "none"}`);
-  console.log(`Pkg Managers:   ${context.techStack.packageManagers.join(", ")}`);
-  console.log(`Modules:        ${context.modules.map(m => m.name).join(", ")}`);
-  console.log(`Code Features:  ${Object.keys(context.codeFeatures).join(", ") || "none"}`);
+  console.log(
+    `Frameworks:     ${context.techStack.frameworks.join(", ") || "none"}`
+  );
+  console.log(
+    `Pkg Managers:   ${context.techStack.packageManagers.join(", ")}`
+  );
+  console.log(`Modules:        ${context.modules.map((m) => m.name).join(", ")}`);
+  console.log(
+    `Code Features:  ${Object.keys(context.codeFeatures).join(", ") || "none"}`
+  );
+
+  if (context.frontendRouter) {
+    console.log(
+      `Frontend Router: ${context.frontendRouter.info.framework} (${context.frontendRouter.info.type})`
+    );
+  }
+  if (context.backendRouter) {
+    console.log(
+      `Backend Router: ${context.backendRouter.info.framework} (${context.backendRouter.info.type})`
+    );
+  }
+  if (context.architecturePattern && context.architecturePattern.type !== "unknown") {
+    console.log(
+      `Architecture:   ${context.architecturePattern.type} (confidence ${context.architecturePattern.confidence})`
+    );
+  }
 
   if (context.projectConfig?.commands) {
     const cmds = context.projectConfig.commands;
@@ -195,7 +161,16 @@ async function cmdAnalyze(projectPath: string) {
     if (cmds.typeCheck) console.log(`  typeCheck:  ${cmds.typeCheck}`);
   }
 
-  console.log(`\nDependencies:   ${context.techStack.dependencies.length} total`);
+  console.log(`\nBest Practices: ${context.bestPractices.length} retrieved`);
+  console.log(`Dependencies:   ${context.techStack.dependencies.length} total`);
+
+  if (consistencyReport?.hasInconsistencies) {
+    console.log(
+      `\nConsistency:    ${consistencyReport.inconsistencies.length} issue(s) detected`
+    );
+  } else if (consistencyReport) {
+    console.log(`\nConsistency:    OK`);
+  }
   console.log("");
 }
 
@@ -229,7 +204,7 @@ async function main() {
         process.exit(1);
     }
   } catch (error) {
-    console.error("\n❌ Failed:", error instanceof Error ? error.message : error);
+    console.error("\nFailed:", error instanceof Error ? error.message : error);
     if (error instanceof Error && error.stack) {
       console.error(error.stack);
     }
@@ -241,7 +216,9 @@ async function main() {
       logger.flush(),
       new Promise<void>((resolve) => setTimeout(resolve, 200)),
     ]);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   process.exit(0);
 }
@@ -253,6 +230,8 @@ main().catch(async (error) => {
       logger.flush(),
       new Promise<void>((resolve) => setTimeout(resolve, 200)),
     ]);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   process.exit(1);
 });

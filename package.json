@@ -16,13 +16,14 @@
   "files": [
     "dist",
     "skill",
+    "docs/story/awesome-cursorrules-samples",
     "README.md",
     "README.zh-CN.md",
     "LICENSE",
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js && echo '#!/usr/bin/env node\nimport \"./src/cli.js\";' > dist/cli.js && chmod +x dist/cli.js",
+    "build": "tsc && node scripts/post-build.mjs",
     "watch": "tsc --watch",
     "dev": "npm run build && node dist/index.js",
     "prepare": "npm run build",
@@ -61,15 +62,13 @@
   "homepage": "https://github.com/ALvinCode/cursor-rules-generators#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "glob": "^11.0.0",
+    "markdownlint": "^0.39.0",
     "pino": "^10.1.0",
-    "pino-pretty": "^13.1.2",
     "yaml": "^2.6.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/inspector": "^0.17.2",
     "@types/node": "^22.10.2",
-    "markdownlint": "^0.39.0",
     "markdownlint-cli2": "^0.19.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

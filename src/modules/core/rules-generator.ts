@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import {
-    BestPractice, CodeFeature, CursorRule, InstructionsFile, Module, RuleGenerationContext,
+    BestPractice, CodeFeature, CursorRule, Module, RuleGenerationContext,
     TechStack
 } from '../../types.js';
 import { FileUtils } from '../../utils/file-utils.js';
@@ -19,6 +19,93 @@ import {
 } from '../generators/tech-stack-matcher.js';
 import { ModuleStructureAnalyzer } from '../analyzers/module-structure-analyzer.js';
 import { ModuleBusinessAnalyzer } from '../analyzers/module-business-analyzer.js';
+
+/**
+ * 职能文件夹关键词（用于区分职能目录与业务目录）
+ *
+ * 这些词代表项目按"职能/技术职责"组织的目录（如 components、utils、api 等），
+ * 与业务名词（如 user、order、checkout）形成对照。
+ *
+ * 单一来源：之前在 `isBusinessFolder` 和 `generateDirectoryPurposes` 中各自维护
+ * 一份相同的列表，现统一到模块级常量，避免漂移。
+ */
+const FUNCTIONAL_FOLDER_KEYWORDS = [
+  // 组件和页面容器（职能层）
+  'component', 'components', 'cmp',
+  'page', 'pages', 'view', 'views',
+  // Hooks 和工具
+  'hook', 'hooks',
+  'util', 'utils', 'utilities', 'helper', 'helpers',
+  // API 和服务
+  'api', 'apis', 'service', 'services',
+  // 类型和模型
+  'type', 'types', 'interface', 'interfaces',
+  'model', 'models', 'entity', 'entities',
+  'dto', 'dao', 'schema', 'schemas',
+  // 状态管理
+  'store', 'stores', 'state',
+  // 样式
+  'style', 'styles', 'css', 'scss', 'sass', 'less',
+  // 配置
+  'config', 'configs', 'configuration',
+  // 测试
+  'test', 'tests', '__tests__', '__mocks__', 'mock', 'mocks',
+  // 功能模块
+  'feature', 'features', 'module', 'modules',
+  // 共享和公共
+  'shared', 'common', 'lib', 'libs', 'library',
+  // 路由
+  'route', 'routes', 'router',
+  // 后端相关
+  'middleware', 'controller', 'controllers',
+  'repository', 'repositories',
+  'guard', 'guards', 'interceptor', 'interceptors',
+  'pipe', 'pipes', 'filter', 'filters',
+  'decorator', 'decorators',
+  // 布局
+  'layout', 'layouts',
+  // 常量
+  'constant', 'constants', 'enum', 'enums',
+  // 验证和格式化
+  'validator', 'validators', 'formatter', 'formatters',
+  // 适配器
+  'adapter', 'adapters',
+  // 提供者
+  'provider', 'providers', 'factory', 'factories',
+  // 策略
+  'strategy', 'strategies',
+  // 数据库相关
+  'migration', 'migrations', 'seed', 'seeds',
+  // 资源
+  'asset', 'assets', 'static', 'public',
+  // 国际化
+  'locale', 'locales', 'i18n',
+  // 主题
+  'theme', 'themes',
+  // 模板
+  'template', 'templates', 'partial', 'partials',
+  // 容器
+  'container', 'containers',
+  // 架构层
+  'presentation', 'presentations', 'domain', 'domains',
+  'infrastructure', 'infrastructures', 'application', 'applications',
+  // 核心
+  'core', 'kernel', 'base', 'bases',
+  // 内部和外部
+  'internal', 'internals', 'external', 'externals',
+  // 第三方
+  'vendor', 'vendors', 'third-party', 'thirdparties',
+  // 插件和扩展
+  'plugin', 'plugins', 'extension', 'extensions',
+  // 工具和脚本
+  'tool', 'tools', 'script', 'scripts',
+  // 构建输出
+  'bin', 'build', 'dist', 'out',
+  // 文档
+  'doc', 'docs', 'documentation',
+  // 示例
+  'example', 'examples', 'demo', 'demos', 'sample', 'samples',
+] as const;
 
 /**
  * 规则生成引擎
@@ -491,29 +578,26 @@ export class RulesGenerator {
   }
 
   /**
-   * 生成 instructions.md 文件
+   * 生成 post-coding 约束行（global-rules Hard Constraints 末尾）
    */
-  async generateInstructions(
-    context: RuleGenerationContext
-  ): Promise<InstructionsFile> {
-    const content = this.generateInstructionsContent(context);
-
-    return {
-      content,
-      fileName: "instructions.md",
-      filePath: path.join(context.projectPath, ".cursor", "instructions.md"),
-    };
+  private generatePostCodingConstraint(context: RuleGenerationContext): string {
+    const cmds = context.projectConfig?.commands;
+    const parts: string[] = [];
+    if (cmds?.lint || cmds?.lintFix) parts.push(`\`${cmds.lintFix ?? cmds.lint}\``);
+    if (cmds?.typeCheck) parts.push(`\`${cmds.typeCheck}\``);
+    if (parts.length === 0) return '';
+    return `- After writing code, run ${parts.join(' and ')} before considering the task complete.`;
   }
 
   /**
    * 检查是否有自定义工具
    */
   private hasCustomTools(context: RuleGenerationContext): boolean {
+    if (!context.customPatterns) return false;
     return (
-      context.customPatterns &&
-      (context.customPatterns.customHooks.length > 0 ||
-        context.customPatterns.customUtils.length > 0 ||
-        context.customPatterns.apiClient?.exists)
+      context.customPatterns.customHooks.length > 0 ||
+      context.customPatterns.customUtils.length > 0 ||
+      Boolean(context.customPatterns.apiClient?.exists)
     );
   }
 
@@ -521,10 +605,9 @@ export class RulesGenerator {
    * 检查是否有错误处理
    */
   private hasErrorHandling(context: RuleGenerationContext): boolean {
-    return (
-      context.projectPractice?.errorHandling &&
-      context.projectPractice.errorHandling.frequency > 0
-    );
+    const errorHandling = context.projectPractice?.errorHandling;
+    if (!errorHandling) return false;
+    return errorHandling.frequency > 0;
   }
 
   /**
@@ -575,6 +658,7 @@ ${commandsSection}
 - Before creating files, consult @project-structure.mdc for correct location.
 - Reuse existing project tools — do not re-implement what already exists.
 - Follow the project's established patterns and conventions.
+${this.generatePostCodingConstraint(context)}
 ${
   context.techStack.frameworks.length > 0
     ? `\n${this.generateFrameworkPrinciples(context)}\n`
@@ -1124,84 +1208,7 @@ ${this.generateDetailedStructureContent(context)}
    * 3. 其他无法识别类别或无法匹配职能关键词列表的文件夹
    */
   private isBusinessFolder(dir: any, deepAnalysis: any[]): boolean {
-    // 定义职能文件夹的关键词（用于判断是否为职能文件夹）
-    const functionalFolderKeywords = [
-      // 组件和页面容器（职能层）
-      'component', 'components', 'cmp',
-      'page', 'pages', 'view', 'views',
-      // Hooks 和工具
-      'hook', 'hooks',
-      'util', 'utils', 'utilities', 'helper', 'helpers',
-      // API 和服务
-      'api', 'apis', 'service', 'services',
-      // 类型和模型
-      'type', 'types', 'interface', 'interfaces',
-      'model', 'models', 'entity', 'entities',
-      'dto', 'dao', 'schema', 'schemas',
-      // 状态管理
-      'store', 'stores', 'state',
-      // 样式
-      'style', 'styles', 'css', 'scss', 'sass', 'less',
-      // 配置
-      'config', 'configs', 'configuration',
-      // 测试
-      'test', 'tests', '__tests__', '__mocks__', 'mock', 'mocks',
-      // 功能模块
-      'feature', 'features', 'module', 'modules',
-      // 共享和公共
-      'shared', 'common', 'lib', 'libs', 'library',
-      // 路由
-      'route', 'routes', 'router',
-      // 后端相关
-      'middleware', 'controller', 'controllers',
-      'repository', 'repositories',
-      'guard', 'guards', 'interceptor', 'interceptors',
-      'pipe', 'pipes', 'filter', 'filters',
-      'decorator', 'decorators',
-      // 布局
-      'layout', 'layouts',
-      // 常量
-      'constant', 'constants', 'enum', 'enums',
-      // 验证和格式化
-      'validator', 'validators', 'formatter', 'formatters',
-      // 适配器
-      'adapter', 'adapters',
-      // 提供者
-      'provider', 'providers', 'factory', 'factories',
-      // 策略
-      'strategy', 'strategies',
-      // 数据库相关
-      'migration', 'migrations', 'seed', 'seeds',
-      // 资源
-      'asset', 'assets', 'static', 'public',
-      // 国际化
-      'locale', 'locales', 'i18n',
-      // 主题
-      'theme', 'themes',
-      // 模板
-      'template', 'templates', 'partial', 'partials',
-      // 容器
-      'container', 'containers',
-      // 架构层
-      'presentation', 'presentations', 'domain', 'domains',
-      'infrastructure', 'infrastructures', 'application', 'applications',
-      // 核心
-      'core', 'kernel', 'base', 'bases',
-      // 内部和外部
-      'internal', 'internals', 'external', 'externals',
-      // 第三方
-      'vendor', 'vendors', 'third-party', 'thirdparties',
-      // 插件和扩展
-      'plugin', 'plugins', 'extension', 'extensions',
-      // 工具和脚本
-      'tool', 'tools', 'script', 'scripts',
-      // 构建输出
-      'bin', 'build', 'dist', 'out',
-      // 文档
-      'doc', 'docs', 'documentation',
-      // 示例
-      'example', 'examples', 'demo', 'demos', 'sample', 'samples',
-    ];
+    const functionalFolderKeywords = FUNCTIONAL_FOLDER_KEYWORDS;
 
     // 优先检查目录名：如果目录名本身是强职能关键词，直接认定为职能文件夹（非业务）
     // 这可以防止因 purpose 描述不准确（如包含中文）导致的误判
@@ -1381,84 +1388,7 @@ ${this.generateDetailedStructureContent(context)}
       return "目录职能说明分析中...\n\n";
     }
 
-    // 定义职能文件夹的关键词（这些目录需要显示，排除业务类页面和组件）
-    const functionalFolderKeywords = [
-      // 组件和页面容器（职能层）
-      'component', 'components', 'cmp',
-      'page', 'pages', 'view', 'views',
-      // Hooks 和工具
-      'hook', 'hooks',
-      'util', 'utils', 'utilities', 'helper', 'helpers',
-      // API 和服务
-      'api', 'apis', 'service', 'services',
-      // 类型和模型
-      'type', 'types', 'interface', 'interfaces',
-      'model', 'models', 'entity', 'entities',
-      'dto', 'dao', 'schema', 'schemas',
-      // 状态管理
-      'store', 'stores', 'state',
-      // 样式
-      'style', 'styles', 'css', 'scss', 'sass', 'less',
-      // 配置
-      'config', 'configs', 'configuration',
-      // 测试
-      'test', 'tests', '__tests__', '__mocks__', 'mock', 'mocks',
-      // 功能模块
-      'feature', 'features', 'module', 'modules',
-      // 共享和公共
-      'shared', 'common', 'lib', 'libs', 'library',
-      // 路由
-      'route', 'routes', 'router',
-      // 后端相关
-      'middleware', 'controller', 'controllers',
-      'repository', 'repositories',
-      'guard', 'guards', 'interceptor', 'interceptors',
-      'pipe', 'pipes', 'filter', 'filters',
-      'decorator', 'decorators',
-      // 布局
-      'layout', 'layouts',
-      // 常量
-      'constant', 'constants', 'enum', 'enums',
-      // 验证和格式化
-      'validator', 'validators', 'formatter', 'formatters',
-      // 适配器
-      'adapter', 'adapters',
-      // 提供者
-      'provider', 'providers', 'factory', 'factories',
-      // 策略
-      'strategy', 'strategies',
-      // 数据库相关
-      'migration', 'migrations', 'seed', 'seeds',
-      // 资源
-      'asset', 'assets', 'static', 'public',
-      // 国际化
-      'locale', 'locales', 'i18n',
-      // 主题
-      'theme', 'themes',
-      // 模板
-      'template', 'templates', 'partial', 'partials',
-      // 容器
-      'container', 'containers',
-      // 架构层
-      'presentation', 'presentations', 'domain', 'domains',
-      'infrastructure', 'infrastructures', 'application', 'applications',
-      // 核心
-      'core', 'kernel', 'base', 'bases',
-      // 内部和外部
-      'internal', 'internals', 'external', 'externals',
-      // 第三方
-      'vendor', 'vendors', 'third-party', 'thirdparties',
-      // 插件和扩展
-      'plugin', 'plugins', 'extension', 'extensions',
-      // 工具和脚本
-      'tool', 'tools', 'script', 'scripts',
-      // 构建输出
-      'bin', 'build', 'dist', 'out',
-      // 文档
-      'doc', 'docs', 'documentation',
-      // 示例
-      'example', 'examples', 'demo', 'demos', 'sample', 'samples',
-    ];
+    const functionalFolderKeywords = FUNCTIONAL_FOLDER_KEYWORDS;
 
     // 判断目录是否为职能文件夹（而非业务类页面/组件）
     const isFunctionalFolder = (dir: any): boolean => {
@@ -2487,178 +2417,6 @@ const mockEverything = ${mockFn}(() => ${mockFn}(() => ${mockFn}()));
   }
 
   /**
-   * v1.3: 旧的 generateGlobalRule 重命名保留（用于向后兼容）
-   */
-  private generateGlobalRule(context: RuleGenerationContext): CursorRule {
-    const metadata = this.generateRuleMetadata(
-      `${this.getProjectName(context.projectPath)} - 全局开发规则`,
-      "Project-wide conventions and best practices. Always loaded.",
-      100,
-      context.techStack.primary,
-      ["global", "best-practices"],
-      undefined,
-      undefined,
-      { alwaysApply: true }
-    );
-
-    let content =
-      metadata +
-      `
-# 项目概述
-
-这是一个基于 ${context.techStack.primary.join(", ")} 的项目。
-
-## 技术栈
-
-**主要技术栈：**
-${context.techStack.primary.map((tech) => `- ${tech}`).join("\n")}
-
-**语言：** ${context.techStack.languages.join(", ")}
-
-**包管理器：** ${context.techStack.packageManagers.join(", ")}
-
-${
-  context.techStack.frameworks.length > 0
-    ? `**框架：** ${context.techStack.frameworks.join(", ")}`
-    : ""
-}
-
-## 项目结构
-
-${this.generateProjectStructureDescription(context)}
-
-## 核心功能特征
-
-${this.generateFeaturesDescription(context.codeFeatures)}
-
----
-
-# 开发规范
-
-${this.generateDevelopmentGuidelines(context)}
-
----
-
-# 代码风格
-
-${
-  context.projectConfig
-    ? this.generateConfigBasedStyleRules(context)
-    : this.generateCodeStyleGuidelines(context)
-}
-
----
-
-${context.customPatterns ? this.generateCustomToolsRules(context) : ""}
-
-${
-  context.customPatterns && context.customPatterns.customHooks.length > 0
-    ? "---\n\n"
-    : ""
-}
-
-# 最佳实践
-
-${this.generateBestPracticesSection(context.bestPractices)}
-
----
-
-# 文件组织
-
-${
-  context.fileOrganization
-    ? this.generateStructureBasedFileOrgRules(context)
-    : this.generateFileOrganizationGuidelines(context)
-}
-
----
-
-# 注意事项
-
-${this.generateCautions(context)}
-`;
-
-    return {
-      scope: "global",
-      modulePath: context.projectPath, // 全局规则放在项目根目录
-      content,
-      fileName: "00-global-rules.mdc",
-      priority: 100,
-    };
-  }
-
-  /**
-   * 生成模块特定规则
-   */
-  private generateModuleRule(
-    context: RuleGenerationContext,
-    module: Module
-  ): CursorRule {
-    const tags = [module.type, "module"];
-    const moduleGlobs = `${module.path}/**`;
-    const metadata = this.generateRuleMetadata(
-      `${module.name} 模块规则`,
-      module.description || `Development rules for the ${module.name} module`,
-      50,
-      context.techStack.primary,
-      tags,
-      undefined,
-      undefined,
-      { globs: moduleGlobs }
-    );
-
-    const content =
-      metadata +
-      `
-# ${module.name} 模块
-
-**类型：** ${this.getModuleTypeName(module.type)}
-
-**路径：** \`${module.path}\`
-
-${module.description ? `**描述：** ${module.description}` : ""}
-
-## 模块职责
-
-${this.generateModuleResponsibilities(module)}
-
-## 开发指南
-
-${this.generateModuleGuidelines(context, module)}
-
-## 依赖关系
-
-${
-  module.dependencies.length > 0
-    ? `此模块依赖以下包：
-${module.dependencies
-  .slice(0, 10)
-  .map((d) => `- ${d}`)
-  .join("\n")}
-${
-  module.dependencies.length > 10
-    ? `\n...以及其他 ${module.dependencies.length - 10} 个依赖`
-    : ""
-}`
-    : "此模块没有外部依赖。"
-}
-
-## 注意事项
-
-${this.generateModuleCautions(module)}
-`;
-
-    return {
-      scope: "module",
-      moduleName: module.name,
-      modulePath: module.path, // 模块规则放在模块自己的目录
-      content,
-      fileName: `${this.sanitizeFileName(module.name)}-rules.mdc`,
-      priority: 50,
-    };
-  }
-
-  /**
    * 生成项目结构描述
    */
   private generateProjectStructureDescription(
@@ -3327,147 +3085,6 @@ ${this.generateFileNamingRules(context)}
 - **用户消息**: 提供友好的错误提示，不暴露技术细节
 
 `;
-  }
-
-  /**
-   * 生成错误处理指南（旧版本 - 已废弃）
-   */
-  private generateErrorHandlingGuidelinesOld(
-    context: RuleGenerationContext
-  ): string {
-    const isJavaScript =
-      context.techStack.languages.includes("JavaScript") ||
-      context.techStack.languages.includes("TypeScript");
-    const isPython = context.techStack.languages.includes("Python");
-
-    let guidelines = `## 错误处理规范（详细版 - 已移至 error-handling.mdc）
-
-### 基本原则
-- 预测可能的错误并主动处理
-- 提供有意义的错误信息
-- 区分可恢复和不可恢复的错误
-- 记录错误以便调试
-
-`;
-
-    if (isJavaScript) {
-      guidelines += `### JavaScript/TypeScript 错误处理
-
-**Try-Catch 使用**：
-\`\`\`typescript
-// ✅ 好的实践
-try {
-  const data = await fetchUserData(userId);
-  return processData(data);
-} catch (error) {
-  if (error instanceof NetworkError) {
-    logger.error('Network error:', error);
-    throw new UserFacingError('无法连接到服务器，请稍后重试');
-  }
-  throw error; // 重新抛出未知错误
-}
-
-// ❌ 避免
-try {
-  // ... 大量代码
-} catch (e) {
-  console.log(e); // 不够具体
-}
-\`\`\`
-
-**Promise 错误处理**：
-\`\`\`typescript
-// ✅ 使用 async/await 和 try-catch
-async function getData() {
-  try {
-    const result = await apiCall();
-    return result;
-  } catch (error) {
-    handleError(error);
-  }
-}
-
-// ✅ 或使用 .catch()
-apiCall()
-  .then(result => processResult(result))
-  .catch(error => handleError(error));
-\`\`\`
-
-**自定义错误类型**：
-\`\`\`typescript
-class ValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
-
-class NotFoundError extends Error {
-  constructor(resource: string) {
-    super(\\\`\${resource} not found\\\`);
-    this.name = 'NotFoundError';
-  }
-}
-\`\`\`
-
-`;
-    }
-
-    if (isPython) {
-      guidelines += `### Python 错误处理
-
-**异常处理**：
-\`\`\`python
-# ✅ 好的实践
-try:
-    user = get_user(user_id)
-    process_user(user)
-except UserNotFoundError as e:
-    logger.error(f"User not found: {user_id}")
-    raise HTTPException(status_code=404, detail=str(e))
-except DatabaseError as e:
-    logger.exception("Database error occurred")
-    raise HTTPException(status_code=500, detail="Internal server error")
-finally:
-    cleanup_resources()
-
-# ❌ 避免
-try:
-    do_something()
-except Exception:  # 过于宽泛
-    pass  # 静默失败
-\`\`\`
-
-**自定义异常**：
-\`\`\`python
-class ValidationError(Exception):
-    """数据验证错误"""
-    pass
-
-class ResourceNotFoundError(Exception):
-    """资源未找到错误"""
-    def __init__(self, resource_type: str, resource_id: str):
-        self.resource_type = resource_type
-        self.resource_id = resource_id
-        super().__init__(f"{resource_type} {resource_id} not found")
-\`\`\`
-
-`;
-    }
-
-    guidelines += `### 错误日志记录
-- 使用适当的日志级别（ERROR, WARN, INFO, DEBUG）
-- 包含上下文信息（用户 ID、请求 ID 等）
-- 不要记录敏感信息（密码、令牌等）
-- 记录错误堆栈跟踪以便调试
-
-### 用户友好的错误消息
-- ✅ "无法保存您的更改，请检查网络连接后重试"
-- ❌ "Error: ERR_CONNECTION_REFUSED at line 42"
-
-`;
-
-    return guidelines;
   }
 
   /**
@@ -4256,344 +3873,6 @@ export const UserProfile = observer(() => {
   }
 
   /**
-   * 生成 instructions.md 内容
-   */
-  private generateInstructionsContent(context: RuleGenerationContext): string {
-    return `# 开发工作流程指导
-
-> 在本项目中使用 Cursor AI 进行开发的推荐流程
-
-## 📋 开始任务前的检查清单
-
-在开始任何开发任务前，请确认：
-
-- [ ] 已阅读 @.cursor/rules/global-rules.mdc 了解项目概述
-${
-  this.hasCustomTools(context)
-    ? "- [ ] 已查看 @.cursor/rules/custom-tools.mdc 了解可用工具\n"
-    : ""
-}- [ ] **已查看 @.cursor/rules/project-structure.mdc 确定文件位置** ⚠️ 重要
-- [ ] **已让 Cursor 确认理解了任务** ⚠️ 重要
-
-## 🚀 开始新任务的标准流程
-
-### 步骤 1：让 Cursor 确认理解
-
-**始终先询问**:
-\`\`\`
-请确认你理解了以下任务：[具体描述任务]
-
-需要创建哪些文件？
-需要使用哪些项目工具？
-需要参考哪些现有代码？
-\`\`\`
-
-⚠️ **重要**: 不要跳过这一步，确保 Cursor 理解任务可以避免很多问题。
-
-### 步骤 2：检查可复用资源
-
-${
-  this.hasCustomTools(context)
-    ? `**查看项目工具**: @.cursor/rules/custom-tools.mdc
-
-询问:
-\`\`\`
-对于 [功能]，项目中是否已有可用的 Hooks 或工具函数？
-\`\`\`
-`
-    : ""
-}
-**查看参考代码**: 
-\`\`\`
-有没有类似功能的现有代码可以参考？
-\`\`\`
-
-### 步骤 3：确定文件位置
-
-**查看**: @.cursor/rules/project-structure.mdc
-
-询问:
-\`\`\`
-新建 [组件/工具/服务] 应该放在哪个目录？
-使用什么路径别名导入？
-\`\`\`
-
-💡 **提示**: \`project-structure.mdc\` 包含完整的目录结构和职能说明，是确定文件位置的最佳参考。
-
-### 步骤 4：实施开发
-
-**明确指定**:
-\`\`\`
-请实现 [功能]：
-${
-  this.hasCustomTools(context)
-    ? "- 使用 @src/hooks/useAuth.ts 的 useAuth\n- 使用 @src/utils/format.ts 的 formatDate\n"
-    : ""
-}- 遵循 @.cursor/rules/code-style.mdc 的命名规范
-- 参考 @src/components/[相似组件].tsx 的结构
-\`\`\`
-
-### 步骤 5：代码审查和格式化 ⚠️ 重要
-
-**检查清单**:
-- [ ] 使用了项目自定义工具？（而非重新实现）
-- [ ] 使用了路径别名？（而非相对路径）
-- [ ] 遵循了命名约定？
-- [ ] 添加了 TypeScript 类型？
-- [ ] 添加了必要的错误处理？
-- [ ] 文件放在了正确的位置？
-${
-  this.featureExists(context, "testing") ? "- [ ] 添加了测试？\n" : ""
-}- [ ] **运行了代码格式化？** ⚠️ 必须
-- [ ] **运行了 lint 检查和修复？** ⚠️ 必须
-
-### 代码格式化（必需步骤）
-
-**每次生成代码后必须运行**：
-
-${this.generateFormattingCommandsSection(context)}
-
-**提示 Cursor**:
-\`\`\`
-生成代码后，请询问我：
-"需要我运行格式化和 lint 命令吗？"
-然后执行相应的命令。
-\`\`\`
-
-## 🎯 常见任务模板
-
-### 新建 React 组件
-
-\`\`\`
-任务: 创建一个 [组件名] 组件
-
-请确认理解：
-1. 组件应该放在哪个目录？
-2. 需要使用哪些项目 Hooks？
-3. 参考哪个现有组件的结构？
-
-然后实现组件，遵循：
-- @.cursor/rules/code-style.mdc - 命名和格式
-${
-  this.isFrontendProject(context)
-    ? "- @.cursor/rules/ui-ux.mdc - UI 规范\n"
-    : ""
-}- @.cursor/rules/architecture.mdc - 文件位置
-\`\`\`
-
-### 新建工具函数
-
-\`\`\`
-任务: 创建一个 [功能] 工具函数
-
-步骤:
-1. 检查 @.cursor/rules/custom-tools.mdc - 是否已存在类似工具？
-2. 确定位置: 应该放在 src/utils/ 的哪个文件？
-3. 实现: 遵循现有工具的风格和命名
-\`\`\`
-
-### API 调用
-
-\`\`\`
-${
-  context.customPatterns?.apiClient?.exists
-    ? `使用项目的 API 客户端：
-- 定义: @src/services/api-client.ts
-- 使用示例: @src/services/[查看现有服务].ts
-
-不要直接使用 fetch 或 axios
-`
-    : "统一的 API 调用方式，保持一致性"
-}
-\`\`\`
-
-### 修复 Bug
-
-\`\`\`
-步骤:
-1. 让 Cursor 分析 bug 的原因
-2. 确认修复方案不会影响其他功能
-3. 遵循项目的错误处理规范
-4. 添加测试防止回归（如果项目有测试）
-\`\`\`
-
-### 使用自定义规则
-
-\`\`\`
-如果项目有自定义规则（@.cursor/rules/custom-rules.mdc）：
-
-1. 查看自定义规则文件，了解项目特定的规范
-2. 在生成代码时，明确引用自定义规则：
-   "遵循 @.cursor/rules/custom-rules.mdc 中的 [具体规范]"
-3. 确保生成的代码符合自定义规则的要求
-\`\`\`
-
-> 💡 **提示**: 自定义规则模板文件是可选的。如果文件不存在或未填写，可以忽略此步骤。
-
-## 💡 与 Cursor 对话的最佳实践
-
-### ✅ 好的提示
-
-\`\`\`
-请确认理解任务
-使用项目的 useAuth Hook（@src/hooks/useAuth.ts）
-参考 @src/components/Button.tsx 的样式
-遵循 @.cursor/rules/code-style.mdc 的命名约定
-\`\`\`
-
-### ❌ 不好的提示
-
-\`\`\`
-帮我写代码（太模糊）
-创建一个组件（没有说明位置、引用、规范）
-实现这个功能（没有明确需求和约束）
-\`\`\`
-
-### 📝 提示模板
-
-\`\`\`
-[明确的任务描述]
-+ [指定要使用的项目工具]
-+ [指定要遵循的规则文件]
-+ [指定要参考的现有代码]
-
-示例:
-"创建用户列表组件，
- 使用 @src/hooks/useAuth.ts 的 useAuth Hook，
- 遵循 @.cursor/rules/ui-ux.mdc 的无障碍规范，
- 参考 @src/components/UserProfile.tsx 的结构"
-\`\`\`
-
-## 📚 快速参考
-
-### 规则文件索引
-
-- **@.cursor/rules/global-rules.mdc** - 项目概述和核心原则
-- **@.cursor/rules/code-style.mdc** - 代码风格和命名
-- **@.cursor/rules/project-structure.mdc** - 目录结构和职能说明（**新建文件前必读**）
-- **@.cursor/rules/architecture.mdc** - 模块结构和架构设计
-${
-  this.hasCustomTools(context)
-    ? "- **@.cursor/rules/custom-tools.mdc** - 自定义工具（必读）\n"
-    : ""
-}${
-      this.hasErrorHandling(context)
-        ? "- **@.cursor/rules/error-handling.mdc** - 错误处理\n"
-        : ""
-    }${
-      this.hasStateManagement(context)
-        ? "- **@.cursor/rules/state-management.mdc** - 状态管理\n"
-        : ""
-    }- **@.cursor/rules/custom-rules.mdc** - 自定义规则（可选）
-
-> 💡 **关于自定义规则**: \`custom-rules.mdc\` 是一个可选文件，用于添加项目特定的自定义规则。如果文件存在且已填写内容，Cursor 会自动应用这些规则。如果文件未填写或已删除，不影响其他规则的执行。详细使用说明请查看该文件。
-
-### 关键文件引用
-
-${this.generateKeyFileReferences(context)}
-
----
-
-*提示: 使用 @filename.ts 可以让 Cursor 快速定位和参考代码*
-`;
-  }
-
-  /**
-   * 生成格式化命令章节
-   */
-  private generateFormattingCommandsSection(
-    context: RuleGenerationContext
-  ): string {
-    let section = "";
-
-    if (context.projectConfig?.commands) {
-      const cmds = context.projectConfig.commands;
-
-      if (cmds.format || cmds.lintFix || cmds.lint) {
-        section += `\`\`\`bash\n`;
-
-        if (cmds.format) {
-          section += `# 1. 格式化代码\n${cmds.format}\n\n`;
-        }
-
-        if (cmds.lintFix) {
-          section += `# 2. 修复 lint 问题\n${cmds.lintFix}\n\n`;
-        } else if (cmds.lint) {
-          section += `# 2. 检查 lint\n${cmds.lint}\n\n`;
-        }
-
-        if (cmds.typeCheck) {
-          section += `# 3. 类型检查\n${cmds.typeCheck}\n`;
-        }
-
-        section += `\`\`\`\n\n`;
-
-        section += `**一键运行（推荐）**:\n`;
-        section += `\`\`\`bash\n`;
-        const oneLineCmd: string[] = [];
-        if (cmds.format) oneLineCmd.push(cmds.format);
-        if (cmds.lintFix) oneLineCmd.push(cmds.lintFix);
-        section += `${oneLineCmd.join(" && ")}\n`;
-        section += `\`\`\`\n\n`;
-      } else {
-        section += `\`\`\`bash\n`;
-        section += `# 项目未配置格式化命令，使用以下方式：\n`;
-        section += `npx prettier --write [文件路径]\n`;
-        section += `npx eslint --fix [文件路径]\n`;
-        section += `\`\`\`\n\n`;
-      }
-    } else {
-      section += `项目未检测到格式化命令。\n`;
-      section += `建议配置 package.json 中的 scripts。\n\n`;
-    }
-
-    return section;
-  }
-
-  /**
-   * 生成关键文件引用
-   */
-  private generateKeyFileReferences(context: RuleGenerationContext): string {
-    let refs = "";
-
-    if (
-      context.customPatterns?.customHooks &&
-      context.customPatterns.customHooks.length > 0
-    ) {
-      refs += "**自定义 Hooks**:\n";
-      context.customPatterns.customHooks.slice(0, 5).forEach((hook) => {
-        refs += `- @${hook.relativePath} - ${hook.name}\n`;
-      });
-      refs += "\n";
-    }
-
-    if (
-      context.customPatterns?.customUtils &&
-      context.customPatterns.customUtils.length > 0
-    ) {
-      refs += "**工具函数**:\n";
-      const grouped = this.groupUtilsByCategory(
-        context.customPatterns.customUtils
-      );
-      Object.entries(grouped)
-        .slice(0, 3)
-        .forEach(([category, utils]) => {
-          refs += `- @${utils[0].relativePath} - ${category}\n`;
-        });
-      refs += "\n";
-    }
-
-    if (
-      context.fileOrganization?.componentLocation &&
-      context.fileOrganization.componentLocation.length > 0
-    ) {
-      refs += `**组件目录**: @${context.fileOrganization.componentLocation[0]}/\n`;
-    }
-
-    return refs || "查看项目实际文件了解组织结构";
-  }
-
-  /**
    * v1.3: 生成模块概述规则（简化版，约 200 行）
    */
   private async generateModuleOverviewRule(
@@ -4768,19 +4047,6 @@ ${this.generateKeyFileReferences(context)}
     });
 
     return missing;
-  }
-
-  /**
-   * 网络搜索最佳实践（v1.5）
-   */
-  private async searchWebBestPractices(
-    techStacks: string[],
-    context: RuleGenerationContext
-  ): Promise<any[]> {
-    // 注意：这里无法直接调用 web_search 工具
-    // 需要在 index.ts 中调用 web_search，然后传递结果
-    // 这里返回空数组，实际搜索在 index.ts 中执行
-    return [];
   }
 
   /**
@@ -5232,8 +4498,8 @@ ${this.generateKeyFileReferences(context)}
     }
 
     // API 客户端
-    if (context.customPatterns.apiClient?.exists) {
-      const api = context.customPatterns.apiClient;
+    const api = context.customPatterns.apiClient;
+    if (api?.exists && api.filePath) {
       rules += `### API 客户端\n\n`;
       rules += `项目使用自定义的 API 客户端：**\`${api.name}\`**\n`;
       rules += `- 位置: \`${FileUtils.getRelativePath(

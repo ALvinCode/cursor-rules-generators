@@ -5,6 +5,7 @@
 
 import { FileUtils } from "../../utils/file-utils.js";
 import { logger } from "../../utils/logger.js";
+import { resolvePackageResource } from "../../utils/package-paths.js";
 import * as path from "path";
 import { FrameworkMatch } from './framework-matcher.js';
 import { TechStackMatch, MultiCategoryMatch } from './tech-stack-matcher.js';
@@ -32,10 +33,9 @@ export class BestPracticeExtractor {
   private samplesDir: string;
 
   constructor() {
-    // 获取 awesome-cursorrules-samples 目录路径
-    const projectRoot = process.cwd();
-    this.samplesDir = path.join(
-      projectRoot,
+    // 样本目录在 npm 包内分发；必须从包根解析（不能用 process.cwd()，
+    // 否则全局安装时会指向用户项目目录）。
+    this.samplesDir = resolvePackageResource(
       "docs",
       "story",
       "awesome-cursorrules-samples"

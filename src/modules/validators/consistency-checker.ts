@@ -187,11 +187,17 @@ export class ConsistencyChecker {
   }
 
   /**
-   * 更新描述文档
+   * 更新描述文档。
+   *
+   * @param projectPath 项目根目录
+   * @param report 一致性报告
+   * @param descriptionFile 可选；当指定时仅更新该文件（README.md 或 package.json）。
+   *   默认（未指定）更新所有相关文件。
    */
   async updateDescriptions(
     projectPath: string,
-    report: ConsistencyReport
+    report: ConsistencyReport,
+    descriptionFile?: string
   ): Promise<void> {
     // 收集需要更新的内容
     const updates = new Map<string, string[]>();
@@ -206,13 +212,18 @@ export class ConsistencyChecker {
       }
     }
 
-    // 更新 README
-    if (updates.has("README.md")) {
+    // 如果指定了 descriptionFile，则把范围缩小到该文件。
+    const targetFile = descriptionFile?.trim();
+    const shouldUpdate = (file: string): boolean => {
+      if (!targetFile) return true;
+      return file === targetFile || targetFile.endsWith(file);
+    };
+
+    if (updates.has("README.md") && shouldUpdate("README.md")) {
       await this.updateReadme(projectPath, updates.get("README.md")!);
     }
 
-    // 更新 package.json
-    if (updates.has("package.json")) {
+    if (updates.has("package.json") && shouldUpdate("package.json")) {
       await this.updatePackageJson(projectPath, updates.get("package.json")!);
     }
   }

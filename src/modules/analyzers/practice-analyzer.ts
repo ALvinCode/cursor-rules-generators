@@ -282,44 +282,5 @@ export class PracticeAnalyzer {
       stateManagement: Array.from(stateManagementMethods),
     };
   }
-
-  /**
-   * 分析 Git commit 规范
-   */
-  async analyzeGitCommits(projectPath: string): Promise<{
-    usesConventional: boolean;
-    pattern: string;
-    examples: string[];
-  }> {
-    try {
-      const { execSync } = await import("child_process");
-      const commits = execSync("git log --oneline -n 50", {
-        cwd: projectPath,
-        encoding: "utf-8",
-      })
-        .split("\n")
-        .filter((c) => c.trim());
-
-      const conventionalPattern = /^[a-f0-9]+\s+(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:/;
-      const conventionalCount = commits.filter((c) =>
-        conventionalPattern.test(c)
-      ).length;
-
-      const usesConventional = conventionalCount / commits.length > 0.5;
-
-      return {
-        usesConventional,
-        pattern: usesConventional ? "conventional" : "custom",
-        examples: commits.slice(0, 5).map((c) => c.split(" ").slice(1).join(" ")),
-      };
-    } catch (error) {
-      // Git 不可用或不是 Git 仓库
-      return {
-        usesConventional: false,
-        pattern: "unknown",
-        examples: [],
-      };
-    }
-  }
 }
 

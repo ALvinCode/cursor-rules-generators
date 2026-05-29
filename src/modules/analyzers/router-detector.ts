@@ -1,68 +1,17 @@
 import * as path from 'path';
 
 import { FileUtils } from '../../utils/file-utils.js';
+import { RouterInfo, RoutingPattern, RouteExample } from '../../types.js';
 
 /**
  * 路由检测器
  * 通用的路由系统检测，支持前端和后端各种路由方案
+ *
+ * 路由相关类型 (`RouterInfo`, `RoutingPattern`, `RouteExample`) 统一由
+ * `types.ts` 提供，本模块直接 re-export 它们以保持向后兼容的导入路径。
  */
 
-export interface RouterInfo {
-  exists: boolean;
-  type: "file-based" | "config-based" | "programmatic" | "mixed";
-  framework: string;
-  version?: string;
-  location: string[]; // 路由文件位置
-}
-
-export interface RoutingPattern {
-  // 组织方式
-  organization: "centralized" | "distributed" | "feature-based" | "mixed";
-
-  // 命名规范
-  urlNaming: "kebab-case" | "camelCase" | "snake_case" | "mixed";
-  fileNaming: string; // 如 'page.tsx', '[id].tsx', 'index.vue'
-
-  // 动态路由
-  dynamicRoutePattern: string; // '[id]', ':id', '<id>', '{id}'
-  dynamicRouteExamples: string[];
-
-  // 路由分组
-  hasRouteGroups: boolean;
-  groupPattern?: string; // 如 '(auth)', '_auth', 等
-
-  // 布局/嵌套
-  supportsLayouts: boolean;
-  layoutPattern?: string;
-
-  // 守卫/中间件
-  hasGuards: boolean;
-  guardFiles?: string[];
-
-  // 懒加载
-  usesLazyLoading: boolean;
-  lazyLoadExamples?: string[];
-
-  // 元信息
-  hasRouteMeta: boolean;
-  metaExamples?: string[];
-
-  // 导航方式
-  navigationMethod?: string; // 'useNavigate', 'router.push', 等
-
-  // 动态生成
-  isDynamicGenerated: boolean; // 是否通过脚本动态生成
-  generationScript?: string;
-}
-
-export interface RouteExample {
-  filePath: string;
-  url: string; // 推断的 URL
-  type: "static" | "dynamic" | "nested" | "api";
-  method?: string; // GET, POST 等（后端路由）
-  hasGuard?: boolean;
-  hasLazyLoad?: boolean;
-}
+export type { RouterInfo, RoutingPattern, RouteExample };
 
 export class RouterDetector {
   /**

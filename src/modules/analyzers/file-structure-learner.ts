@@ -240,53 +240,5 @@ export class FileStructureLearner {
   ): string[] {
     return structure.filter((d) => d.purpose === purpose).map((d) => d.path);
   }
-
-  /**
-   * 生成文件组织描述
-   */
-  generateOrganizationDescription(org: FileOrganization): string {
-    let desc = "### 项目文件组织\n\n```\n";
-
-    // 按层级组织
-    const topLevel = org.structure.filter((d) => !d.path.includes(path.sep));
-    const secondLevel = org.structure.filter(
-      (d) => d.path.split(path.sep).length === 2
-    );
-
-    for (const dir of topLevel.slice(0, 10)) {
-      desc += `${dir.path}/  # ${dir.purpose} (${dir.fileCount} 个文件)\n`;
-
-      const children = secondLevel.filter((d) =>
-        d.path.startsWith(dir.path + path.sep)
-      );
-      for (const child of children.slice(0, 5)) {
-        const childName = path.basename(child.path);
-        desc += `  ├── ${childName}/  # ${child.purpose}\n`;
-      }
-    }
-
-    desc += "```\n\n";
-
-    // 添加关键目录说明
-    if (org.componentLocation.length > 0) {
-      desc += `**组件位置**: \`${org.componentLocation[0]}\`\n`;
-    }
-    if (org.hooksLocation.length > 0) {
-      desc += `**Hooks 位置**: \`${org.hooksLocation[0]}\`\n`;
-    }
-    if (org.utilsLocation.length > 0) {
-      desc += `**工具函数位置**: \`${org.utilsLocation[0]}\`\n`;
-    }
-    if (org.apiLocation.length > 0) {
-      desc += `**API 服务位置**: \`${org.apiLocation[0]}\`\n`;
-    }
-
-    desc += `\n**文件命名**: 组件使用 ${org.namingConvention.components}\n`;
-    if (org.namingConvention.useIndexFiles) {
-      desc += `**导出方式**: 使用 index 文件统一导出\n`;
-    }
-
-    return desc;
-  }
 }
 

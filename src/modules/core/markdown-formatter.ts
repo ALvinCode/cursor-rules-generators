@@ -1,6 +1,3 @@
-import { logger } from '../../utils/logger.js';
-import { FileUtils } from '../../utils/file-utils.js';
-
 /**
  * Markdown 格式修复工具
  * 修复常见的 markdownlint 错误
@@ -250,37 +247,6 @@ export class MarkdownFormatter {
     }
 
     return result.join('\n');
-  }
-
-  /**
-   * 修复文件格式
-   * @param filePath 文件路径
-   */
-  static async formatFile(filePath: string): Promise<void> {
-    try {
-      const content = await FileUtils.readFile(filePath);
-      const formatted = this.format(content);
-      
-      // 只有内容发生变化时才写入
-      if (content !== formatted) {
-        await FileUtils.writeFile(filePath, formatted);
-        logger.debug(`已修复 markdown 格式: ${filePath}`);
-      }
-    } catch (error) {
-      logger.warn(`修复 markdown 格式失败: ${filePath}`, error);
-    }
-  }
-
-  /**
-   * 批量修复多个文件
-   * @param filePaths 文件路径数组
-   */
-  static async formatFiles(filePaths: string[]): Promise<void> {
-    for (const filePath of filePaths) {
-      if (filePath.endsWith('.mdc') || filePath.endsWith('.md')) {
-        await this.formatFile(filePath);
-      }
-    }
   }
 }
 

@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-import { CursorRule, FileOrganizationInfo, InstructionsFile } from '../../types.js';
+import { CursorRule, FileOrganizationInfo } from '../../types.js';
 import { FileUtils } from '../../utils/file-utils.js';
 import { logger } from '../../utils/logger.js';
 import { GenerationCoordinator, LocationConfirmation } from './generation-coordinator.js';
@@ -108,56 +108,6 @@ export class FileWriter {
     }
 
     return { writtenFiles, confirmations };
-  }
-
-  /**
-   * 写入 instructions.md 文件（v1.3 新增，带 markdownlint 验证）
-   */
-  async writeInstructions(instructions: InstructionsFile): Promise<void> {
-    try {
-      // 验证 instructions 对象
-      if (!instructions || !instructions.content || !instructions.filePath) {
-        throw new Error(
-          `instructions 对象不完整: ${JSON.stringify({
-            hasContent: !!instructions?.content,
-            hasFilePath: !!instructions?.filePath,
-          })}`
-        );
-      }
-
-      // 1. 先使用 MarkdownFormatter 进行基本格式化
-      let formattedContent = MarkdownFormatter.format(instructions.content);
-      
-      // 2. 使用 markdownlint 验证并修复
-      const projectPath = path.dirname(path.dirname(instructions.filePath));
-      MarkdownlintValidator.initializeConfigPath(projectPath);
-      
-      const validationResult = await MarkdownlintValidator.validateAndFix(
-        formattedContent,
-        instructions.filePath
-      );
-      formattedContent = validationResult.content;
-
-      // 3. 写入文件
-      await FileUtils.writeFile(instructions.filePath, formattedContent);
-
-      // 4. 再次验证写入后的文件
-      await MarkdownlintValidator.fixFile(instructions.filePath);
-
-      if (validationResult.valid) {
-        logger.debug(`已写入工作流指导文件（符合 markdownlint 规范）: ${instructions.fileName}`);
-      } else {
-        logger.warn(`工作流指导文件存在 markdownlint 警告: ${instructions.fileName}`, {
-          errors: validationResult.errors.map(
-            (e) => `${e.rule}: ${e.description} (line ${e.line})`
-          ),
-        });
-      }
-    } catch (error) {
-      logger.error(`写入 instructions.md 失败: ${instructions?.filePath || "未知路径"}`, error);
-      // 重新抛出错误，让调用者处理
-      throw error;
-    }
   }
 
   /**

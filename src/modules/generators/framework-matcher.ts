@@ -5,6 +5,7 @@
 
 import { TechStack } from '../../types.js';
 import { logger } from "../../utils/logger.js";
+import { jaccardSimilarity } from "../../utils/similarity.js";
 
 export interface FrameworkMatch {
   framework: string;
@@ -99,29 +100,12 @@ const FRAMEWORK_RULES_MAP: Record<string, FrameworkRuleEntry> = {
 };
 
 /**
- * 计算技术栈相似度
+ * 技术栈相似度（Jaccard）。
+ *
+ * 实现统一在 `src/utils/similarity.ts`，本处仅作为内部别名以保持
+ * 既有可读性。
  */
-function calculateSimilarity(
-  projectStack: string[],
-  ruleStack: string[]
-): number {
-  const projectSet = new Set(projectStack.map(s => s.toLowerCase()));
-  const ruleSet = new Set(ruleStack.map(s => s.toLowerCase()));
-  
-  // 计算交集
-  let intersection = 0;
-  for (const tech of Array.from(projectSet)) {
-    if (ruleSet.has(tech)) {
-      intersection++;
-    }
-  }
-  
-  // 计算并集
-  const union = new Set([...Array.from(projectSet), ...Array.from(ruleSet)]).size;
-  
-  // Jaccard 相似度
-  return intersection / union;
-}
+const calculateSimilarity = jaccardSimilarity;
 
 /**
  * 匹配最相似的框架规则
@@ -176,63 +160,5 @@ export function findBestFrameworkMatch(techStack: TechStack): FrameworkMatch | n
 
   logger.warn('未找到匹配的框架规则', { projectStack });
   return null;
-}
-
-/**
- * 获取框架特定的格式模板
- */
-export function getFrameworkFormatTemplate(match: FrameworkMatch): {
-  persona?: string;
-  structure: string[];
-  examples?: string[];
-} {
-  const templates: Record<string, any> = {
-    'nextjs-typescript': {
-      persona: 'You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, and Tailwind CSS.',
-      structure: [
-        'Key Principles',
-        'Code Style and Structure',
-        'Naming Conventions',
-        'TypeScript Usage',
-        'React/Next.js Best Practices',
-        'Project Structure'
-      ],
-      examples: [
-        'Component examples',
-        'Routing examples',
-        'Data fetching examples'
-      ]
-    },
-    'react-typescript': {
-      persona: 'You are an expert in React, TypeScript, and modern web development.',
-      structure: [
-        'Key Principles',
-        'Component Development',
-        'State Management',
-        'Code Style',
-        'Project Structure'
-      ]
-    },
-    'vue-typescript': {
-      persona: 'You are an expert in Vue 3, TypeScript, and Composition API.',
-      structure: [
-        'Key Principles',
-        'Component Development',
-        'Composition API',
-        'State Management',
-        'Project Structure'
-      ]
-    }
-  };
-
-  return templates[match.framework] || {
-    persona: `You are an expert in ${match.framework}.`,
-    structure: [
-      'Key Principles',
-      'Code Style',
-      'Best Practices',
-      'Project Structure'
-    ]
-  };
 }
 

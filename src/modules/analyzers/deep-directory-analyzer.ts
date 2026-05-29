@@ -52,7 +52,22 @@ export class DeepDirectoryAnalyzer {
     
     // 0. 构建目录树结构（用于上下文分析）
     const directoryTree = this.buildDirectoryTree(files, projectPath);
-    
+
+    // 0.b. 预计算文件→目录索引：避免在 analyzeDirectory 中对每个目录都全量扫描 files。
+    // dirToDirectFiles[d] 仅包含直接位于 d 下（不含子目录）的文件，
+    // analyzeDirectory 内再合并子目录列表获得递归文件集合。
+    const dirToDirectFiles = new Map<string, string[]>();
+    for (const f of files) {
+      const rel = FileUtils.getRelativePath(projectPath, f);
+      const dir = path.dirname(rel);
+      const bucket = dirToDirectFiles.get(dir);
+      if (bucket) {
+        bucket.push(f);
+      } else {
+        dirToDirectFiles.set(dir, [f]);
+      }
+    }
+
     // 1. 识别所有文件类型
     const fileTypeMap = await this.fileTypeIdentifier.identifyFileTypes(
       files,
@@ -73,7 +88,8 @@ export class DeepDirectoryAnalyzer {
           files,
           fileTypeMap,
           modules,
-          directoryTree
+          directoryTree,
+          dirToDirectFiles
         );
         if (analysis) {
           analyses.push(analysis);
@@ -98,18 +114,34 @@ export class DeepDirectoryAnalyzer {
     allFiles: string[],
     fileTypeMap: Map<string, FileTypeInfo>,
     modules: Array<{ name: string; path: string }>,
-    directoryTree: Map<string, string[]>
+    directoryTree: Map<string, string[]>,
+    dirToDirectFiles?: Map<string, string[]>
   ): Promise<DeepDirectoryAnalysis | null> {
     const fullPath = path.join(projectPath, dirPath);
-    const filesInDir = allFiles.filter((f) => {
-      const fileDir = path.dirname(FileUtils.getRelativePath(projectPath, f));
-      return fileDir === dirPath || fileDir.startsWith(dirPath + path.sep);
-    });
+    let filesInDir: string[];
+    let directFiles: string[];
 
-    const directFiles = filesInDir.filter((f) => {
-      const fileDir = path.dirname(FileUtils.getRelativePath(projectPath, f));
-      return fileDir === dirPath;
-    });
+    if (dirToDirectFiles) {
+      // 快路径：使用预计算索引。O(子目录) 而非 O(文件)。
+      directFiles = dirToDirectFiles.get(dirPath) ?? [];
+      filesInDir = [...directFiles];
+      const prefix = dirPath + path.sep;
+      for (const [childDir, childFiles] of dirToDirectFiles) {
+        if (childDir !== dirPath && childDir.startsWith(prefix)) {
+          filesInDir.push(...childFiles);
+        }
+      }
+    } else {
+      // 兼容路径：保留旧的 O(文件) 扫描，供未传索引的调用使用。
+      filesInDir = allFiles.filter((f) => {
+        const fileDir = path.dirname(FileUtils.getRelativePath(projectPath, f));
+        return fileDir === dirPath || fileDir.startsWith(dirPath + path.sep);
+      });
+      directFiles = filesInDir.filter((f) => {
+        const fileDir = path.dirname(FileUtils.getRelativePath(projectPath, f));
+        return fileDir === dirPath;
+      });
+    }
 
     if (directFiles.length === 0 && filesInDir.length === 0) {
       return null; // 空目录或只有子目录
@@ -169,7 +201,12 @@ export class DeepDirectoryAnalyzer {
     const version = this.identifyVersion(dirPath, directFiles);
 
     // 识别子目录
-    const childDirectories = this.getChildDirectories(dirPath, allFiles, projectPath);
+    const childDirectories = this.getChildDirectories(
+      dirPath,
+      allFiles,
+      projectPath,
+      dirToDirectFiles
+    );
 
     return {
       path: dirPath,
@@ -547,26 +584,6 @@ export class DeepDirectoryAnalyzer {
       }
       return contentAnalysis.purpose;
     }
-
-    // 如果文件内容分析无法确定，且目录名也无法确定，才尝试基于业务关键词推断
-    // 但只有在目录名确实是通用词或无法确定时才使用业务关键词
-    // 完全跳过业务关键词，优先使用目录名
-    // if (contentAnalysis.businessKeywords.length > 0 && 
-    //     (this.isCategoryName(dirName) || this.isMeaninglessName(dirName))) {
-    //   const businessPurpose = this.inferBusinessPurposeFromKeywords(
-    //     dirName,
-    //     contentAnalysis.businessKeywords,
-    //     primaryTypes
-    //   );
-    //   if (businessPurpose) {
-    //     // 向上查找类别词（忽略无意义命名）
-    //     const categoryDir = this.findCategoryDirInAncestors(dirParts);
-    //     if (categoryDir) {
-    //       return this.enhanceWithParentCategory(businessPurpose, dirName, categoryDir);
-    //     }
-    //     return businessPurpose;
-    //   }
-    // }
 
     // ========== 第四阶段：继承父级目录的语义（增强语义） ==========
     // 向上查找类别词，忽略无意义命名（如 src、lib 等）
@@ -1206,43 +1223,6 @@ export class DeepDirectoryAnalyzer {
   }
 
   /**
-   * 基于业务关键词推断职能
-   */
-  private inferBusinessPurposeFromKeywords(
-    dirName: string,
-    businessKeywords: string[],
-    primaryTypes: FileTypeCategory[]
-  ): string | null {
-    if (businessKeywords.length === 0) {
-      return null;
-    }
-
-    const keyword = businessKeywords[0];
-    const keywordCN = this.translateKeyword(keyword);
-
-    // 根据主要文件类型确定职能
-    if (primaryTypes.includes("component")) {
-      return `${keywordCN} 组件`;
-    } else if (primaryTypes.includes("page")) {
-      return `${keywordCN} 页面`;
-    } else if (primaryTypes.includes("service")) {
-      return `${keywordCN} 接口`;
-    } else if (primaryTypes.includes("utility")) {
-      return `${keywordCN} 工具`;
-    } else if (primaryTypes.includes("model")) {
-      return `${keywordCN} 数据模型`;
-    } else if (primaryTypes.includes("hook")) {
-      return `${keywordCN} Hooks`;
-    } else if (primaryTypes.includes("type")) {
-      return `${keywordCN} 数据类型`;
-    } else if (primaryTypes.includes("enum")) {
-      return `${keywordCN} 枚举`;
-    } else {
-      return keywordCN;
-    }
-  }
-
-  /**
    * 基于文件类型获取职能（兜底）
    */
   private getPurposeByFileType(
@@ -1583,26 +1563,44 @@ export class DeepDirectoryAnalyzer {
   }
 
   /**
-   * 获取子目录列表
+   * 获取子目录列表。
+   * 当 dirToDirectFiles 可用时，直接从索引提取直接子目录（O(子目录)）；
+   * 否则回退到对 allFiles 全量扫描（O(files)）。
    */
   private getChildDirectories(
     dirPath: string,
     allFiles: string[],
-    projectPath: string
+    projectPath: string,
+    dirToDirectFiles?: Map<string, string[]>
   ): string[] {
-    const children = new Set<string>();
+    const prefix = dirPath + path.sep;
 
+    if (dirToDirectFiles) {
+      const children = new Set<string>();
+      for (const childDir of dirToDirectFiles.keys()) {
+        if (childDir.startsWith(prefix)) {
+          const relative = childDir.substring(prefix.length);
+          const firstPart = relative.split(path.sep)[0];
+          if (firstPart) {
+            children.add(path.join(dirPath, firstPart));
+          }
+        }
+      }
+      return Array.from(children);
+    }
+
+    // 兜底：无索引时对 allFiles 全量扫描
+    const children = new Set<string>();
     for (const file of allFiles) {
       const fileDir = path.dirname(FileUtils.getRelativePath(projectPath, file));
-      if (fileDir.startsWith(dirPath + path.sep)) {
-        const relative = fileDir.substring(dirPath.length + 1);
+      if (fileDir.startsWith(prefix)) {
+        const relative = fileDir.substring(prefix.length);
         const firstPart = relative.split(path.sep)[0];
         if (firstPart) {
           children.add(path.join(dirPath, firstPart));
         }
       }
     }
-
     return Array.from(children);
   }
 
@@ -1808,148 +1806,5 @@ export class DeepDirectoryAnalyzer {
     return features.length > 0 ? { features, shared: shared.length > 0 ? shared : undefined } : undefined;
   }
 
-  /**
-   * 检测版本隔离模式
-   */
-  detectVersionIsolation(analyses: DeepDirectoryAnalysis[]): {
-    hasVersioning: boolean;
-    versions: string[];
-    pattern: "directory" | "prefix" | "suffix" | "none";
-  } {
-    const versions = new Set<string>();
-    let hasDirectoryVersioning = false;
-    let hasPrefixVersioning = false;
-    let hasSuffixVersioning = false;
-
-    for (const analysis of analyses) {
-      if (analysis.version) {
-        versions.add(analysis.version);
-        const dirParts = analysis.path.split(path.sep).filter(Boolean);
-        if (dirParts.includes(analysis.version)) {
-          hasDirectoryVersioning = true;
-        } else {
-          const dirName = path.basename(analysis.path);
-          if (dirName.startsWith(analysis.version)) {
-            hasPrefixVersioning = true;
-          } else if (dirName.endsWith(analysis.version)) {
-            hasSuffixVersioning = true;
-          }
-        }
-      }
-    }
-
-    let pattern: "directory" | "prefix" | "suffix" | "none" = "none";
-    if (hasDirectoryVersioning) {
-      pattern = "directory";
-    } else if (hasPrefixVersioning) {
-      pattern = "prefix";
-    } else if (hasSuffixVersioning) {
-      pattern = "suffix";
-    }
-
-    return {
-      hasVersioning: versions.size > 0,
-      versions: Array.from(versions),
-      pattern,
-    };
-  }
-
-  /**
-   * 检测模块层级（支持多国家线等）
-   */
-  detectModuleHierarchy(
-    analyses: DeepDirectoryAnalysis[],
-    modules: Array<{ name: string; path: string; type?: string }>
-  ): {
-    levels: Array<{
-      level: number;
-      name: string;
-      type: "country" | "region" | "module" | "feature" | "other";
-      directories: string[];
-    }>;
-  } {
-    const levels: Array<{
-      level: number;
-      name: string;
-      type: "country" | "region" | "module" | "feature" | "other";
-      directories: string[];
-    }> = [];
-
-    // 分析目录层级
-    const levelMap = new Map<number, Set<string>>();
-
-    for (const analysis of analyses) {
-      const depth = analysis.depth;
-      if (!levelMap.has(depth)) {
-        levelMap.set(depth, new Set());
-      }
-      levelMap.get(depth)!.add(analysis.path);
-    }
-
-    // 识别每一层的类型
-    for (const [depth, dirs] of levelMap) {
-      const dirArray = Array.from(dirs);
-      const type = this.inferLevelType(dirArray, depth);
-
-      levels.push({
-        level: depth,
-        name: `Level ${depth}`,
-        type,
-        directories: dirArray,
-      });
-    }
-
-    // 按层级排序
-    levels.sort((a, b) => a.level - b.level);
-
-    return { levels };
-  }
-
-  /**
-   * 推断层级类型
-   */
-  private inferLevelType(
-    directories: string[],
-    depth: number
-  ): "country" | "region" | "module" | "feature" | "other" {
-    // 检查国家代码模式（如 ph, th, sg, my, id 等）
-    const countryCodes = ["ph", "th", "sg", "my", "id", "vn", "tw", "hk", "cn"];
-    for (const dir of directories) {
-      const dirName = path.basename(dir).toLowerCase();
-      if (countryCodes.includes(dirName) || dirName.match(/^[a-z]{2}$/)) {
-        return "country";
-      }
-    }
-
-    // 检查区域模式
-    const regionNames = ["asia", "europe", "america", "region"];
-    for (const dir of directories) {
-      const dirName = path.basename(dir).toLowerCase();
-      if (regionNames.some((r) => dirName.includes(r))) {
-        return "region";
-      }
-    }
-
-    // 检查功能模块
-    if (depth <= 2) {
-      for (const dir of directories) {
-        const dirName = path.basename(dir).toLowerCase();
-        if (
-          dirName.includes("feature") ||
-          dirName.includes("module") ||
-          dirName.includes("service")
-        ) {
-          return "feature";
-        }
-      }
-    }
-
-    // 默认模块类型
-    if (depth <= 3) {
-      return "module";
-    }
-
-    return "other";
-  }
 }
 

@@ -26,9 +26,10 @@ import { RouterDetector } from './modules/analyzers/router-detector.js';
 import { RuleValidator } from './modules/validators/rule-validator.js';
 import { RulesGenerator } from './modules/core/rules-generator.js';
 import { TechStackDetector } from './modules/analyzers/tech-stack-detector.js';
-import { CursorRule, Dependency, GenerationSummary, InstructionsFile } from './types.js';
+import { CursorRule, Dependency, GenerationSummary } from './types.js';
 import { createErrorResponse } from './utils/errors.js';
 import { logger } from './utils/logger.js';
+import { AnalysisPipeline } from './modules/core/analysis-pipeline.js';
 
 /**
  * 动态读取 package.json 中的版本号
@@ -415,8 +416,7 @@ class CursorRulesGeneratorsServer {
       frontendRouterInfo,
       backendRouterInfo
     )} 个规则文件\n`;
-    output += `✅ [10/11] 准备写入 - 将写入 .cursor/ 目录\n`;
-    output += `✅ [11/11] 准备完成 - 将生成 instructions.md\n\n`;
+    output += `✅ [10/10] 准备写入 - 将写入 .cursor/ 目录\n\n`;
 
     output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
@@ -493,7 +493,6 @@ class CursorRulesGeneratorsServer {
     // 显示将生成的文件
     output += `## 📁 将要生成的文件\n\n`;
     output += `.cursor/\n`;
-    output += `├── instructions.md (~200 行)\n`;
     output += `└── rules/\n`;
     output += `    ├── global-rules.mdc (~280 行)\n`;
     output += `    ├── code-style.mdc (~200 行)\n`;
@@ -554,7 +553,7 @@ class CursorRulesGeneratorsServer {
     frontendRouter: { exists: boolean } | { info: { exists: boolean } } | null,
     backendRouter: { exists: boolean } | { info: { exists: boolean } } | null
   ): number {
-    let count = 4; // global, code-style, architecture, instructions
+    let count = 3; // global, code-style, architecture
     if (customToolsCount > 0) count++;
     if (
       techStack.frameworks.some((f: string) =>
@@ -701,37 +700,91 @@ class CursorRulesGeneratorsServer {
     let descriptionUpdated = false;
     let rules: CursorRule[] = [];
     let writtenFiles: string[] = [];
-    let instructions: InstructionsFile | undefined;
-
     // 重置 report 状态
     this.report = {
       warnings: [],
       errors: [],
     };
 
+    // ── 分析阶段：使用共享 AnalysisPipeline（与 CLI 同一代码路径）──────────────
+    const pipeline = new AnalysisPipeline();
+    let pipelineTask2Started = false;
+
+    const {
+      context: analysisContext,
+      consistencyReport: pipelineConsistencyReport,
+    } = await pipeline.run(projectPath, {
+      onProgress: (p) => {
+        switch (p.stage) {
+          case 'collect-files':
+            startTask(1, `cursor-rules-generators 正在扫描项目路径：${projectPath}`);
+            break;
+          case 'tech-stack':
+            if (!pipelineTask2Started) {
+              startTask(2, 'cursor-rules-generators 正在识别技术栈与模块结构。');
+              pipelineTask2Started = true;
+            }
+            break;
+          case 'code-features':
+            completeTask(2);
+            break;
+          case 'project-config':
+            startTask(3, 'cursor-rules-generators 正在检查项目配置文件。');
+            break;
+          case 'practices':
+            startTask(4, 'cursor-rules-generators 正在提取项目实践规范。');
+            break;
+          case 'custom-patterns':
+            startTask(5, 'cursor-rules-generators 正在收集自定义 Hooks 与工具函数。');
+            break;
+          case 'file-organization':
+            startTask(6, 'cursor-rules-generators 正在分析目录结构与命名约定。');
+            break;
+          case 'deep-directory':
+            startTask(6.5, 'cursor-rules-generators 正在深度分析目录结构和职能。');
+            break;
+          case 'routers':
+            startTask(7, 'cursor-rules-generators 正在识别路由框架。');
+            break;
+        }
+      },
+    });
+
+    // 从 pipeline 结果提取所有分析产出（与 CLI 共享同一数据源）
+    files = analysisContext.files ?? [];
+    techStack = analysisContext.techStack;
+    modules = analysisContext.modules ?? [];
+    codeFeatures = analysisContext.codeFeatures ?? {};
+    projectConfig = analysisContext.projectConfig;
+    projectPractice = analysisContext.projectPractice;
+    customPatterns = analysisContext.customPatterns;
+    fileOrganization = analysisContext.fileOrganization;
+    deepAnalysis = analysisContext.deepAnalysis ?? [];
+    architecturePattern = analysisContext.architecturePattern;
+    frontendRouter = analysisContext.frontendRouter;
+    backendRouter = analysisContext.backendRouter;
+    bestPractices = analysisContext.bestPractices ?? [];
+    consistencyReport = pipelineConsistencyReport ?? {
+      hasInconsistencies: false,
+      inconsistencies: [],
+    };
+
+    // ── 补充各任务的详情信息 ─────────────────────────────────────────────────
     // 任务 1：收集项目文件
-    startTask(1, `cursor-rules-generators 正在扫描项目路径：${projectPath}`);
-    files = await this.projectAnalyzer.collectFiles(projectPath);
     fileTypeStats = this.groupFilesByType(files);
-    const topFileTypes = Object.entries(fileTypeStats)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([ext, count]) => `${ext} (${count})`);
-    addDetail(1, `已收集 ${files.length} 个有效文件。`);
-    if (topFileTypes.length > 0) {
-      addDetail(1, `主要文件类型：${topFileTypes.join("，")}`);
+    {
+      const topFileTypes = Object.entries(fileTypeStats)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([ext, count]) => `${ext} (${count})`);
+      addDetail(1, `已收集 ${files.length} 个有效文件。`);
+      if (topFileTypes.length > 0) {
+        addDetail(1, `主要文件类型：${topFileTypes.join("，")}`);
+      }
     }
     completeTask(1);
 
-    // 任务 2：分析技术栈与模块架构
-    startTask(2, "cursor-rules-generators 正在识别技术栈与模块结构。");
-    techStack = await this.techStackDetector.detect(projectPath, files);
-    modules = await this.moduleDetector.detectModules(projectPath, files);
-    codeFeatures = await this.codeAnalyzer.analyzeFeatures(
-      projectPath,
-      files,
-      techStack
-    );
+    // 任务 2：技术栈与模块架构
     addDetail(
       2,
       `主要技术栈：${
@@ -746,127 +799,80 @@ class CursorRulesGeneratorsServer {
         Object.keys(codeFeatures).length
       } 项代码特征。`
     );
-    completeTask(2);
 
-    // 任务 3：检查项目配置
-    startTask(3, "cursor-rules-generators 正在检查项目配置文件。");
-    projectConfig = await this.configParser.parseProjectConfig(projectPath);
-    const configSummary: string[] = [];
-    if (projectConfig?.prettier) configSummary.push("Prettier");
-    if (projectConfig?.eslint) configSummary.push("ESLint");
-    if (projectConfig?.typescript) configSummary.push("TypeScript 配置");
-    if (projectConfig?.commands?.format)
-      configSummary.push(`格式化命令：${projectConfig.commands.format}`);
-    if (projectConfig?.commands?.lintFix)
-      configSummary.push(`Lint 修复命令：${projectConfig.commands.lintFix}`);
-    addDetail(
-      3,
-      `检查到配置项：${
-        configSummary.length > 0 ? configSummary.join("；") : "暂无显式配置"
-      }。`
-    );
-    const aliasCount = projectConfig?.pathAliases
-      ? Object.keys(projectConfig.pathAliases).length
-      : 0;
-    if (aliasCount > 0) {
-      addDetail(3, `识别到 ${aliasCount} 个路径别名。`);
+    // 任务 3：项目配置
+    {
+      const configSummary: string[] = [];
+      if (projectConfig?.prettier) configSummary.push("Prettier");
+      if (projectConfig?.eslint) configSummary.push("ESLint");
+      if (projectConfig?.typescript) configSummary.push("TypeScript 配置");
+      if (projectConfig?.commands?.format)
+        configSummary.push(`格式化命令：${projectConfig.commands.format}`);
+      if (projectConfig?.commands?.lintFix)
+        configSummary.push(`Lint 修复命令：${projectConfig.commands.lintFix}`);
+      addDetail(
+        3,
+        `检查到配置项：${
+          configSummary.length > 0 ? configSummary.join("；") : "暂无显式配置"
+        }。`
+      );
+      const aliasCount = projectConfig?.pathAliases
+        ? Object.keys(projectConfig.pathAliases).length
+        : 0;
+      if (aliasCount > 0) {
+        addDetail(3, `识别到 ${aliasCount} 个路径别名。`);
+      }
     }
     completeTask(3);
 
-    // 任务 4：分析项目实践规范
-    startTask(4, "cursor-rules-generators 正在提取项目实践规范。");
-    const errorHandling = await this.practiceAnalyzer.analyzeErrorHandling(
-      projectPath,
-      files
-    );
-    const codeStyle = await this.practiceAnalyzer.analyzeCodeStyle(
-      projectPath,
-      files
-    );
-    const componentPattern =
-      await this.practiceAnalyzer.analyzeComponentPatterns(projectPath, files);
-    projectPractice = { errorHandling, codeStyle, componentPattern };
-    addDetail(4, `错误处理模式：${errorHandling.type || "未检测"}。`);
-    addDetail(
-      4,
-      `代码风格：变量声明 ${codeStyle.variableDeclaration}，函数风格 ${codeStyle.functionStyle}，字符串引号 ${codeStyle.stringQuote}。`
-    );
-    addDetail(
-      4,
-      `组件组织方式：组件类型 ${componentPattern.type}，导出形式 ${
-        componentPattern.exportStyle
-      }，状态管理 ${componentPattern.stateManagement.join("，") || "未检测"}。`
-    );
+    // 任务 4：实践规范
+    addDetail(4, `错误处理模式：${projectPractice?.errorHandling?.type || "未检测"}。`);
+    if (projectPractice?.codeStyle) {
+      const cs = projectPractice.codeStyle;
+      addDetail(
+        4,
+        `代码风格：变量声明 ${cs.variableDeclaration}，函数风格 ${cs.functionStyle}，字符串引号 ${cs.stringQuote}。`
+      );
+    }
+    if (projectPractice?.componentPattern) {
+      const cp = projectPractice.componentPattern;
+      addDetail(
+        4,
+        `组件组织方式：组件类型 ${cp.type}，导出形式 ${
+          cp.exportStyle
+        }，状态管理 ${cp.stateManagement?.join("，") || "未检测"}。`
+      );
+    }
     completeTask(4);
 
-    // 任务 5：检测自定义工具与模式
-    startTask(5, "cursor-rules-generators 正在收集自定义 Hooks 与工具函数。");
-    const customHooks = await this.customPatternDetector.detectCustomHooks(
-      projectPath,
-      files
-    );
-    const customUtils = await this.customPatternDetector.detectCustomUtils(
-      projectPath,
-      files
-    );
-    const apiClient = await this.customPatternDetector.detectAPIClient(
-      projectPath,
-      files
-    );
-    customPatterns = { customHooks, customUtils, apiClient };
+    // 任务 5：自定义工具
     addDetail(
       5,
-      `发现 ${customHooks.length} 个自定义 Hooks、${customUtils.length} 个工具函数。`
+      `发现 ${customPatterns?.customHooks?.length ?? 0} 个自定义 Hooks、${
+        customPatterns?.customUtils?.length ?? 0
+      } 个工具函数。`
     );
-    if (apiClient?.exists) {
-      addDetail(5, `检测到 API 客户端：${apiClient.name || "未命名"}。`);
+    if (customPatterns?.apiClient?.exists) {
+      addDetail(5, `检测到 API 客户端：${(customPatterns.apiClient as any).name || "未命名"}。`);
     }
     completeTask(5);
 
-    // 任务 6：学习文件组织结构
-    startTask(6, "cursor-rules-generators 正在分析目录结构与命名约定。");
-    fileOrganization = await this.fileStructureLearner.learnStructure(
-      projectPath,
-      files
-    );
-    addDetail(6, `识别 ${fileOrganization.structure.length} 个目录节点。`);
-    if (fileOrganization.componentLocation?.length > 0) {
-      addDetail(6, `组件目录定位为 ${fileOrganization.componentLocation[0]}。`);
+    // 任务 6：文件组织
+    addDetail(6, `识别 ${(fileOrganization as any)?.structure?.length ?? 0} 个目录节点。`);
+    if (((fileOrganization as any)?.componentLocation?.length ?? 0) > 0) {
+      addDetail(6, `组件目录定位为 ${(fileOrganization as any).componentLocation[0]}。`);
     }
-    if (fileOrganization.utilsLocation?.length > 0) {
-      addDetail(6, `工具函数目录定位为 ${fileOrganization.utilsLocation[0]}。`);
+    if (((fileOrganization as any)?.utilsLocation?.length ?? 0) > 0) {
+      addDetail(6, `工具函数目录定位为 ${(fileOrganization as any).utilsLocation[0]}。`);
     }
-    if (fileOrganization.namingConvention) {
-      addDetail(
-        6,
-        `命名规范：${JSON.stringify(fileOrganization.namingConvention)}。`
-      );
+    if ((fileOrganization as any)?.namingConvention) {
+      addDetail(6, `命名规范：${JSON.stringify((fileOrganization as any).namingConvention)}。`);
     }
     completeTask(6);
 
-    // 任务 6.5：深度目录分析（v1.8 新增）
-    startTask(6.5, "cursor-rules-generators 正在深度分析目录结构和职能。");
-    const deepAnalyzer = new DeepDirectoryAnalyzer();
-    const dependenciesForAnalysis = techStack.dependencies.map((d: Dependency) => ({
-      name: d.name,
-      version: d.version,
-    }));
-    await deepAnalyzer.setDependencies(dependenciesForAnalysis);
-    deepAnalysis = await deepAnalyzer.analyzeProjectStructure(
-      projectPath,
-      files,
-      modules,
-      dependenciesForAnalysis
-    );
+    // 任务 6.5：深度目录分析
     addDetail(6.5, `已分析 ${deepAnalysis.length} 个目录的职能和结构。`);
-    
-    // 识别架构模式
-    architecturePattern = await deepAnalyzer.identifyArchitecturePattern(
-      deepAnalysis,
-      projectPath,
-      files
-    );
-    if (architecturePattern.type !== "unknown") {
+    if (architecturePattern && architecturePattern.type !== "unknown") {
       addDetail(
         6.5,
         `识别架构模式：${architecturePattern.type}（置信度：${architecturePattern.confidence}）。`
@@ -874,91 +880,33 @@ class CursorRulesGeneratorsServer {
     }
     completeTask(6.5);
 
-    // 任务 7：识别路由系统（增强版：同时检查依赖和文件结构）
-    startTask(7, "cursor-rules-generators 正在识别路由框架。");
-    const dependencies = techStack.dependencies.map((d: Dependency) => ({
-      name: d.name,
-      version: d.version,
-    }));
-    const frontendRouterInfo = await this.routerDetector.detectFrontendRouter(
-      projectPath,
-      files,
-      dependencies
-    );
-    const backendRouterInfo = await this.routerDetector.detectBackendRouter(
-      projectPath,
-      files,
-      dependencies
-    );
-
-    if (frontendRouterInfo) {
-      const pattern = await this.routerDetector.analyzeRoutingPattern(
-        projectPath,
-        files,
-        frontendRouterInfo
-      );
-      const examples = await this.routerDetector.extractRouteExamples(
-        projectPath,
-        files,
-        frontendRouterInfo,
-        pattern
-      );
-      frontendRouter = { info: frontendRouterInfo, pattern, examples };
-      addDetail(
-        7,
-        `前端路由：${frontendRouterInfo.framework}（${frontendRouterInfo.type}）。`
-      );
+    // 任务 7：路由系统
+    if (frontendRouter) {
+      addDetail(7, `前端路由：${frontendRouter.info.framework}（${frontendRouter.info.type}）。`);
     } else {
       addDetail(7, "未检测到前端路由系统。");
     }
-
-    if (backendRouterInfo) {
-      const pattern = await this.routerDetector.analyzeRoutingPattern(
-        projectPath,
-        files,
-        backendRouterInfo
-      );
-      const examples = await this.routerDetector.extractRouteExamples(
-        projectPath,
-        files,
-        backendRouterInfo,
-        pattern
-      );
-      backendRouter = { info: backendRouterInfo, pattern, examples };
-      addDetail(
-        7,
-        `后端路由：${backendRouterInfo.framework}（${backendRouterInfo.type}）。`
-      );
+    if (backendRouter) {
+      addDetail(7, `后端路由：${backendRouter.info.framework}（${backendRouter.info.type}）。`);
     }
-
-    if (!frontendRouterInfo && !backendRouterInfo) {
+    if (!frontendRouter && !backendRouter) {
       addDetail(7, "未检测到任何路由框架。");
     }
     completeTask(7);
 
-    // 任务 8：评估动态路由生成方式
+    // 任务 8：动态路由分析（pipeline 已在路由阶段分析，从 context 读取结果）
     if (frontendRouter) {
       startTask(8, "cursor-rules-generators 正在评估动态路由生成方式。");
-      const dynamicAnalysis = await this.routerDetector.analyzeDynamicRouting(
-        projectPath,
-        files,
-        frontendRouter.info
-      );
-      frontendRouter.dynamicAnalysis = dynamicAnalysis;
-
-      if (dynamicAnalysis.isDynamic) {
-        frontendRouter.pattern.isDynamicGenerated = true;
-        frontendRouter.pattern.generationScript =
-          dynamicAnalysis.recommendation.method;
+      const dynamicAnalysis = frontendRouter.dynamicAnalysis as any;
+      if (dynamicAnalysis?.isDynamic) {
         addDetail(
           8,
-          `评估结果：路由由脚本或命令生成（${dynamicAnalysis.recommendation.method}）。`
+          `评估结果：路由由脚本或命令生成（${dynamicAnalysis.recommendation?.method}）。`
         );
       } else {
         addDetail(8, "评估结果：路由为手动维护或静态文件。\n");
       }
-
-      if (dynamicAnalysis.needsConfirmation) {
+      if (dynamicAnalysis?.needsConfirmation) {
         uncertainties.push({
           topic: "前端路由生成方式",
           ...dynamicAnalysis.recommendation,
@@ -967,25 +915,14 @@ class CursorRulesGeneratorsServer {
         });
         addDetail(8, "发现需要用户确认的路由生成方案，已记录为待确认事项。");
       }
-
       completeTask(8);
     } else {
       skipTask(8, "未识别前端路由，动态路由评估不适用。");
     }
 
-    // 任务 9：生成规则与一致性检查
+    // 任务 9：生成规则与一致性检查（bestPractices / consistencyReport 已由 AnalysisPipeline 提供）
     startTask(9, "cursor-rules-generators 正在汇总最佳实践并检查文档一致性。");
-    bestPractices = await this.context7Integration.getBestPractices(
-      techStack.dependencies
-    );
     addDetail(9, `获取到 ${bestPractices.length} 条相关最佳实践。`);
-
-    consistencyReport = await this.consistencyChecker.check(
-      projectPath,
-      files,
-      techStack,
-      codeFeatures
-    );
     if (consistencyReport.hasInconsistencies) {
       addDetail(
         9,
@@ -1114,11 +1051,8 @@ class CursorRulesGeneratorsServer {
     
     completeTask(9);
 
-    // 任务 10：写入规则文件与说明
-    startTask(
-      10,
-      "cursor-rules-generators 正在写入规则文件与 instructions.md。"
-    );
+    // 任务 10：写入规则文件
+    startTask(10, "cursor-rules-generators 正在写入规则文件。");
     const writeResult = await this.fileWriter.writeRules(
       projectPath,
       rules,
@@ -1126,32 +1060,7 @@ class CursorRulesGeneratorsServer {
     );
     writtenFiles = writeResult.writtenFiles;
     const locationConfirmations = writeResult.confirmations;
-
-    instructions = await this.rulesGenerator.generateInstructions({
-      projectPath,
-      techStack,
-      modules,
-      codeFeatures,
-      bestPractices,
-      includeModuleRules,
-      projectPractice,
-      projectConfig,
-      customPatterns,
-      fileOrganization,
-    });
-    try {
-      await this.fileWriter.writeInstructions(instructions);
-      writtenFiles.push(".cursor/instructions.md");
-      addDetail(10, `已写入 ${writtenFiles.length} 个文件（包含 instructions.md）。`);
-    } catch (error) {
-      logger.error("写入 instructions.md 失败", error);
-      this.report.errors.push(
-        `无法写入 .cursor/instructions.md: ${error instanceof Error ? error.message : String(error)}`
-      );
-      addDetail(10, `⚠️ 警告：写入 instructions.md 失败，但规则文件已成功写入。`);
-      // 即使失败也记录到 writtenFiles，因为至少尝试了
-      writtenFiles.push(".cursor/instructions.md (写入失败)");
-    }
+    addDetail(10, `已写入 ${writtenFiles.length} 个规则文件。`);
 
     // 检查是否有需要确认的位置
     const needsConfirmation = locationConfirmations.some(
@@ -1343,9 +1252,6 @@ class CursorRulesGeneratorsServer {
     }
 
     const instructionsTips: string[] = [];
-    instructionsTips.push(
-      `cursor-rules-generators 已写入 \`.cursor/instructions.md\`，请先阅读“执行流程”章节。`
-    );
     instructionsTips.push(
       `cursor-rules-generators 建议在任务开始前加载对应规则文件，例如在编写路由时参考 \`.cursor/rules/frontend-routing.mdc\`。`
     );
@@ -1721,7 +1627,11 @@ class CursorRulesGeneratorsServer {
       };
     }
 
-    await this.consistencyChecker.updateDescriptions(projectPath, report);
+    await this.consistencyChecker.updateDescriptions(
+      projectPath,
+      report,
+      descriptionFile
+    );
 
     return {
       content: [
@@ -1987,19 +1897,6 @@ class CursorRulesGeneratorsServer {
 
     tree += "```\n";
     return tree;
-  }
-
-  /**
-   * 获取不一致类型的中文标签
-   */
-  private getInconsistencyTypeLabel(type: string): string {
-    const labels: Record<string, string> = {
-      "missing-doc": "文档缺失",
-      "outdated-doc": "文档过时",
-      "wrong-tech-stack": "技术栈描述错误",
-      "missing-feature": "功能描述缺失",
-    };
-    return labels[type] || type;
   }
 
   private groupFilesByType(files: string[]): Record<string, number> {

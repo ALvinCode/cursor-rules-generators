@@ -6,7 +6,8 @@
 
 import { TechStack } from '../../types.js';
 import { logger } from "../../utils/logger.js";
-import * as path from "path";
+import { resolvePackageResource } from "../../utils/package-paths.js";
+import { jaccardSimilarity } from "../../utils/similarity.js";
 import { FileUtils } from "../../utils/file-utils.js";
 
 export interface TechStackMatch {
@@ -88,29 +89,9 @@ const TECH_KEYWORDS_MAP: Record<string, string[]> = {
 };
 
 /**
- * 计算技术栈相似度（Jaccard 相似度）
+ * 技术栈相似度（Jaccard）。实现统一在 `src/utils/similarity.ts`。
  */
-function calculateSimilarity(
-  projectStack: string[],
-  ruleStack: string[]
-): number {
-  const projectSet = new Set(projectStack.map(s => s.toLowerCase()));
-  const ruleSet = new Set(ruleStack.map(s => s.toLowerCase()));
-  
-  // 计算交集
-  let intersection = 0;
-  for (const tech of Array.from(projectSet)) {
-    if (ruleSet.has(tech)) {
-      intersection++;
-    }
-  }
-  
-  // 计算并集
-  const union = new Set([...Array.from(projectSet), ...Array.from(ruleSet)]).size;
-  
-  // Jaccard 相似度
-  return union > 0 ? intersection / union : 0;
-}
+const calculateSimilarity = jaccardSimilarity;
 
 /**
  * 从规则文件名中提取技术栈
@@ -160,14 +141,14 @@ function normalizeTechName(name: string): string {
  * 加载规则索引
  */
 async function loadRuleIndex(): Promise<any[]> {
-  const indexPath = path.join(
-    process.cwd(),
+  // 规则索引文件随 npm 包分发，必须从包根解析。
+  const indexPath = resolvePackageResource(
     'docs',
     'story',
     'awesome-cursorrules-samples',
     'index.json'
   );
-  
+
   try {
     const indexContent = await FileUtils.readFile(indexPath);
     const index = JSON.parse(indexContent);
@@ -176,27 +157,6 @@ async function loadRuleIndex(): Promise<any[]> {
     logger.debug('无法加载规则索引，使用空数组', { error });
     return [];
   }
-}
-
-/**
- * 检测规则格式
- */
-function detectFormat(content: string): 'persona-first' | 'title-first' | 'mixed' | 'code-comment' {
-  const lower = content.toLowerCase();
-  
-  if (/^you are|^assistant/i.test(content.trim())) {
-    return 'persona-first';
-  }
-  
-  if (/^#\s+/.test(content.trim())) {
-    return 'title-first';
-  }
-  
-  if (/```/.test(content) && content.length < 500) {
-    return 'code-comment';
-  }
-  
-  return 'mixed';
 }
 
 /**
@@ -292,18 +252,4 @@ export function getBestMatchForCategory(
   return categoryMatches.length > 0 ? categoryMatches[0] : null;
 }
 
-/**
- * 获取所有类别的最佳匹配
- */
-export function getAllCategoryBestMatches(
-  multiMatch: MultiCategoryMatch
-): Record<string, TechStackMatch | null> {
-  const result: Record<string, TechStackMatch | null> = {};
-  
-  for (const category of Object.keys(TECH_KEYWORDS_MAP)) {
-    result[category] = getBestMatchForCategory(multiMatch, category);
-  }
-  
-  return result;
-}
 

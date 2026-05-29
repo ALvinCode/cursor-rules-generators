@@ -1,6 +1,44 @@
 /**
  * 类型定义文件
+ *
+ * 共享类型集中在本文件，避免每个调用方各自定义同名字段。
+ *
+ * 对于"领域类型"（由具体分析器定义），通过 `import type` 从源模块引入，
+ * 这样 TypeScript 不会在运行时产生模块依赖（type-only import 在编译后被擦除），
+ * 同时调用方仍可从 `types.ts` 一处获取所有类型契约。
  */
+
+import type {
+  ErrorHandlingPattern,
+  CodeStylePattern,
+  ComponentPattern,
+} from './modules/analyzers/practice-analyzer.js';
+import type {
+  CustomHook,
+  CustomUtil,
+  APIClientInfo,
+} from './modules/analyzers/custom-pattern-detector.js';
+import type { DirectoryPurpose } from './modules/analyzers/file-structure-learner.js';
+import type {
+  PrettierConfig,
+  ESLintConfig,
+  TSConfig,
+} from './modules/core/config-parser.js';
+import type { DynamicRoutingAnalysis } from './modules/analyzers/router-detector.js';
+
+export type {
+  ErrorHandlingPattern,
+  CodeStylePattern,
+  ComponentPattern,
+  CustomHook,
+  CustomUtil,
+  APIClientInfo,
+  DirectoryPurpose,
+  PrettierConfig,
+  ESLintConfig,
+  TSConfig,
+  DynamicRoutingAnalysis,
+};
 
 export interface ProjectFile {
   path: string;
@@ -79,22 +117,17 @@ export interface CursorRule {
   globs?: string | string[];
 }
 
-export interface InstructionsFile {
-  content: string;
-  fileName: string; // instructions.md
-  filePath: string; // .cursor/instructions.md
-}
 
 export interface ProjectPractice {
-  errorHandling: any; // ErrorHandlingPattern from practice-analyzer
-  codeStyle: any; // CodeStylePattern from practice-analyzer
-  componentPattern: any; // ComponentPattern from practice-analyzer
+  errorHandling: ErrorHandlingPattern;
+  codeStyle: CodeStylePattern;
+  componentPattern: ComponentPattern;
 }
 
 export interface ProjectConfiguration {
-  prettier?: any; // PrettierConfig from config-parser
-  eslint?: any; // ESLintConfig from config-parser
-  typescript?: any; // TSConfig from config-parser
+  prettier?: PrettierConfig;
+  eslint?: ESLintConfig;
+  typescript?: TSConfig;
   pathAliases: Record<string, string>;
   commands?: {
     build?: string;
@@ -109,20 +142,30 @@ export interface ProjectConfiguration {
 }
 
 export interface CustomPatterns {
-  customHooks: any[]; // CustomHook[] from custom-pattern-detector
-  customUtils: any[]; // CustomUtil[] from custom-pattern-detector
-  apiClient?: any; // APIClientInfo from custom-pattern-detector
+  customHooks: CustomHook[];
+  customUtils: CustomUtil[];
+  apiClient?: APIClientInfo;
+}
+
+/**
+ * 文件命名约定。原先此字段使用 any 导致下游代码无法获得字段提示。
+ * 与 `FileOrganization.namingConvention`（在 file-structure-learner 中）保持一致。
+ */
+export interface FileNamingConvention {
+  components: "PascalCase" | "kebab-case" | "mixed";
+  files: "camelCase" | "kebab-case" | "mixed";
+  useIndexFiles: boolean;
 }
 
 export interface FileOrganizationInfo {
-  structure: any[]; // DirectoryPurpose[] from file-structure-learner
+  structure: DirectoryPurpose[];
   componentLocation: string[];
   utilsLocation: string[];
-  typesLocation?: string[]; // v1.7 新增
-  stylesLocation?: string[]; // v1.7 新增
-  apiLocation?: string[]; // v1.7 新增
-  hooksLocation?: string[]; // v1.7 新增
-  namingConvention: any;
+  typesLocation?: string[];
+  stylesLocation?: string[];
+  apiLocation?: string[];
+  hooksLocation?: string[];
+  namingConvention: FileNamingConvention;
 }
 
 export interface RouterInfo {
@@ -146,7 +189,9 @@ export interface RoutingPattern {
   hasGuards: boolean;
   guardFiles?: string[];
   usesLazyLoading: boolean;
+  lazyLoadExamples?: string[];
   hasRouteMeta: boolean;
+  metaExamples?: string[];
   navigationMethod?: string;
   isDynamicGenerated: boolean;
   generationScript?: string;
@@ -158,6 +203,7 @@ export interface RouteExample {
   type: "static" | "dynamic" | "nested" | "api";
   method?: string;
   hasGuard?: boolean;
+  hasLazyLoad?: boolean;
 }
 
 export interface RuleGenerationContext {
@@ -177,7 +223,7 @@ export interface RuleGenerationContext {
     info: RouterInfo;
     pattern: RoutingPattern;
     examples: RouteExample[];
-    dynamicAnalysis?: any;
+    dynamicAnalysis?: DynamicRoutingAnalysis;
   };
   backendRouter?: {
     info: RouterInfo;
@@ -192,7 +238,21 @@ export interface RuleGenerationContext {
 }
 
 /**
- * 生成摘要相关类型（v1.7 新增）
+ * 单条生成说明：描述某个规则文件为何被生成、何时生效。
+ */
+export interface GenerationExplanation {
+  filePath: string;
+  type: string;
+  sourceRule: string;
+  triggerCondition: string;
+  usageGuidance: string;
+}
+
+/**
+ * 生成摘要（v1.7 新增）
+ *
+ * 此类型是规则生成结果的对外契约，被 MCP 工具响应、生成协调器以及测试脚本共享。
+ * 之前在 `generation-coordinator.ts` 也有一份重复定义；现统一以本文件为准。
  */
 export interface GenerationSummary {
   status: "success" | "needs-confirmation" | "error";
@@ -200,13 +260,7 @@ export interface GenerationSummary {
     path: string;
     type: string;
     sourceRule: string;
-    explanation?: {
-      filePath: string;
-      type: string;
-      sourceRule: string;
-      triggerCondition: string;
-      usageGuidance: string;
-    };
+    explanation?: GenerationExplanation;
   }>;
   contextEvaluation: {
     detectedStructure: string[];

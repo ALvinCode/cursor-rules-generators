@@ -313,46 +313,4 @@ export class ConfigParser {
     return aliases;
   }
 
-  /**
-   * 将配置转换为可读的描述
-   */
-  describeConfig(config: ProjectConfig): string {
-    let description = "";
-
-    if (config.prettier) {
-      description += `**代码格式化配置** (Prettier):\n`;
-      description += `- 缩进: ${
-        config.prettier.useTabs
-          ? "Tabs"
-          : `${config.prettier.tabWidth || 2} 个空格`
-      }\n`;
-      description += `- 引号: ${
-        config.prettier.singleQuote ? "单引号" : "双引号"
-      }\n`;
-      description += `- 分号: ${config.prettier.semi ? "使用" : "不使用"}\n`;
-      description += `- 行长度: ${config.prettier.printWidth || 80} 字符\n`;
-      description += `- 尾随逗号: ${
-        config.prettier.trailingComma || "none"
-      }\n\n`;
-    }
-
-    if (config.typescript?.compilerOptions) {
-      description += `**TypeScript 配置**:\n`;
-      description += `- 严格模式: ${
-        config.typescript.compilerOptions.strict ? "启用" : "禁用"
-      }\n`;
-      if (config.typescript.compilerOptions.target) {
-        description += `- 编译目标: ${config.typescript.compilerOptions.target}\n`;
-      }
-    }
-
-    if (Object.keys(config.pathAliases).length > 0) {
-      description += `\n**路径别名**:\n`;
-      for (const [alias, target] of Object.entries(config.pathAliases)) {
-        description += `- \`${alias}\` → \`${target}\`\n`;
-      }
-    }
-
-    return description;
-  }
 }

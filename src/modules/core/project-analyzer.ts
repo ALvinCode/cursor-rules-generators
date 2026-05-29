@@ -1,6 +1,5 @@
 import { FileUtils } from "../../utils/file-utils.js";
 import { logger } from "../../utils/logger.js";
-import * as path from "path";
 
 /**
  * 项目分析器
@@ -15,29 +14,6 @@ export class ProjectAnalyzer {
     const files = await FileUtils.collectFiles(projectPath, 10);
     logger.debug(`扫描完成，共发现 ${files.length} 个有用文件`);
     return files;
-  }
-
-  /**
-   * 获取项目基础信息
-   */
-  async getProjectInfo(projectPath: string): Promise<{
-    name: string;
-    hasPackageJson: boolean;
-    hasReadme: boolean;
-  }> {
-    const name = path.basename(projectPath);
-
-    const packageJsonPath = path.join(projectPath, "package.json");
-    const readmePath = path.join(projectPath, "README.md");
-
-    const hasPackageJson = await FileUtils.fileExists(packageJsonPath);
-    const hasReadme = await FileUtils.fileExists(readmePath);
-
-    return {
-      name,
-      hasPackageJson,
-      hasReadme,
-    };
   }
 }
 

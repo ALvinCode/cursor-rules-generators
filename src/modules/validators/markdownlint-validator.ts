@@ -56,11 +56,20 @@ export class MarkdownlintValidator {
       rule: string;
       description: string;
     }>;
+    skipped?: boolean;
   }> {
+    let markdownlint: typeof import('markdownlint/promise');
     try {
-      // 动态导入 markdownlint (使用 promise 版本)
-      const markdownlint = await import('markdownlint/promise');
-      const options: any = {
+      markdownlint = await import('markdownlint/promise');
+    } catch (error) {
+      logger.warn(
+        `markdownlint module unavailable; skipping validation: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return { valid: true, errors: [], skipped: true };
+    }
+
+    try {
+      const options: Parameters<typeof markdownlint.lint>[0] = {
         strings: {
           [filePath || 'content.md']: content,
         },
@@ -74,13 +83,11 @@ export class MarkdownlintValidator {
           if (this.configPath.endsWith('.json')) {
             options.config = JSON.parse(configContent);
           } else {
-            // YAML 配置需要 yaml 库解析
             const yaml = await import('yaml');
             options.config = yaml.parse(configContent);
           }
         } catch (error) {
           logger.warn(`无法加载 markdownlint 配置: ${error}`);
-          // 使用默认配置
           options.config = {};
         }
       }
@@ -88,11 +95,11 @@ export class MarkdownlintValidator {
       const results = await markdownlint.lint(options);
       const fileResults = results[filePath || 'content.md'] || [];
 
-      const errors = fileResults.map((error: any) => ({
+      const errors = fileResults.map((error) => ({
         line: error.lineNumber,
-        column: error.columnNumber || 1,
-        rule: error.ruleNames?.[0] || error.ruleNames || 'unknown',
-        description: error.ruleDescription || error.ruleNames?.join('/') || 'Unknown error',
+        column: (error as { columnNumber?: number }).columnNumber || 1,
+        rule: Array.isArray(error.ruleNames) ? error.ruleNames[0] || 'unknown' : 'unknown',
+        description: error.ruleDescription || (Array.isArray(error.ruleNames) ? error.ruleNames.join('/') : 'Unknown error'),
       }));
 
       return {
@@ -100,12 +107,10 @@ export class MarkdownlintValidator {
         errors,
       };
     } catch (error) {
-      logger.error(`Markdownlint 验证失败: ${error}`);
-      // 如果验证失败，返回空错误列表（不阻止文件写入）
-      return {
-        valid: true,
-        errors: [],
-      };
+      logger.error(
+        `Markdownlint validation execution failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return { valid: false, errors: [], skipped: true };
     }
   }
 
@@ -121,7 +126,13 @@ export class MarkdownlintValidator {
 
       // 先验证
       const validation = await this.validateContent(content, filePath);
-      
+
+      // markdownlint 模块不可用或执行失败时跳过修复，避免误写盘
+      if (validation.skipped) {
+        logger.debug(`markdownlint 验证已跳过，不执行修复: ${filePath}`);
+        return true;
+      }
+
       if (validation.valid) {
         logger.debug(`文件已符合 markdownlint 规范: ${filePath}`);
         return true;

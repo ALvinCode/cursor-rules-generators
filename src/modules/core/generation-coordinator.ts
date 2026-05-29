@@ -1,9 +1,18 @@
 import * as path from 'path';
 
-import { CursorRule, FileOrganizationInfo, RuleGenerationContext } from '../../types.js';
+import {
+  CursorRule,
+  FileOrganizationInfo,
+  RuleGenerationContext,
+  GenerationSummary,
+  GenerationExplanation,
+} from '../../types.js';
 import { FileUtils } from '../../utils/file-utils.js';
 import { logger } from '../../utils/logger.js';
 import { CodeGenerationRequirementsChecker } from './code-generation-requirements.js';
+
+// 重新导出，保持既有从本模块导入这两类型的代码不变。
+export type { GenerationSummary, GenerationExplanation };
 
 /**
  * 生成位置确认结果
@@ -14,63 +23,6 @@ export interface LocationConfirmation {
   reason?: string;
   suggestedAlternatives?: string[];
   certainty: "certain" | "likely" | "uncertain";
-}
-
-/**
- * 上下文约束评估结果
- */
-export interface ContextConstraintEvaluation {
-  matches: boolean;
-  detectedStructure: string[];
-  expectedStructure: string[];
-  mismatches: Array<{
-    type: string;
-    detected: string | null;
-    expected: string;
-    severity: "high" | "medium" | "low";
-  }>;
-}
-
-/**
- * 生成说明
- */
-export interface GenerationExplanation {
-  filePath: string;
-  type: string;
-  sourceRule: string;
-  triggerCondition: string;
-  usageGuidance: string;
-}
-
-/**
- * 生成摘要
- */
-export interface GenerationSummary {
-  status: "success" | "needs-confirmation" | "error";
-  filesGenerated: Array<{
-    path: string;
-    type: string;
-    sourceRule: string;
-    explanation?: GenerationExplanation;
-  }>;
-  contextEvaluation: {
-    detectedStructure: string[];
-    appliedStructureRule: string;
-    mismatches?: Array<{
-      type: string;
-      detected: string | null;
-      expected: string;
-      severity: "high" | "medium" | "low";
-    }>;
-  };
-  userGuidance: string[];
-  notes: string[];
-  confirmationsNeeded?: Array<{
-    topic: string;
-    currentPath: string;
-    reason: string;
-    alternatives?: string[];
-  }>;
 }
 
 /**
@@ -146,94 +98,6 @@ export class GenerationCoordinator {
       needsConfirmation: false,
       targetPath,
       certainty: "certain",
-    };
-  }
-
-  /**
-   * 评估上下文约束
-   * 比较项目实际结构与规则预期生成结构
-   */
-  evaluateContextConstraints(
-    rule: CursorRule,
-    fileOrganization: FileOrganizationInfo,
-    projectPath: string
-  ): ContextConstraintEvaluation {
-    const detectedStructure: string[] = [];
-    const expectedStructure: string[] = [];
-    const mismatches: Array<{
-      type: string;
-      detected: string | null;
-      expected: string;
-      severity: "high" | "medium" | "low";
-    }> = [];
-
-    // 提取检测到的结构
-    if (fileOrganization.componentLocation.length > 0) {
-      detectedStructure.push(
-        `components → ${fileOrganization.componentLocation[0]}`
-      );
-    }
-    if (fileOrganization.utilsLocation.length > 0) {
-      detectedStructure.push(`utils → ${fileOrganization.utilsLocation[0]}`);
-    }
-    if (
-      fileOrganization.typesLocation &&
-      fileOrganization.typesLocation.length > 0
-    ) {
-      detectedStructure.push(`types → ${fileOrganization.typesLocation[0]}`);
-    }
-    if (
-      fileOrganization.hooksLocation &&
-      fileOrganization.hooksLocation.length > 0
-    ) {
-      detectedStructure.push(`hooks → ${fileOrganization.hooksLocation[0]}`);
-    }
-    if (
-      fileOrganization.apiLocation &&
-      fileOrganization.apiLocation.length > 0
-    ) {
-      detectedStructure.push(`api → ${fileOrganization.apiLocation[0]}`);
-    }
-
-    // 确定规则文件的预期位置
-    const baseDir = rule.modulePath || projectPath;
-    const rulesDir = path.join(baseDir, ".cursor", "rules");
-    expectedStructure.push(`rules → ${path.relative(projectPath, rulesDir)}`);
-
-    // 检查规则类型与项目结构的匹配
-    if (rule.type === "reference" && rule.fileName.includes("custom-tools")) {
-      // 自定义工具规则应该与项目中的工具位置匹配
-      if (
-        fileOrganization.utilsLocation.length === 0 &&
-        (!fileOrganization.hooksLocation ||
-          fileOrganization.hooksLocation.length === 0)
-      ) {
-        mismatches.push({
-          type: "missing-tools-directory",
-          detected: null,
-          expected: "utils 或 hooks 目录",
-          severity: "medium",
-        });
-      }
-    }
-
-    if (rule.type === "guideline" && rule.fileName.includes("architecture")) {
-      // 架构规则应该反映实际的项目结构
-      if (fileOrganization.structure.length === 0) {
-        mismatches.push({
-          type: "empty-structure",
-          detected: "未检测到目录结构",
-          expected: "至少一个功能目录",
-          severity: "low",
-        });
-      }
-    }
-
-    return {
-      matches: mismatches.length === 0,
-      detectedStructure,
-      expectedStructure,
-      mismatches,
     };
   }
 
