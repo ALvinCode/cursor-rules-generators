@@ -138,6 +138,35 @@ export class ConfigParser {
    * 查找匹配的命令
    */
   /**
+   * 判断一个脚本命令值是否"以测试运行为唯一目的"。
+   *
+   * 原则：禁止仅从脚本 alias 推测用途，必须读取实际执行命令判断。
+   * 常见误匹配：
+   *   - prepare = "test -z \"$CI\" && husky install"  → Unix shell test 工具，非测试运行器
+   *   - npm lifecycle 钩子（prepare, prepublish 等）不参与语义匹配
+   */
+  private isPureTestCommand(scriptKey: string, scriptValue: string): boolean {
+    // npm lifecycle hooks 永远不是测试命令
+    const NPM_LIFECYCLE_HOOKS = new Set([
+      'prepare', 'prepublish', 'prepublishOnly', 'postpublish',
+      'preinstall', 'postinstall', 'preuninstall', 'postuninstall',
+      'prepack', 'postpack',
+    ]);
+    if (NPM_LIFECYCLE_HOOKS.has(scriptKey.toLowerCase())) return false;
+
+    const v = scriptValue.trim().toLowerCase();
+
+    // Unix shell test 工具（test -z / test -n / [ -x / [[ ）不是测试运行器
+    if (/^test\s+-[a-z]/i.test(v) || /^\[\s*-/.test(v) || /^\[\[/.test(v)) return false;
+
+    // 必须含真实测试运行器关键词
+    const hasTestRunner = /\b(jest|vitest|mocha|jasmine|cypress|playwright|karma|ava)\b/.test(v)
+      || /\bnpm\s+test\b|\byarn\s+test\b|\bpnpm\s+test\b/.test(v); // 间接调用
+
+    return hasTestRunner;
+  }
+
+  /**
    * 判断一个脚本命令值是否"以类型检查为唯一目的"。
    *
    * 原则：禁止仅从脚本 alias 推测用途，必须读取实际执行命令判断。
@@ -169,10 +198,15 @@ export class ConfigParser {
     // 2. 值匹配：必须读取实际命令值判断用途，不能从脚本名称推测
     // typeCheck 专项：命令值必须以类型检查为唯一目的（不能同时启动 dev server）
     const isTypeCheckSearch = keywords.some(kw => ['tsc', 'type-check', 'typecheck', 'vue-tsc'].includes(kw));
+    // test 专项：命令值必须调用真实测试运行器，且 key 不能是 npm lifecycle 钩子
+    const isTestSearch = keywords.some(kw => ['test', 'jest', 'vitest', 'mocha'].includes(kw));
     for (const [key, value] of Object.entries(scripts)) {
       if (isTypeCheckSearch) {
-        // 用命令值内容判断，而非 key 名称
         if (this.isPureTypeCheckCommand(value)) {
+          return `${runPrefix} ${key}`;
+        }
+      } else if (isTestSearch) {
+        if (this.isPureTestCommand(key, value)) {
           return `${runPrefix} ${key}`;
         }
       } else {

@@ -568,11 +568,12 @@ export class RulesGenerator {
       }
     }
 
-    // 11. 测试规则（前端项目必生成；后端/CLI 项目有测试框架时生成）
+    // 11. 测试规则：仅在有测试框架或显式测试需求时生成（无框架 = 跳过，不生成空文件）
     const needsTesting = requirements.some((r) => r.ruleType === "testing");
     const hasTestingFeature = this.featureExists(context, "testing");
+    const hasTestFramework = this.detectTestFramework(context) !== null;
     const isFrontend = this.isFrontendProject(context);
-    if (needsTesting || hasTestingFeature || isFrontend) {
+    if (needsTesting || hasTestingFeature || hasTestFramework) {
       const testingRule = this.generateTestingRule(context);
       rules.push(testingRule);
     }
@@ -702,7 +703,7 @@ ${
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
-${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(this.isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${this.isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(this.featureExists(context, "testing") || this.isFrontendProject(context)) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(this.isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${this.isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(this.featureExists(context, "testing") || this.detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -1631,10 +1632,24 @@ ${this.generateDetailedStructureContent(context)}
     content += `|-----------------|---------|----------|\n`;
 
     if (org) {
-      if (isFrontend && org.componentLocation.length > 0) {
-        const loc = org.componentLocation[0];
-        content += `| 页面组件 | \`${loc}/\` | \`UserList.${extx}\` |\n`;
-        content += `| 可复用 UI 组件 | \`${loc}/\` | \`Button.${extx}\` |\n`;
+      if (isFrontend) {
+        // 页面/路由组件 与 可复用 UI 组件 语义不同，必须分别检测目录
+        // 优先从 deepAnalysis 检测 views/pages/screens/routes 目录（取最浅路径）
+        const PAGE_DIR_KEYWORDS = new Set(['views', 'pages', 'screens', 'routes']);
+        const pageDir = (context.deepAnalysis ?? [])
+          .filter(d => PAGE_DIR_KEYWORDS.has(d.path.split('/').pop()?.toLowerCase() ?? ''))
+          .sort((a, b) => a.depth - b.depth)[0]?.path;
+
+        if (pageDir && org.componentLocation.length > 0 && pageDir !== org.componentLocation[0]) {
+          // 有独立页面目录 → 分别映射
+          content += `| 页面组件 | \`${pageDir}/\` | \`UserList.${extx}\` |\n`;
+          content += `| 可复用 UI 组件 | \`${org.componentLocation[0]}/\` | \`Button.${extx}\` |\n`;
+        } else if (pageDir) {
+          content += `| 页面 / 可复用组件 | \`${pageDir}/\` | \`UserList.${extx}\` |\n`;
+        } else if (org.componentLocation.length > 0) {
+          // 无独立页面目录，组件目录兼用于页面
+          content += `| 组件（含页面）| \`${org.componentLocation[0]}/\` | \`UserList.${extx}\` |\n`;
+        }
       }
       if (org.utilsLocation.length > 0) {
         const loc = org.utilsLocation[0];
@@ -1774,7 +1789,8 @@ ${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices
 
     const coreFeatures: string[] = [];
     for (const [, feature] of Object.entries(features)) {
-      if (feature.frequency > 0) {
+      // 只输出有具体约束意义的特性，跳过纯存在性描述（如「包含 API 路由定义」）
+      if (feature.frequency > 0 && feature.description && !/包含|定义$/.test(feature.description)) {
         coreFeatures.push(`- ${feature.description}`);
       }
     }
@@ -2147,17 +2163,12 @@ ${this.generateBackendRouterContent(router, context)}
       }
     }
 
+    // 路由懒加载
     if (pattern.usesLazyLoading) {
       content += `## 路由懒加载\n\n`;
       content += `项目使用懒加载优化性能。\n\n`;
       content += `✅ 继续为大型页面使用懒加载\n\n`;
     }
-
-    // 移除建议，改为收集到 SuggestionCollector
-    content += `## 当前实践\n\n`;
-    content += `✅ 保持现有的路由组织方式\n`;
-    content += `✅ 遵循命名规范（${pattern.urlNaming}）\n`;
-    content += `\n`;
 
     return content;
   }
@@ -2232,6 +2243,64 @@ ${this.generateBackendRouterContent(router, context)}
   /**
    * 生成新建路由指南
    */
+  /**
+   * 根据路由框架类型生成「注册新路由」的代码片段。
+   * 基于框架语义生成模板，不依赖读取特定项目文件，具备通用性。
+   */
+  private generateRouteRegistrationSnippet(info: any, pattern: any): string {
+    const framework: string = info.framework ?? '';
+    const routerType: string = info.type ?? 'config-based';
+    const usesLazy: boolean = !!pattern.usesLazyLoading;
+
+    if (framework.includes('Next.js')) {
+      if (info.version === 'App Router') {
+        return `\`\`\`
+app/
+└── feature-name/
+    ├── page.tsx        # 页面组件（必须）
+    └── layout.tsx      # 布局（可选，影响子路由）
+\`\`\``;
+      }
+      return `\`\`\`
+pages/
+└── feature-name.tsx    # 文件即路由：/ → /feature-name
+\`\`\``;
+    }
+
+    if (framework.includes('Vue Router') || framework.includes('Vue')) {
+      const lazy = usesLazy
+        ? `component: () => import('@/views/FeatureName.vue')`
+        : `component: FeatureNameView`;
+      return `\`\`\`typescript
+// router/index.ts 或路由配置文件
+{
+  path: '/feature-name',
+  name: 'FeatureName',
+  ${lazy},
+}
+\`\`\``;
+    }
+
+    if (framework.includes('React Router') || routerType === 'config-based') {
+      const lazy = usesLazy
+        ? `element: React.lazy(() => import('@/views/FeatureName'))`
+        : `element: <FeatureName />`;
+      return `\`\`\`tsx
+// src/router/index.tsx 或路由配置文件
+{
+  path: '/feature-name',
+  ${lazy},
+}
+\`\`\``;
+    }
+
+    // 通用 fallback
+    return `\`\`\`typescript
+// 在路由配置文件中添加新路由条目
+{ path: '/feature-name', component: FeaturePage }
+\`\`\``;
+  }
+
   private generateNewRouteGuidelines(
     info: any,
     pattern: any,
@@ -2249,6 +2318,9 @@ ${this.generateBackendRouterContent(router, context)}
           guidelines += `4. 如需布局，创建 \`layout.tsx\`\n`;
         }
         guidelines += `\n`;
+        guidelines += `### 路由注册格式\n\n`;
+        guidelines += this.generateRouteRegistrationSnippet(info, pattern);
+        guidelines += `\n\n`;
 
         if (examples.length > 0) {
           guidelines += `参考示例: @${examples[0].filePath}\n\n`;
@@ -2262,6 +2334,9 @@ ${this.generateBackendRouterContent(router, context)}
         guidelines += `3. 大型页面使用懒加载\n`;
       }
       guidelines += `\n`;
+      guidelines += `### 路由注册格式\n\n`;
+      guidelines += this.generateRouteRegistrationSnippet(info, pattern);
+      guidelines += `\n\n`;
     }
 
     return guidelines;
@@ -4145,6 +4220,8 @@ ${entries.join("\n")}\n`;
     const lowerLib = libName.toLowerCase();
 
     if (lowerLib.includes("mobx")) {
+      const isTS = context.techStack.languages.includes("TypeScript");
+
       // 动态推断 store 目录：从 deepAnalysis 中找 basename 含 store/stores 的最浅目录
       const storeDir = (() => {
         const deep = context.deepAnalysis || [];
@@ -4158,9 +4235,41 @@ ${entries.join("\n")}\n`;
         return 'src/store';
       })();
 
-      // 根据检测到的实际模式输出对应模板
+      // 根据检测到的实际模式 + 是否 TypeScript 输出对应模板
       const storeExample = mobxPattern === 'makeAutoObservable'
-        ? `import { makeAutoObservable } from 'mobx'
+        ? isTS
+          ? `import { makeAutoObservable } from 'mobx'
+
+interface User {
+  id: string
+  name: string
+}
+
+class UserStore {
+  user: User | null = null
+  loading: boolean = false
+  error: string | null = null
+
+  constructor() {
+    makeAutoObservable(this)
+  }
+
+  setUser(user: User): void {
+    this.user = user
+  }
+
+  async fetchUser(id: string): Promise<void> {
+    this.loading = true
+    try {
+      this.user = await api.getUser(id)
+    } catch (err) {
+      this.error = String(err)
+    } finally {
+      this.loading = false
+    }
+  }
+}`
+          : `import { makeAutoObservable } from 'mobx'
 
 class UserStore {
   user = null
@@ -4174,7 +4283,22 @@ class UserStore {
     this.user = user
   }
 }`
-        : `import { makeObservable, observable, action } from 'mobx'
+        : isTS
+          ? `import { makeObservable, observable, action } from 'mobx'
+
+class UserStore {
+  @observable user: User | null = null
+
+  constructor() {
+    makeObservable(this)
+  }
+
+  @action
+  setUser(user: User): void {
+    this.user = user
+  }
+}`
+          : `import { makeObservable, observable, action } from 'mobx'
 
 class UserStore {
   @observable user = null
@@ -4680,42 +4804,17 @@ ${bestPractices}
       rules += `✅ 保持与现有代码一致的风格\n\n`;
     }
 
-    // ESLint 配置和命令
+    // ESLint 配置说明（只描述工具存在，不重复输出命令）
     if (context.projectConfig.eslint || context.projectConfig.commands?.lint) {
       rules += `### ESLint 代码检查\n\n`;
-
       if (context.projectConfig.eslint) {
         rules += `项目使用 ESLint 进行代码质量检查。\n\n`;
         rules += `**配置文件**: @.eslintrc\n\n`;
       }
-
-      if (
-        context.projectConfig.commands?.lint ||
-        context.projectConfig.commands?.lintFix
-      ) {
-        rules += `**生成代码后必须运行**：\n\n`;
-        rules += `\`\`\`bash\n`;
-        if (context.projectConfig.commands?.lint) {
-          rules += `# 1. 检查问题\n`;
-          rules += `${context.projectConfig.commands.lint}\n\n`;
-        }
-        if (context.projectConfig.commands?.lintFix) {
-          rules += `# 2. 自动修复\n`;
-          rules += `${context.projectConfig.commands.lintFix}\n`;
-        }
-        rules += `\`\`\`\n\n`;
-
-        rules += `**提示**: 生成代码后，Cursor 应主动询问：\n`;
-        rules += `\`\`\`\n`;
-        rules += `需要我运行 lint 检查和修复吗？\n`;
-        if (context.projectConfig.commands?.lintFix) {
-          rules += `${context.projectConfig.commands.lintFix}\n`;
-        }
-        rules += `\`\`\`\n\n`;
-      }
+      // 命令由下方「代码生成后标准流程」统一输出，此处不重复
     }
 
-    // 完整的代码生成后流程
+    // 代码生成后的完整流程（唯一输出命令的位置）
     if (context.projectConfig.commands) {
       rules += `### 代码生成后的标准流程\n\n`;
       rules += `**每次生成代码后，Cursor 必须提示运行**：\n\n`;
@@ -5044,19 +5143,10 @@ ${bestPractices}
     }
 
     let content = `项目采用 **${this.getArchitecturePatternName(pattern.type)}** 架构模式。\n\n`;
-    
-    if (pattern.confidence !== "low") {
-      content += `**置信度**: ${pattern.confidence === "high" ? "高" : "中"}\n\n`;
-    }
-    
-    if (pattern.indicators && pattern.indicators.length > 0) {
-      content += `**识别依据**:\n`;
-      pattern.indicators.forEach((indicator: string) => {
-        content += `- ${indicator}\n`;
-      });
-      content += `\n`;
-    }
-    
+
+    // 注意：置信度（confidence）和识别依据（indicators）是生成器内部分析元数据，
+    // 不应出现在规则内容中 — 规则只输出对 AI Agent 有指导意义的约束。
+
     if (pattern.layerStructure) {
       content += `### 层级结构\n\n`;
       if (pattern.layerStructure.presentation) {
