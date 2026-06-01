@@ -142,13 +142,21 @@ export class ConfigParser {
     keywords: string[],
     runPrefix = "npm run"
   ): string | undefined {
+    // dev/serve/start/watch 这类 script 名永远不能作为 type-check/lint/test 的结果
+    const DEV_SCRIPT_NAMES = new Set([
+      'serve', 'dev', 'start', 'preview', 'watch', 'storybook',
+    ]);
+
+    // 1. 精确 key 匹配（优先级最高）
     for (const keyword of keywords) {
       if (scripts[keyword]) {
         return `${runPrefix} ${keyword}`;
       }
     }
 
+    // 2. 值包含关键词的模糊匹配，跳过 dev/serve 类脚本
     for (const [key, value] of Object.entries(scripts)) {
+      if (DEV_SCRIPT_NAMES.has(key.toLowerCase())) continue;
       if (keywords.some((kw) => value.toLowerCase().includes(kw))) {
         return `${runPrefix} ${key}`;
       }

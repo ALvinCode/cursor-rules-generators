@@ -392,7 +392,7 @@ export class RulesGenerator {
       requirements.some((r) => r.ruleType === "state-management") ||
       this.hasStateManagement(context);
     if (needsStateManagement) {
-      const stateManagementRule = this.generateStateManagementRule(context);
+      const stateManagementRule = await this.generateStateManagementRule(context);
       rules.push(stateManagementRule);
     }
 
@@ -587,7 +587,7 @@ export class RulesGenerator {
 
     // 11c. Feature Recipe（端到端功能创建模板，前端项目必生成）
     if (isFrontend) {
-      const featureRecipeRule = this.generateFeatureRecipeRule(context);
+      const featureRecipeRule = await this.generateFeatureRecipeRule(context);
       rules.push(featureRecipeRule);
     }
 
@@ -614,7 +614,10 @@ export class RulesGenerator {
     const cmds = context.projectConfig?.commands;
     const parts: string[] = [];
     if (cmds?.lint || cmds?.lintFix) parts.push(`\`${cmds.lintFix ?? cmds.lint}\``);
-    if (cmds?.typeCheck) parts.push(`\`${cmds.typeCheck}\``);
+    const devServerPattern = /\b(serve|dev|start|preview|watch)\b/;
+    if (cmds?.typeCheck && !devServerPattern.test(cmds.typeCheck)) {
+      parts.push(`\`${cmds.typeCheck}\``);
+    }
     if (parts.length === 0) return '';
     return `- After writing code, run ${parts.join(' and ')} before considering the task complete.`;
   }
@@ -1580,10 +1583,21 @@ ${this.generateDetailedStructureContent(context)}
       content += `**位置**: \`${org.typesLocation[0]}/\`\n\n`;
     }
 
-    // 样式文件位置
+    // 样式目录：只在 basename 属于样式根目录语义词时展示
+    // 深度本身不是判据，命名才是（styles/theme/tokens 是根；Funding/FormModule 是业务路径）
+    const STYLE_ROOT_KEYWORDS = new Set([
+      'styles', 'style', 'css', 'scss', 'less', 'sass',
+      'theme', 'themes', 'tokens', 'stylesheets', 'assets',
+    ]);
     if (org.stylesLocation && org.stylesLocation.length > 0) {
-      content += `### 样式文件目录\n\n`;
-      content += `**位置**: \`${org.stylesLocation[0]}/\`\n\n`;
+      const styleRootDir = org.stylesLocation.find((loc) => {
+        const basename = loc.replace(/\/$/, '').split('/').pop() ?? '';
+        return STYLE_ROOT_KEYWORDS.has(basename.toLowerCase());
+      });
+      if (styleRootDir) {
+        content += `### 样式文件目录\n\n`;
+        content += `**位置**: \`${styleRootDir}/\`\n\n`;
+      }
     }
 
     // API 位置
@@ -1868,14 +1882,18 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
   /**
    * v1.3: 生成状态管理规则（约 200 行）
    */
-  private generateStateManagementRule(
+  private async generateStateManagementRule(
     context: RuleGenerationContext
-  ): CursorRule {
+  ): Promise<CursorRule> {
     const stateLib = context.techStack.dependencies.find((d) =>
       ["redux", "mobx", "zustand", "pinia", "vuex"].some((lib) =>
         d.name.toLowerCase().includes(lib)
       )
     );
+
+    // MobX 时基于版本 + 实际代码检测使用模式
+    const isMobX = stateLib?.name?.toLowerCase().includes('mobx') ?? false;
+    const mobxPattern = isMobX ? await this.detectMobXPattern(context) : 'makeAutoObservable';
 
     const storeGlobs = this.getStoreGlobs(context);
     const metadata = this.generateRuleMetadata(
@@ -1896,7 +1914,7 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
 
 参考: @global-rules.mdc
 
-${this.generateStateManagementContent(context, stateLib?.name)}
+${this.generateStateManagementContent(context, stateLib?.name, mobxPattern)}
 
 ---
 
@@ -2551,7 +2569,7 @@ try {
    * Feature Recipe — 端到端功能创建指南
    * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
    */
-  private generateFeatureRecipeRule(context: RuleGenerationContext): CursorRule {
+  private async generateFeatureRecipeRule(context: RuleGenerationContext): Promise<CursorRule> {
     const metadata = this.generateRuleMetadata(
       "端到端功能创建指南",
       "Step-by-step recipe for adding a complete feature: types → API → store → component → route",
@@ -2576,6 +2594,9 @@ try {
     const hasRedux = stateLib?.name?.toLowerCase().includes("redux");
     const hasZustand = stateLib?.name?.toLowerCase().includes("zustand");
 
+    // 基于版本 + 实际代码检测 MobX 模式，与 state-management.mdc 保持一致
+    const mobxPattern = hasMobX ? await this.detectMobXPattern(context) : 'makeAutoObservable';
+
     const apiClient = context.customPatterns?.apiClient;
     const apiClientName = apiClient?.name || "apiClient";
     const hasAxios = context.techStack.dependencies.some((d) => d.name === "axios");
@@ -2593,12 +2614,30 @@ try {
 
     let storeStep = "";
     if (hasMobX) {
-      storeStep = `
-### 3. Store（MobX）
+      // 根据检测到的实际 MobX 模式选择模板
+      const mobxStoreBody = mobxPattern === 'makeAutoObservable'
+        ? `import { makeAutoObservable } from "mobx";
+import type { FeatureItem } from "${typeAlias}/feature";
 
-\`\`\`${ext}
-// ${storeDir}/featureStore.${ext}
-import { makeObservable, observable, action } from "mobx";
+class FeatureStore {
+  items: FeatureItem[] = [];
+  loading = false;
+  error: string | null = null;
+
+  constructor() { makeAutoObservable(this); }
+
+  async fetchItems() {
+    this.loading = true;
+    try {
+      this.items = await fetchFeatureList();
+    } catch (err) {
+      this.error = String(err);
+    } finally {
+      this.loading = false;
+    }
+  }
+}`
+        : `import { makeObservable, observable, action } from "mobx";
 import type { FeatureItem } from "${typeAlias}/feature";
 
 class FeatureStore {
@@ -2619,7 +2658,14 @@ class FeatureStore {
       this.loading = false;
     }
   }
-}
+}`;
+
+      storeStep = `
+### 3. Store（MobX）
+
+\`\`\`${ext}
+// ${storeDir}/featureStore.${ext}
+${mobxStoreBody}
 export const featureStore = new FeatureStore();
 \`\`\`
 `;
@@ -3850,7 +3896,11 @@ ${p.content}
     if (cmds.lint) entries.push(`| Lint | \`${cmds.lint}\` |`);
     if (cmds.lintFix) entries.push(`| Lint Fix | \`${cmds.lintFix}\` |`);
     if (cmds.format) entries.push(`| Format | \`${cmds.format}\` |`);
-    if (cmds.typeCheck) entries.push(`| Type Check | \`${cmds.typeCheck}\` |`);
+    // 只显示明确是类型检查的命令，跳过 dev server 命令
+    const devServerPattern = /\b(serve|dev|start|preview|watch)\b/;
+    if (cmds.typeCheck && !devServerPattern.test(cmds.typeCheck)) {
+      entries.push(`| Type Check | \`${cmds.typeCheck}\` |`);
+    }
 
     if (entries.length === 0) return "";
 
@@ -3886,17 +3936,16 @@ ${entries.join("\n")}\n`;
   }
 
   private getHookGlobs(context: RuleGenerationContext): string | null {
+    // 直接使用 path.dirname 从 hook 文件路径获取其所在目录
+    // 不过滤路径名语义或深度：hooks 可能在 composables/、features/xxx/hooks/ 等任意位置
+    // 唯一安全过滤：排除绝对路径
     const hookDirs = (context.customPatterns?.customHooks ?? [])
       .map((h) => {
-        const parts = h.relativePath.split('/');
-        if (parts.length < 2) return null;
-        const dir = parts.slice(0, -1).join('/') + '/';
-        // 只保留：路径中含 hook/hooks 目录段，且深度 ≤ 3 层
-        const hasHookSegment = parts.some(
-          (p) => p.toLowerCase() === 'hooks' || p.toLowerCase() === 'hook'
-        );
-        const isShallow = parts.length <= 4; // file depth ≤ 4 → dir depth ≤ 3
-        return hasHookSegment && isShallow && !path.isAbsolute(dir) ? dir : null;
+        const dir = path.dirname(h.relativePath);
+        // path.dirname('file.ts') → '.' 说明在根目录，跳过
+        if (dir === '.' || dir === '') return null;
+        const normalized = dir.endsWith('/') ? dir : dir + '/';
+        return !path.isAbsolute(normalized) ? normalized : null;
       })
       .filter((d): d is string => d !== null);
     const uniqueDirs = [...new Set(hookDirs)].slice(0, 3);
@@ -4008,11 +4057,79 @@ ${entries.join("\n")}\n`;
   }
 
   /**
+   * 检测项目实际使用的 MobX 模式。
+   *
+   * 优先级（从高到低）：
+   * 1. 实际代码：扫描项目 store 文件，出现哪种写法用哪种
+   * 2. 安装版本：MobX < 6 只有 decorator 写法；6+ 两种均可
+   * 3. fallback：makeAutoObservable（MobX 6+ 官方推荐的简洁写法）
+   */
+  private async detectMobXPattern(
+    context: RuleGenerationContext
+  ): Promise<'makeAutoObservable' | 'decorator'> {
+    // --- 步骤 1：扫描实际 store 文件内容 ---
+    const deep = context.deepAnalysis || [];
+    const storeDirs = deep
+      .filter((d) => /\bstore[s]?\b/i.test(d.path.split('/').pop() ?? ''))
+      .sort((a, b) => a.depth - b.depth)
+      .slice(0, 3); // 只扫描最浅的 3 个 store 目录
+
+    let foundAutoObservable = false;
+    let foundDecorator = false;
+
+    for (const dir of storeDirs) {
+      try {
+        const dirPath = path.join(context.projectPath, dir.path);
+        const { readdir } = await import('fs/promises');
+        const entries = await readdir(dirPath, { withFileTypes: true });
+        const storeFiles = entries
+          .filter((e) => e.isFile() && /\.(ts|tsx|js|jsx)$/.test(e.name))
+          .slice(0, 5); // 每个目录最多抽查 5 个文件
+
+        for (const file of storeFiles) {
+          const filePath = path.join(dirPath, file.name);
+          const content = await FileUtils.readFile(filePath);
+          if (content.includes('makeAutoObservable')) foundAutoObservable = true;
+          if (content.includes('@observable') || content.includes('makeObservable(this)')) {
+            foundDecorator = true;
+          }
+          if (foundAutoObservable || foundDecorator) break;
+        }
+        if (foundAutoObservable || foundDecorator) break;
+      } catch {
+        // 目录读取失败时静默跳过
+      }
+    }
+
+    // 实际代码中有 makeAutoObservable → 优先
+    if (foundAutoObservable) return 'makeAutoObservable';
+    // 实际代码中有 decorator 写法
+    if (foundDecorator) return 'decorator';
+
+    // --- 步骤 2：依据安装版本判断 ---
+    const mobxDep = context.techStack.dependencies.find(
+      (d) => d.name === 'mobx' || d.name === 'mobx-react' || d.name === 'mobx-react-lite'
+    );
+    if (mobxDep?.version) {
+      // 去掉版本前缀符号（^, ~, >=）
+      const rawVersion = mobxDep.version.replace(/^[\^~>=<]+/, '');
+      const majorVersion = parseInt(rawVersion.split('.')[0] ?? '0', 10);
+      // MobX 4/5 只有 decorator 写法；MobX 6+ 默认推荐 makeAutoObservable
+      if (majorVersion < 6) return 'decorator';
+      if (majorVersion >= 6) return 'makeAutoObservable';
+    }
+
+    // --- 步骤 3：fallback ---
+    return 'makeAutoObservable';
+  }
+
+  /**
    * 生成状态管理内容
    */
   private generateStateManagementContent(
     context: RuleGenerationContext,
-    libName?: string
+    libName?: string,
+    mobxPattern: 'makeAutoObservable' | 'decorator' = 'makeAutoObservable'
   ): string {
     if (!libName) {
       return "项目使用状态管理，请遵循一致的状态更新模式。";
@@ -4021,30 +4138,72 @@ ${entries.join("\n")}\n`;
     const lowerLib = libName.toLowerCase();
 
     if (lowerLib.includes("mobx")) {
+      // 动态推断 store 目录：从 deepAnalysis 中找 basename 含 store/stores 的最浅目录
+      const storeDir = (() => {
+        const deep = context.deepAnalysis || [];
+        const storeEntries = deep.filter((d) =>
+          /^store[s]?$/i.test(d.path.split('/').pop() || '')
+        );
+        if (storeEntries.length > 0) {
+          storeEntries.sort((a, b) => a.depth - b.depth);
+          return storeEntries[0].path;
+        }
+        return 'src/store';
+      })();
+
+      // 根据检测到的实际模式输出对应模板
+      const storeExample = mobxPattern === 'makeAutoObservable'
+        ? `import { makeAutoObservable } from 'mobx'
+
+class UserStore {
+  user = null
+  loading = false
+
+  constructor() {
+    makeAutoObservable(this)
+  }
+
+  setUser(user) {
+    this.user = user
+  }
+}`
+        : `import { makeObservable, observable, action } from 'mobx'
+
+class UserStore {
+  @observable user = null
+
+  constructor() {
+    makeObservable(this)
+  }
+
+  @action
+  setUser(user) {
+    this.user = user
+  }
+}`;
+
+      const bestPractices = mobxPattern === 'makeAutoObservable'
+        ? `- 使用 makeAutoObservable 自动推断所有属性为 observable、action
+- 不需要手动声明 @observable/@action（减少样板代码）
+- 组件用 observer() 包装
+- 避免直接修改 observable（应在 action 中修改）`
+        : `- 使用 @observable 定义响应式状态
+- 使用 @action 定义状态修改方法
+- 组件用 observer() 包装
+- 避免直接修改 observable`;
+
       return `## MobX 状态管理
 
 ### 项目当前使用
 - 状态管理库: MobX
-- Store 位置: 查看 @src/stores/ 目录
+- Store 位置: \`${storeDir}/\`
+- 使用模式: ${mobxPattern === 'makeAutoObservable' ? 'makeAutoObservable（自动推断）' : 'makeObservable + Decorators（显式声明）'}
 
 ### 使用规范
 
 **定义 Store**:
 \`\`\`typescript
-import { makeObservable, observable, action } from 'mobx'
-
-class UserStore {
-  @observable user = null
-  
-  constructor() {
-    makeObservable(this)
-  }
-  
-  @action
-  setUser(user) {
-    this.user = user
-  }
-}
+${storeExample}
 \`\`\`
 
 **在组件中使用**:
@@ -4059,10 +4218,7 @@ export const UserProfile = observer(() => {
 
 ### 最佳实践
 
-- 使用 @observable 定义响应式状态
-- 使用 @action 定义状态修改方法
-- 组件用 observer() 包装
-- 避免直接修改 observable
+${bestPractices}
 
 参考: 查找项目中的 Store 文件作为示例`;
     }
