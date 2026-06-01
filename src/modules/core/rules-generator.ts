@@ -568,15 +568,25 @@ export class RulesGenerator {
       }
     }
 
-    // 11. 测试规则（按需，约 220 行或简短提示）
+    // 11. 测试规则（前端项目必生成；后端/CLI 项目有测试框架时生成）
     const needsTesting = requirements.some((r) => r.ruleType === "testing");
-    if (needsTesting || this.featureExists(context, "testing")) {
+    const hasTestingFeature = this.featureExists(context, "testing");
+    const isFrontend = this.isFrontendProject(context);
+    if (needsTesting || hasTestingFeature || isFrontend) {
       const testingRule = this.generateTestingRule(context);
       rules.push(testingRule);
     }
 
-    // 11b. Feature Recipe（端到端功能创建模板，前端项目必生成）
-    if (this.isFrontendProject(context)) {
+    // 11b. API Patterns（前端项目有 axios 或自定义 apiClient 时生成）
+    const hasApiClient = context.customPatterns?.apiClient?.exists;
+    const hasAxiosDep = context.techStack.dependencies.some((d) => d.name === "axios");
+    if (isFrontend && (hasApiClient || hasAxiosDep)) {
+      const apiPatternsRule = this.generateApiPatternsRule(context);
+      rules.push(apiPatternsRule);
+    }
+
+    // 11c. Feature Recipe（端到端功能创建模板，前端项目必生成）
+    if (isFrontend) {
       const featureRecipeRule = this.generateFeatureRecipeRule(context);
       rules.push(featureRecipeRule);
     }
@@ -691,7 +701,7 @@ ${
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
-${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${this.isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${this.featureExists(context, "testing") ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(this.isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${this.isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(this.featureExists(context, "testing") || this.isFrontendProject(context)) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -743,27 +753,24 @@ ${
 ## Do / Don't
 
 \`\`\`typescript
-// DON'T: swallow errors
-try { await fetchData(); } catch (e) {}
-
-// DO: handle errors explicitly
-try {
-  await fetchData();
-} catch (error: unknown) {
-  logger.error("fetchData failed", { error });
-  throw error;
-}
-\`\`\`
-
-\`\`\`typescript
-// DON'T: use any
+// DON'T: use any — 失去类型保护
 function process(data: any) { return data.value; }
 
-// DO: use explicit types
+// DO: 使用精确类型
 function process(data: ProcessInput): ProcessOutput {
   return data.value;
 }
 \`\`\`
+
+\`\`\`typescript
+// DON'T: 隐式类型 + 可变默认
+var count = 0;
+
+// DO: 显式类型 + 不可变优先
+const count: number = 0;
+\`\`\`
+
+> 错误处理规范请参考 **@error-handling.mdc**
 
 ${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}
 `;
@@ -791,6 +798,7 @@ ${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\
     // 检查并确保有完整的 deepAnalysis 数据
     await this.ensureDeepAnalysisData(context);
     
+    const indexGlobs = "**/index.{ts,tsx,js,jsx}";
     const metadata = this.generateRuleMetadata(
       "项目结构",
       "Consult when creating new files or directories to determine correct location and naming conventions",
@@ -798,7 +806,8 @@ ${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\
       context.techStack.primary,
       ["structure", "directory", "file-organization"],
       "reference",
-      ["global-rules"]
+      ["global-rules"],
+      { globs: indexGlobs }
     );
 
     const content =
@@ -1109,6 +1118,9 @@ ${this.generateDetailedStructureContent(context)}
       return aName.localeCompare(bName);
     });
 
+    // 纯样式/资源目录：深度限制为 2（避免 styles/antd/xxx 等深链条）
+    const SHALLOW_DIRS = new Set(['styles', 'style', 'assets', 'images', 'icons', 'fonts', 'public', 'static']);
+
     const buildTree = (
       dir: any,
       prefix: string,
@@ -1118,8 +1130,13 @@ ${this.generateDetailedStructureContent(context)}
       const connector = isLast ? "└── " : "├── ";
       const dirName = path.basename(dir.path);
 
-      // 深度超过 4 时折叠，不再展开
-      if (currentDepth > 4) {
+      // 样式/资源目录折叠深度限制为 2
+      const parentName = path.basename(dir.path.split('/').slice(0, -1).join('/') || '');
+      const isUnderShallowDir = SHALLOW_DIRS.has(parentName.toLowerCase());
+      const maxDepth = isUnderShallowDir ? 2 : 4;
+
+      // 超过最大深度时折叠
+      if (currentDepth > maxDepth) {
         tree.push(`${prefix}${connector}${dirName}/`);
         return;
       }
@@ -1677,6 +1694,7 @@ ${this.generateDetailedStructureContent(context)}
     context: RuleGenerationContext,
     missingPractices?: any[]
   ): CursorRule {
+    const srcGlobs = this.getLanguageGlobs(context);
     const metadata = this.generateRuleMetadata(
       "项目架构",
       "Consult when designing features, adding modules, or making architectural decisions",
@@ -1684,7 +1702,8 @@ ${this.generateDetailedStructureContent(context)}
       context.techStack.primary,
       ["architecture", "modules"],
       "guideline",
-      ["global-rules", "project-structure"]
+      ["global-rules", "project-structure"],
+      { globs: srcGlobs }
     );
 
     // 补充缺失的最佳实践
@@ -1899,10 +1918,14 @@ ${this.generateStateManagementContent(context, stateLib?.name)}
    * v1.3: 生成 UI/UX 规则（约 250 行）
    */
   private generateUIUXRule(context: RuleGenerationContext): CursorRule {
-    const uiGlobs = "**/*.{tsx,jsx,vue,svelte}";
+    // 收窄到 components/views 目录，避免所有 tsx 文件都触发
+    const org = context.fileOrganization;
+    const compDir = org?.componentLocation?.[0]?.replace(/\/$/, '') || 'src/components';
+    const viewDir = 'src/views';
+    const uiGlobs = `${compDir}/**/*.{tsx,jsx,vue,svelte}, ${viewDir}/**/*.{tsx,jsx,vue,svelte}`;
     const metadata = this.generateRuleMetadata(
       "UI/UX 设计规范",
-      "UI component patterns, accessibility, and UX best practices for frontend code",
+      "UI component patterns and conventions for this project's UI library",
       75,
       context.techStack.primary,
       ["ui-ux", "frontend"],
@@ -2417,6 +2440,114 @@ ${this.generateConditionalTestingRules(context)}
   }
 
   /**
+   * API Patterns — 基于项目实际 API 客户端生成调用规范
+   */
+  private generateApiPatternsRule(context: RuleGenerationContext): CursorRule {
+    const org = context.fileOrganization;
+    const apiClient = context.customPatterns?.apiClient;
+    const apiDir = org?.apiLocation?.[0] || 'src/api';
+    const apiAlias = apiDir.replace(/^src\//, '@/');
+    const isTS = context.techStack.languages.includes("TypeScript");
+    const ext = isTS ? "ts" : "js";
+    const clientName = apiClient?.name || "apiClient";
+    const clientPath = apiClient?.filePath
+      ? apiClient.filePath.replace(/^.*?src\//, 'src/')
+      : `${apiDir}/index.${ext}`;
+    const clientImportAlias = clientPath.replace(/^src\//, '@/').replace(/\.(ts|js)$/, '');
+    const hasAuth = apiClient?.hasAuth ?? false;
+    const hasErrorHandling = apiClient?.hasErrorHandling ?? false;
+
+    const globs = `${apiDir}/**`;
+    const metadata = this.generateRuleMetadata(
+      "API 调用规范",
+      "How to call backend APIs: file location, client usage, error handling",
+      80,
+      context.techStack.primary,
+      ["api", "http"],
+      "practice",
+      ["global-rules"],
+      { globs }
+    );
+
+    const content = metadata + `
+# API 调用规范
+
+## 核心约定
+
+- 所有 API 函数集中放在 \`${apiDir}/\` 目录下，按业务模块分文件
+- **禁止**在组件/Store 中直接 \`fetch\`/\`axios.get\`，必须通过封装函数
+- 每个函数只做一件事：请求 + 返回数据（副作用在调用方处理）
+
+## HTTP 客户端
+
+项目已封装 \`${clientName}\`，位于 \`${clientPath}\`：
+
+\`\`\`${ext}
+import { ${clientName} } from "${clientImportAlias}";
+\`\`\`
+
+${hasAuth ? `> ✅ 已内置鉴权逻辑（Token 自动注入），调用方无需手动设置 Authorization header。\n` : ""}
+${hasErrorHandling ? `> ✅ 已内置统一错误处理（非 2xx 响应会统一弹出提示或跳转登录）。\n` : ""}
+
+## 标准函数结构
+
+\`\`\`${ext}
+// ${apiDir}/feature.${ext}
+import { ${clientName} } from "${clientImportAlias}";
+${isTS ? `import type { FeatureItem, FeatureListParams } from "@/interface/feature";\n` : ""}
+export async function fetchFeatureList(${isTS ? "params: FeatureListParams" : "params"}): Promise<${isTS ? "FeatureItem[]" : "any"}> {
+  const { data } = await ${clientName}.get("/api/features", { params });
+  return data;
+}
+
+export async function createFeature(${isTS ? "payload: Partial<FeatureItem>" : "payload"}): Promise<${isTS ? "FeatureItem" : "any"}> {
+  const { data } = await ${clientName}.post("/api/features", payload);
+  return data;
+}
+\`\`\`
+
+## Do / Don't
+
+\`\`\`${ext}
+// ❌ 组件内直接 fetch
+useEffect(() => {
+  axios.get("/api/features").then(setList);
+}, []);
+
+// ✅ 调用封装函数
+useEffect(() => {
+  fetchFeatureList({ page: 1, pageSize: 20 }).then(setList);
+}, []);
+\`\`\`
+
+${!hasErrorHandling ? `## 错误处理
+
+每个 API 函数必须处理异常，或在调用方 try-catch：
+
+\`\`\`${ext}
+try {
+  const list = await fetchFeatureList(params);
+  setList(list);
+} catch (error) {
+  message.error("加载失败");
+}
+\`\`\`
+
+参考: @error-handling.mdc` : ""}
+`;
+
+    return {
+      scope: "specialized",
+      modulePath: context.projectPath,
+      content,
+      fileName: "api-patterns.mdc",
+      priority: 80,
+      type: "practice",
+      depends: ["global-rules"],
+    };
+  }
+
+  /**
    * Feature Recipe — 端到端功能创建指南
    * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
    */
@@ -2456,6 +2587,10 @@ ${this.generateConditionalTestingRules(context)}
     const routeDir = (context.frontendRouter?.info?.location?.[0] || `src/routes`).replace(/\/$/, '');
     const hookDir = org?.hooksLocation?.[0] || `src/hooks`;
 
+    // 将检测到的 typeDir 转为 import 别名（src/xxx → @/xxx）
+    const typeAlias = typeDir.replace(/^src\//, '@/');
+    const apiAlias = apiDir.replace(/^src\//, '@/');
+
     let storeStep = "";
     if (hasMobX) {
       storeStep = `
@@ -2463,16 +2598,17 @@ ${this.generateConditionalTestingRules(context)}
 
 \`\`\`${ext}
 // ${storeDir}/featureStore.${ext}
-import { makeAutoObservable } from "mobx";
-import type { FeatureItem } from "@/types/feature";
+import { makeObservable, observable, action } from "mobx";
+import type { FeatureItem } from "${typeAlias}/feature";
 
 class FeatureStore {
-  items: FeatureItem[] = [];
-  loading = false;
-  error: string | null = null;
+  @observable items: FeatureItem[] = [];
+  @observable loading = false;
+  @observable error: string | null = null;
 
-  constructor() { makeAutoObservable(this); }
+  constructor() { makeObservable(this); }
 
+  @action
   async fetchItems() {
     this.loading = true;
     try {
@@ -2494,7 +2630,7 @@ export const featureStore = new FeatureStore();
 \`\`\`${ext}
 // ${storeDir}/featureSlice.${ext}
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { FeatureItem } from "@/types/feature";
+import type { FeatureItem } from "${typeAlias}/feature";
 
 export const loadFeatures = createAsyncThunk("feature/load", fetchFeatureList);
 
@@ -2518,7 +2654,7 @@ export default featureSlice.reducer;
 \`\`\`${ext}
 // ${storeDir}/featureStore.${ext}
 import { create } from "zustand";
-import type { FeatureItem } from "@/types/feature";
+import type { FeatureItem } from "${typeAlias}/feature";
 
 interface FeatureStore {
   items: FeatureItem[];
@@ -2566,8 +2702,8 @@ export interface FeatureListParams {
 
 \`\`\`${ext}
 // ${apiDir}/feature.${ext}
-import type { FeatureItem, FeatureListParams } from "@/types/feature";
-${hasAxios ? `import { ${apiClientName} } from "@/${apiDir.replace(/^src\//, '')}";` : ""}
+import type { FeatureItem, FeatureListParams } from "${typeAlias}/feature";
+${hasAxios ? `import { ${apiClientName} } from "${apiAlias}";` : ""}
 
 export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
   const { data } = await ${hasAxios ? apiClientName : "fetch"}${hasAxios ? `.get("/api/features", { params })` : '(`/api/features?page=${params.page}`)'};
@@ -2839,300 +2975,93 @@ ${
    * 生成 UI/UX 规范
    */
   private generateUIUXGuidelines(context: RuleGenerationContext): string {
-    return `## UI/UX 设计规范
+    const deps = context.techStack.dependencies || [];
+    const hasAntd = deps.some((d) => d.name === "antd" || d.name === "@ant-design/pro-components");
+    const hasMui = deps.some((d) => d.name === "@mui/material" || d.name === "@material-ui/core");
+    const hasShadcn = deps.some((d) => d.name === "@radix-ui/react-dialog" || d.name === "shadcn-ui");
+    const hasStyledComponents = deps.some((d) => d.name === "styled-components");
+    const hasTailwind = deps.some((d) => d.name === "tailwindcss");
+    const hasLess = deps.some((d) => d.name === "less");
+    const isTS = context.techStack.languages.includes("TypeScript");
 
-### 视觉层次
-
-**建立清晰的视觉层次以引导用户注意力**：
-
-- **大小和比例**：重要元素使用更大的尺寸
-- **颜色对比**：使用颜色突出关键信息和行动号召
-- **间距**：使用空白空间分隔不同的内容区域
-- **字体层次**：标题、副标题、正文使用不同的字体大小和粗细
-
-示例：
-\`\`\`tsx
-// ✅ 清晰的视觉层次
-<div className="card">
-  <h1 className="text-3xl font-bold">主标题</h1>
-  <h2 className="text-xl text-gray-600 mt-2">副标题</h2>
-  <p className="text-base mt-4">正文内容...</p>
-  <button className="mt-6 bg-blue-600 text-white px-6 py-3 rounded-lg">
-    主要操作
-  </button>
-</div>
-\`\`\`
-
-### 设计一致性
-
-**在整个应用中保持一致的设计风格**：
-
-- **颜色系统**：定义主色、辅助色、中性色调色板
-- **间距系统**：使用统一的间距尺度（4px、8px、16px、24px、32px）
-- **字体系统**：限制字体大小的数量（通常 5-7 个级别）
-- **组件样式**：按钮、输入框、卡片等保持一致的外观
-
-\`\`\`typescript
-// ✅ 使用设计令牌（Design Tokens）
-const theme = {
-  colors: {
-    primary: '#3B82F6',
-    secondary: '#10B981',
-    danger: '#EF4444',
-    neutral: {
-      50: '#F9FAFB',
-      100: '#F3F4F6',
-      // ...
+    // 确定样式方案描述
+    let styleApproach = "";
+    if (hasAntd && hasStyledComponents) {
+      styleApproach = "antd 组件 + styled-components 自定义样式";
+    } else if (hasAntd && hasLess) {
+      styleApproach = "antd 组件 + Less 变量覆盖";
+    } else if (hasAntd) {
+      styleApproach = "antd 组件库";
+    } else if (hasMui) {
+      styleApproach = "Material UI";
+    } else if (hasShadcn) {
+      styleApproach = "shadcn/ui + Radix UI";
+    } else if (hasTailwind) {
+      styleApproach = "Tailwind CSS";
+    } else {
+      styleApproach = "自定义 CSS/CSS Modules";
     }
-  },
-  spacing: {
-    xs: '0.25rem',  // 4px
-    sm: '0.5rem',   // 8px
-    md: '1rem',     // 16px
-    lg: '1.5rem',   // 24px
-    xl: '2rem',     // 32px
-  },
-  fontSize: {
-    xs: '0.75rem',
-    sm: '0.875rem',
-    base: '1rem',
-    lg: '1.125rem',
-    xl: '1.25rem',
-    '2xl': '1.5rem',
-  }
-};
-\`\`\`
 
-### 导航模式
+    let content = `## 项目 UI 方案\n\n`;
+    content += `**当前使用**: ${styleApproach}\n\n`;
 
-**创建直观的导航，减少用户认知负担**：
+    if (hasAntd) {
+      content += `### Antd 使用约定\n\n`;
+      content += `**Do ✅**\n`;
+      content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
+      content += `// 优先使用 antd 原生 API，不要重复封装已有能力\n`;
+      content += `import { Table, Form, Modal, Button, Space } from "antd";\n\n`;
+      content += `// Form 使用 Form.useForm()，不要直接 ref\n`;
+      content += `const [form] = Form.useForm();\n\n`;
+      content += `// Table 分页统一走 onChange 回调\n`;
+      content += `<Table\n`;
+      content += `  dataSource={data}\n`;
+      content += `  columns={columns}\n`;
+      content += `  pagination={{ current, pageSize, total, onChange: handlePageChange }}\n`;
+      content += `/>;\n`;
+      content += `\`\`\`\n\n`;
 
-- **清晰的主导航**：主要功能易于发现
-- **面包屑导航**：帮助用户了解当前位置
-- **搜索功能**：对于内容丰富的应用提供搜索
-- **一致的位置**：导航元素放在用户预期的位置
+      content += `**Don't ❌**\n`;
+      content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
+      content += `// 不要用原生 <button> 替代 antd Button\n`;
+      content += `<button onClick={…}>提交</button>\n\n`;
+      content += `// 不要重新实现 antd 已有的 Modal.confirm / message.error\n`;
+      content += `const MyAlert = () => <div className="alert">{msg}</div>;\n`;
+      content += `\`\`\`\n\n`;
 
-\`\`\`tsx
-// ✅ 清晰的导航结构
-<nav>
-  <div className="logo">应用名称</div>
-  <ul className="nav-items">
-    <li><Link to="/">首页</Link></li>
-    <li><Link to="/products">产品</Link></li>
-    <li><Link to="/about">关于</Link></li>
-  </ul>
-  <div className="user-menu">
-    <button>用户菜单</button>
-  </div>
-</nav>
-
-{/* 面包屑 */}
-<div className="breadcrumb">
-  首页 / 产品 / 详情
-</div>
-\`\`\`
-
-### 响应式设计
-
-**确保应用在不同设备上都能良好展示**：
-
-- **移动优先**：从小屏幕开始设计，逐步增强
-- **断点**：使用标准断点（sm: 640px, md: 768px, lg: 1024px, xl: 1280px）
-- **弹性布局**：使用 Flexbox 和 Grid 创建灵活的布局
-- **触摸友好**：移动端按钮至少 44x44px
-
-\`\`\`tsx
-// ✅ 响应式组件
-<div className="
-  grid 
-  grid-cols-1 
-  md:grid-cols-2 
-  lg:grid-cols-3 
-  gap-4 
-  md:gap-6
-">
-  {items.map(item => (
-    <Card key={item.id} {...item} />
-  ))}
-</div>
-\`\`\`
-
-### 无障碍访问（WCAG）
-
-**遵循 WCAG 2.1 AA 级标准，确保所有用户都能访问**：
-
-**1. 可感知性（Perceivable）**：
-- **文本替代**：为图片提供 alt 文本
-- **颜色对比**：文本与背景的对比度至少 4.5:1（大文本 3:1）
-- **可调整文本**：支持文本缩放至 200%
-
-\`\`\`tsx
-// ✅ 提供 alt 文本
-<img src="profile.jpg" alt="用户头像：张三" />
-
-// ✅ 足够的颜色对比
-<button className="bg-blue-600 text-white"> {/* 对比度 > 4.5:1 */}
-  提交
-</button>
-
-// ❌ 仅依赖颜色传达信息
-<span className="text-red-500">错误</span>  {/* 缺少图标或文字说明 */}
-
-// ✅ 同时使用颜色和图标
-<span className="text-red-500">
-  <AlertIcon /> 错误：请填写必填字段
-</span>
-\`\`\`
-
-**2. 可操作性（Operable）**：
-- **键盘导航**：所有功能都可以通过键盘访问
-- **焦点可见**：清晰的焦点指示器
-- **足够的时间**：不要使用自动消失的内容（或提供控制）
-
-\`\`\`tsx
-// ✅ 键盘可访问的下拉菜单
-<button 
-  onClick={toggleMenu}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      toggleMenu();
+      content += `### 常用场景\n\n`;
+      content += `| 场景 | 使用组件 |\n`;
+      content += `|------|---------|\n`;
+      content += `| 数据列表 | \`Table\` + \`useTable\` hook |\n`;
+      content += `| 表单提交 | \`Form\` + \`Form.useForm()\` |\n`;
+      content += `| 确认弹窗 | \`Modal.confirm()\` |\n`;
+      content += `| 操作反馈 | \`message.success/error()\` |\n`;
+      content += `| 加载状态 | \`Spin\` 或 Table \`loading\` prop |\n\n`;
     }
-  }}
-  aria-expanded={isOpen}
-  aria-haspopup="true"
->
-  菜单
-</button>
 
-// ✅ 清晰的焦点样式
-<style>
-  button:focus-visible {
-    outline: 2px solid #3B82F6;
-    outline-offset: 2px;
+    if (hasStyledComponents) {
+      content += `### Styled-components 约定\n\n`;
+      content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
+      content += `// 命名：S + PascalCase（避免与组件名冲突）\n`;
+      content += `const SWrapper = styled.div\`\n`;
+      content += `  padding: 16px;\n`;
+      content += `  background: \${({ theme }) => theme.colors.background};\n`;
+      content += `\`;\n\n`;
+      content += `// 不要内联大块 CSS，抽出命名 styled 组件\n`;
+      content += `\`\`\`\n\n`;
+    } else if (hasTailwind) {
+      content += `### Tailwind 约定\n\n`;
+      content += `- 复杂样式组合提取为 \`@apply\` 或 styled 组件，不要行内堆砌超过 8 个 class\n`;
+      content += `- 响应式前缀顺序：\`sm:\` → \`md:\` → \`lg:\`\n\n`;
+    }
+
+    content += `### 无障碍（A11y）最低要求\n\n`;
+    content += `- 交互元素必须有 \`aria-label\` 或可见文本\n`;
+    content += `- 图标按钮加 \`title\` 属性\n`;
+    content += `- 表单字段关联 \`label\`（htmlFor）\n\n`;
+
+    return content;
   }
-</style>
-\`\`\`
-
-**3. 可理解性（Understandable）**：
-- **语义化 HTML**：使用正确的 HTML 元素
-- **标签和说明**：为表单控件提供标签
-- **错误建议**：提供具体的错误修复建议
-
-\`\`\`tsx
-// ✅ 语义化和可访问的表单
-<form>
-  <label htmlFor="email">
-    电子邮箱
-    <span aria-label="必填">*</span>
-  </label>
-  <input
-    id="email"
-    type="email"
-    aria-required="true"
-    aria-invalid={hasError}
-    aria-describedby={hasError ? "email-error" : undefined}
-  />
-  {hasError && (
-    <div id="email-error" role="alert">
-      请输入有效的电子邮箱地址，例如：user@example.com
-    </div>
-  )}
-</form>
-\`\`\`
-
-**4. 鲁棒性（Robust）**：
-- **ARIA 属性**：适当使用 ARIA 增强可访问性
-- **兼容辅助技术**：确保与屏幕阅读器等工具兼容
-
-\`\`\`tsx
-// ✅ 使用 ARIA 增强自定义组件
-<div
-  role="tablist"
-  aria-label="设置选项卡"
->
-  <button
-    role="tab"
-    aria-selected={activeTab === 'general'}
-    aria-controls="general-panel"
-    id="general-tab"
-  >
-    常规
-  </button>
-  <button
-    role="tab"
-    aria-selected={activeTab === 'privacy'}
-    aria-controls="privacy-panel"
-    id="privacy-tab"
-  >
-    隐私
-  </button>
-</div>
-
-<div
-  role="tabpanel"
-  id="general-panel"
-  aria-labelledby="general-tab"
-  hidden={activeTab !== 'general'}
->
-  {/* 内容 */}
-</div>
-\`\`\`
-
-### 性能和用户体验
-
-- **加载反馈**：提供加载指示器
-- **骨架屏**：在内容加载时显示内容结构
-- **优化图片**：使用适当的格式和尺寸
-- **渐进增强**：基础功能在所有环境下可用
-
-\`\`\`tsx
-// ✅ 提供加载状态
-{isLoading ? (
-  <div className="skeleton">
-    <div className="skeleton-line" />
-    <div className="skeleton-line" />
-  </div>
-) : (
-  <div className="content">{data}</div>
-)}
-
-// ✅ 图片优化（Next.js 示例）
-<Image
-  src="/hero.jpg"
-  alt="英雄图片"
-  width={1200}
-  height={600}
-  priority
-  sizes="(max-width: 768px) 100vw, 1200px"
-/>
-\`\`\`
-
-### UI 组件最佳实践
-
-**按钮**：
-- 主要操作使用明显的样式
-- 次要操作使用较弱的视觉权重
-- 危险操作使用红色/警告色
-- 最小触摸目标 44x44px
-
-**表单**：
-- 清晰的标签和占位符
-- 实时验证反馈
-- 明确的错误消息
-- 自动聚焦第一个字段
-
-**模态框/对话框**：
-- 提供关闭方式
-- ESC 键可关闭
-- 焦点陷阱（不能 Tab 到外部）
-- 返回后恢复焦点
-
-`;
-  }
-
-  /**
-   * 生成代码风格指南
-   */
   private generateCodeStyleGuidelines(context: RuleGenerationContext): string {
     let style = `## 通用规范
 
@@ -3960,9 +3889,16 @@ ${entries.join("\n")}\n`;
     const hookDirs = (context.customPatterns?.customHooks ?? [])
       .map((h) => {
         const parts = h.relativePath.split('/');
-        return parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : null;
+        if (parts.length < 2) return null;
+        const dir = parts.slice(0, -1).join('/') + '/';
+        // 只保留：路径中含 hook/hooks 目录段，且深度 ≤ 3 层
+        const hasHookSegment = parts.some(
+          (p) => p.toLowerCase() === 'hooks' || p.toLowerCase() === 'hook'
+        );
+        const isShallow = parts.length <= 4; // file depth ≤ 4 → dir depth ≤ 3
+        return hasHookSegment && isShallow && !path.isAbsolute(dir) ? dir : null;
       })
-      .filter((d): d is string => d !== null && !path.isAbsolute(d));
+      .filter((d): d is string => d !== null);
     const uniqueDirs = [...new Set(hookDirs)].slice(0, 3);
     if (uniqueDirs.length > 0) {
       return uniqueDirs.map((d) => `${d}**`).join(', ');
@@ -4757,7 +4693,13 @@ export const UserProfile = observer(() => {
       rules += `### 自定义 Hooks\n\n`;
       rules += `项目定义了以下自定义 hooks，**生成代码时必须优先使用**：\n\n`;
 
-      const topHooks = context.customPatterns.customHooks.slice(0, 10);
+      // 过滤掉使用频率为 0 的 hooks（可能是未使用或已废弃），频率 0 仍保留但标记
+      const topHooks = context.customPatterns.customHooks
+        .filter((h) => h.frequency > 0)
+        .slice(0, 10);
+      if (topHooks.length === 0) {
+        rules += `> 项目中的自定义 hooks 尚未检测到使用记录，请参考 @project-structure.mdc 确认 hooks 目录位置。\n\n`;
+      }
       for (const hook of topHooks) {
         rules += `**${hook.name}** ${
           hook.description ? `- ${hook.description}` : ""
@@ -5050,8 +4992,7 @@ export const UserProfile = observer(() => {
       dirsByCategory.get(category)!.push(dir);
     }
 
-    let content = `## 模块结构\n\n`;
-    content += `基于项目目录结构分析，项目主要包含以下模块和目录：\n\n`;
+    let content = `基于项目目录结构分析，项目主要包含以下模块和目录：\n\n`;
 
     // 按类别组织显示
     const categoryOrder = [
