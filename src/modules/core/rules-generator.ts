@@ -614,10 +614,8 @@ export class RulesGenerator {
     const cmds = context.projectConfig?.commands;
     const parts: string[] = [];
     if (cmds?.lint || cmds?.lintFix) parts.push(`\`${cmds.lintFix ?? cmds.lint}\``);
-    const devServerPattern = /\b(serve|dev|start|preview|watch)\b/;
-    if (cmds?.typeCheck && !devServerPattern.test(cmds.typeCheck)) {
-      parts.push(`\`${cmds.typeCheck}\``);
-    }
+    // typeCheck 已在 config-parser 层通过命令值判断排除复合命令，展示侧直接使用
+    if (cmds?.typeCheck) parts.push(`\`${cmds.typeCheck}\``);
     if (parts.length === 0) return '';
     return `- After writing code, run ${parts.join(' and ')} before considering the task complete.`;
   }
@@ -3896,11 +3894,8 @@ ${p.content}
     if (cmds.lint) entries.push(`| Lint | \`${cmds.lint}\` |`);
     if (cmds.lintFix) entries.push(`| Lint Fix | \`${cmds.lintFix}\` |`);
     if (cmds.format) entries.push(`| Format | \`${cmds.format}\` |`);
-    // 只显示明确是类型检查的命令，跳过 dev server 命令
-    const devServerPattern = /\b(serve|dev|start|preview|watch)\b/;
-    if (cmds.typeCheck && !devServerPattern.test(cmds.typeCheck)) {
-      entries.push(`| Type Check | \`${cmds.typeCheck}\` |`);
-    }
+    // typeCheck 已在 config-parser 层通过命令值判断排除复合命令，展示侧直接使用
+    if (cmds.typeCheck) entries.push(`| Type Check | \`${cmds.typeCheck}\` |`);
 
     if (entries.length === 0) return "";
 
@@ -3962,14 +3957,26 @@ ${entries.join("\n")}\n`;
       )
     );
     if (!stateLib) return null;
-    // 从 structure 中找 store/slice 相关目录
-    const sliceDirs = (context.fileOrganization?.structure ?? [])
-      .filter((d) => /store|stores|slice|state|reducer/i.test(d.path.split('/').pop() ?? ''))
-      .map((d) => d.path.replace(/^\//, '') + '/')
-      .filter((p) => !path.isAbsolute(p));
-    const uniqueDirs = [...new Set(sliceDirs)].slice(0, 3);
-    if (uniqueDirs.length > 0) {
-      return uniqueDirs.map((d) => `${d}**`).join(', ');
+
+    // 收集所有作用域层级的 store 目录：
+    //   - 全局层（src/store/, src/stores/）
+    //   - 业务层（src/views/X/store/, src/features/X/state/, etc.）
+    // 来源 1：fileOrganization.structure（已识别的文件组织信息）
+    const structureDirs = (context.fileOrganization?.structure ?? [])
+      .filter((d) => /\b(store|stores|slice|state|reducer)\b/i.test(d.path.split('/').pop() ?? ''))
+      .map((d) => d.path.replace(/^\//, ''));
+
+    // 来源 2：deepAnalysis（覆盖所有深度，含业务模块内的局部 store 目录）
+    const deepDirs = (context.deepAnalysis ?? [])
+      .filter((d) => /\b(store|stores|slice|state|reducer)\b/i.test(d.path.split('/').pop() ?? ''))
+      .map((d) => d.path.replace(/^\//, ''));
+
+    const allDirs = [...new Set([...structureDirs, ...deepDirs])]
+      .filter((p) => p.length > 0 && !path.isAbsolute(p))
+      .sort((a, b) => a.split('/').length - b.split('/').length); // 浅路径优先排列
+
+    if (allDirs.length > 0) {
+      return allDirs.map((d) => `${d.replace(/\/$/, '')}/**`).join(', ');
     }
     return '**/store/**, **/stores/**, **/slice/**';
   }

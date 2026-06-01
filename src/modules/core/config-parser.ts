@@ -137,16 +137,28 @@ export class ConfigParser {
   /**
    * 查找匹配的命令
    */
+  /**
+   * 判断一个脚本命令值是否"以类型检查为唯一目的"。
+   *
+   * 原则：禁止仅从脚本 alias 推测用途，必须读取实际执行命令判断。
+   * - 包含 tsc/vue-tsc 但同时启动了 dev server → 复合命令，主目的不是类型检查
+   * - 只运行 tsc/vue-tsc（可带 --noEmit / --watch 等参数）→ 是类型检查
+   */
+  private isPureTypeCheckCommand(scriptValue: string): boolean {
+    const v = scriptValue.toLowerCase();
+    // 必须含类型检查工具
+    const hasTypeChecker = /\btsc\b|\bvue-tsc\b/.test(v);
+    if (!hasTypeChecker) return false;
+    // 含 dev-server 工具则判定为复合命令（主目的是开发服务，不是类型检查）
+    const hasDevServer = /\bvite\b|\bwebpack(-dev-server)?\b|\bnext\s+dev\b|\bnuxt\s+dev\b|\breact-scripts\s+start\b|\bts-node\b|\bnode\s+/.test(v);
+    return !hasDevServer;
+  }
+
   private findCommand(
     scripts: Record<string, string>,
     keywords: string[],
     runPrefix = "npm run"
   ): string | undefined {
-    // dev/serve/start/watch 这类 script 名永远不能作为 type-check/lint/test 的结果
-    const DEV_SCRIPT_NAMES = new Set([
-      'serve', 'dev', 'start', 'preview', 'watch', 'storybook',
-    ]);
-
     // 1. 精确 key 匹配（优先级最高）
     for (const keyword of keywords) {
       if (scripts[keyword]) {
@@ -154,11 +166,19 @@ export class ConfigParser {
       }
     }
 
-    // 2. 值包含关键词的模糊匹配，跳过 dev/serve 类脚本
+    // 2. 值匹配：必须读取实际命令值判断用途，不能从脚本名称推测
+    // typeCheck 专项：命令值必须以类型检查为唯一目的（不能同时启动 dev server）
+    const isTypeCheckSearch = keywords.some(kw => ['tsc', 'type-check', 'typecheck', 'vue-tsc'].includes(kw));
     for (const [key, value] of Object.entries(scripts)) {
-      if (DEV_SCRIPT_NAMES.has(key.toLowerCase())) continue;
-      if (keywords.some((kw) => value.toLowerCase().includes(kw))) {
-        return `${runPrefix} ${key}`;
+      if (isTypeCheckSearch) {
+        // 用命令值内容判断，而非 key 名称
+        if (this.isPureTypeCheckCommand(value)) {
+          return `${runPrefix} ${key}`;
+        }
+      } else {
+        if (keywords.some((kw) => value.toLowerCase().includes(kw))) {
+          return `${runPrefix} ${key}`;
+        }
       }
     }
 
