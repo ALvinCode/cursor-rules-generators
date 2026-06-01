@@ -2678,6 +2678,12 @@ try {
     const apiDir = org?.apiLocation?.[0] || `src/api`;
     const storeDir = `src/store`;
     const compDir = org?.componentLocation?.[0] || `src/components`;
+    // 路由注册的页面组件（步骤6被 router 挂载）应放在页面目录，而非可复用组件目录
+    // 优先从 deepAnalysis 检测 views/pages/screens 目录（与 generateNewFileGuidelines 逻辑一致）
+    const PAGE_DIR_KEYWORDS = new Set(['views', 'pages', 'screens']);
+    const pageDir = (context.deepAnalysis ?? [])
+      .filter(d => PAGE_DIR_KEYWORDS.has(d.path.split('/').pop()?.toLowerCase() ?? ''))
+      .sort((a, b) => a.depth - b.depth)[0]?.path || compDir;
     const routeDir = (context.frontendRouter?.info?.location?.[0] || `src/routes`).replace(/\/$/, '');
     const hookDir = org?.hooksLocation?.[0] || `src/hooks`;
 
@@ -2848,7 +2854,7 @@ export function useFeature(id: string) {
 ### ${stateLib ? "5" : "4"}. 页面组件
 
 \`\`\`${extx}
-// ${compDir}/FeatureList/FeatureList.${extx}
+// ${pageDir}/FeatureList/FeatureList.${extx}
 // 只负责渲染，业务逻辑在 Hook / Store 中
 export function FeatureList() {
   // 1. 从 store/hook 获取数据
@@ -2872,7 +2878,7 @@ export function FeatureList() {
 - [ ] \`${typeDir}/feature.${ext}\` — 类型定义
 - [ ] \`${apiDir}/feature.${ext}\` — API 函数
 ${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/useFeature.${ext}\` — 数据 Hook（可选）
-- [ ] \`${compDir}/FeatureList/\` — 页面组件
+- [ ] \`${pageDir}/FeatureList/\` — 页面组件
 - [ ] 路由配置已更新
 
 ---
@@ -4950,26 +4956,29 @@ ${bestPractices}
 
     let rules = `## 项目自定义工具（优先使用）\n\n`;
 
-    // 自定义 Hooks
+    // 自定义 Hooks：按频率分层输出
     if (context.customPatterns.customHooks && context.customPatterns.customHooks.length > 0) {
       rules += `### 自定义 Hooks\n\n`;
       rules += `项目定义了以下自定义 hooks，**生成代码时必须优先使用**：\n\n`;
 
-      // 过滤掉使用频率为 0 的 hooks（可能是未使用或已废弃），频率 0 仍保留但标记
-      const topHooks = context.customPatterns.customHooks
+      const activeHooks = context.customPatterns.customHooks
         .filter((h) => h.frequency > 0)
         .slice(0, 10);
-      if (topHooks.length === 0) {
+
+      if (activeHooks.length === 0) {
         rules += `> 项目中的自定义 hooks 尚未检测到使用记录，请参考 @project-structure.mdc 确认 hooks 目录位置。\n\n`;
       }
-      for (const hook of topHooks) {
-        rules += `**${hook.name}** ${
-          hook.description ? `- ${hook.description}` : ""
-        }\n`;
+
+      for (const hook of activeHooks) {
+        // 按频率分层：高(>10) = 强制优先；中(4-10) = 优先使用；低(1-3) = 可选参考
+        const freqLabel = hook.frequency > 10 ? "高" : hook.frequency > 3 ? "中" : "低";
+        const freqNote = hook.frequency <= 3
+          ? ` ⚠️ 低频（仅 ${hook.frequency} 处使用，仅在明确匹配使用场景时优先）`
+          : ` (${hook.frequency} 处)`;
+
+        rules += `**${hook.name}** ${hook.description ? `- ${hook.description}` : ""}\n`;
         rules += `- 位置: \`${hook.relativePath}\`\n`;
-        rules += `- 使用频率: ${
-          hook.frequency > 10 ? "高" : hook.frequency > 3 ? "中" : "低"
-        } (${hook.frequency} 处)\n`;
+        rules += `- 使用频率: ${freqLabel}${freqNote}\n`;
         if (hook.usage) {
           rules += `- 使用方式:\n`;
           rules += `  \`\`\`typescript\n`;
@@ -4980,22 +4989,50 @@ ${bestPractices}
       }
     }
 
-    // 自定义工具函数
+    // 自定义工具函数：同名函数标注上下文容器，由 Agent 在调用点按就近原则决策
     if (context.customPatterns.customUtils && context.customPatterns.customUtils.length > 0) {
       rules += `### 自定义工具函数\n\n`;
       rules += `项目定义了以下工具函数，**生成代码时必须优先使用**：\n\n`;
 
-      // 按类别分组
-      const utilsByCategory = this.groupUtilsByCategory(
-        context.customPatterns.customUtils
+      // 收集项目依赖名称，用于识别路径中是否包含已知子库段
+      const depNames = new Set(
+        (context.techStack.dependencies ?? []).map((d) => d.name.toLowerCase())
       );
+
+      const utilsByCategory = this.groupUtilsByCategory(context.customPatterns.customUtils);
 
       for (const [category, utils] of Object.entries(utilsByCategory)) {
         rules += `**${category}**:\n`;
+
+        // 分组同名函数
+        const nameGroups: Record<string, any[]> = {};
+        for (const u of utils) {
+          if (!nameGroups[u.name]) nameGroups[u.name] = [];
+          nameGroups[u.name].push(u);
+        }
+
+        const processedNames = new Set<string>();
         for (const util of utils.slice(0, 5)) {
-          rules += `- \`${util.name}\` (${util.relativePath})\n`;
-          if (util.signature) {
-            rules += `  \`\`\`typescript\n  ${util.signature}\n  \`\`\`\n`;
+          if (processedNames.has(util.name)) continue;
+          processedNames.add(util.name);
+
+          const group = nameGroups[util.name];
+          if (group.length > 1) {
+            // 同名函数：不排序，如实标注每个定义所属的上下文容器
+            // 由 Agent 在生成代码时按调用点就近原则选择正确版本
+            rules += `- \`${util.name}\` — **多处定义，按调用位置就近选择**：\n`;
+            for (const g of group) {
+              const label = this.inferContextLabel(g.relativePath, depNames);
+              rules += `  - \`${g.relativePath}\` — ${label}\n`;
+              if (g.signature) {
+                rules += `    \`\`\`typescript\n    ${g.signature}\n    \`\`\`\n`;
+              }
+            }
+          } else {
+            rules += `- \`${util.name}\` (${util.relativePath})\n`;
+            if (util.signature) {
+              rules += `  \`\`\`typescript\n  ${util.signature}\n  \`\`\`\n`;
+            }
           }
         }
         rules += `\n`;
@@ -5047,6 +5084,48 @@ ${bestPractices}
       grouped[util.category].push(util);
     }
     return grouped;
+  }
+
+  /**
+   * 推断路径所属的上下文容器标签，用于同名函数的多处定义标注。
+   *
+   * 判断依据（按优先级）：
+   * 1. 路径中某段与已知依赖名匹配 → 识别为该依赖的子库
+   * 2. 路径中存在 vendor / third-party 等惯用段 → 外部库
+   * 3. 路径中的 feature / module 级目录名 → 业务模块
+   * 4. 其余情况 → 主项目
+   *
+   * 注意：此方法只做上下文描述，不做优先级排序。
+   * 优先级由 Agent 在生成代码时根据调用点就近决策。
+   */
+  private inferContextLabel(relativePath: string, depNames: Set<string>): string {
+    const segments = relativePath.split('/').map((s) => s.toLowerCase());
+
+    // 1. 路径中某段命中已知依赖名 → 子库
+    for (const seg of segments) {
+      if (depNames.has(seg)) {
+        return `${seg} 子库`;
+      }
+    }
+
+    // 2. 惯用的外部/vendored 路径段
+    const VENDOR_SEGMENTS = new Set(['vendor', 'third-party', 'thirdparty', 'external']);
+    for (const seg of segments) {
+      if (VENDOR_SEGMENTS.has(seg)) {
+        return `外部库（${seg}/）`;
+      }
+    }
+
+    // 3. 识别 feature / module 业务级目录（非根级 src/）
+    const FEATURE_SEGMENTS = new Set(['features', 'modules', 'pages', 'views', 'domains']);
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (FEATURE_SEGMENTS.has(segments[i])) {
+        return `${segments[i + 1]} 模块`;
+      }
+    }
+
+    // 4. 默认：主项目
+    return '主项目';
   }
 
   /**
