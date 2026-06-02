@@ -6,6 +6,7 @@ import {
 } from '../../types.js';
 import { FileUtils } from '../../utils/file-utils.js';
 import { logger } from '../../utils/logger.js';
+import { ValidationError } from '../../utils/errors.js';
 import { BestPracticeComparator } from '../generators/best-practice-comparator.js';
 import { BestPracticeExtractor } from '../generators/best-practice-extractor.js';
 import { BestPracticeWebSearcher } from '../integrations/best-practice-web-searcher.js';
@@ -19,6 +20,24 @@ import {
 } from '../generators/tech-stack-matcher.js';
 import { ModuleStructureAnalyzer } from '../analyzers/module-structure-analyzer.js';
 import { ModuleBusinessAnalyzer } from '../analyzers/module-business-analyzer.js';
+import { buildRuleMetadata } from '../generators/rules/rule-metadata.js';
+import {
+  featureExists,
+  isFrontendProject,
+  getLanguageGlobs,
+  getRouteGlobs,
+  generateVersionedTechStack,
+  generateCommandsSection,
+  generatePersona,
+  generatePostCodingConstraint,
+  getProjectName,
+  sanitizeFileName,
+  getRouterTypeDescription,
+  getOrganizationDescription,
+  getArchitecturePatternName,
+  getModuleTypeName,
+  getCategoryDisplayName,
+} from '../generators/rules/rule-helpers.js';
 
 /**
  * 职能文件夹关键词（用于区分职能目录与业务目录）
@@ -181,6 +200,19 @@ export class RulesGenerator {
 
     // 清空建议收集器
     this.suggestionCollector.clear();
+
+    // 置信度闸门：技术栈完全识别不出（无 primary / languages / frameworks）时，
+    // 任何生成结果都只会是占位垃圾，直接拒绝生成并提示调用方核对项目路径。
+    const ts = context.techStack;
+    if (
+      ts.primary.length === 0 &&
+      ts.languages.length === 0 &&
+      ts.frameworks.length === 0
+    ) {
+      throw new ValidationError(
+        '未能从该项目识别出任何技术栈（语言/框架/主依赖均为空），已跳过规则生成。请确认传入的是有效的项目根目录。'
+      );
+    }
 
     // v1.4: 框架匹配 - 找到最相似的框架规则格式
     this.frameworkMatch = findBestFrameworkMatch(context.techStack);
@@ -399,7 +431,7 @@ export class RulesGenerator {
     // 8. UI/UX 规则（按需，约 250 行）
     const needsUIUX =
       requirements.some((r) => r.ruleType === "ui-ux") ||
-      this.isFrontendProject(context);
+      isFrontendProject(context);
     if (needsUIUX) {
       const uiUxRule = this.generateUIUXRule(context);
       rules.push(uiUxRule);
@@ -570,9 +602,9 @@ export class RulesGenerator {
 
     // 11. 测试规则：仅在有测试框架或显式测试需求时生成（无框架 = 跳过，不生成空文件）
     const needsTesting = requirements.some((r) => r.ruleType === "testing");
-    const hasTestingFeature = this.featureExists(context, "testing");
+    const hasTestingFeature = featureExists(context, "testing");
     const hasTestFramework = this.detectTestFramework(context) !== null;
-    const isFrontend = this.isFrontendProject(context);
+    const isFrontend = isFrontendProject(context);
     if (needsTesting || hasTestingFeature || hasTestFramework) {
       const testingRule = this.generateTestingRule(context);
       rules.push(testingRule);
@@ -609,19 +641,6 @@ export class RulesGenerator {
   }
 
   /**
-   * 生成 post-coding 约束行（global-rules Hard Constraints 末尾）
-   */
-  private generatePostCodingConstraint(context: RuleGenerationContext): string {
-    const cmds = context.projectConfig?.commands;
-    const parts: string[] = [];
-    if (cmds?.lint || cmds?.lintFix) parts.push(`\`${cmds.lintFix ?? cmds.lint}\``);
-    // typeCheck 已在 config-parser 层通过命令值判断排除复合命令，展示侧直接使用
-    if (cmds?.typeCheck) parts.push(`\`${cmds.typeCheck}\``);
-    if (parts.length === 0) return '';
-    return `- After writing code, run ${parts.join(' and ')} before considering the task complete.`;
-  }
-
-  /**
    * 检查是否有自定义工具
    */
   private hasCustomTools(context: RuleGenerationContext): boolean {
@@ -646,7 +665,7 @@ export class RulesGenerator {
    * 检查是否有状态管理
    */
   private hasStateManagement(context: RuleGenerationContext): boolean {
-    return this.featureExists(context, "state-management");
+    return featureExists(context, "state-management");
   }
 
   /**
@@ -655,8 +674,8 @@ export class RulesGenerator {
   private generateGlobalOverviewRule(
     context: RuleGenerationContext
   ): CursorRule {
-    const metadata = this.generateRuleMetadata(
-      `${this.getProjectName(context.projectPath)} - 全局规则`,
+    const metadata = buildRuleMetadata(
+      `${getProjectName(context.projectPath)} - 全局规则`,
       "Project-wide conventions, tech stack, and core development principles. Always loaded.",
       100,
       context.techStack.primary,
@@ -666,14 +685,14 @@ export class RulesGenerator {
       { alwaysApply: true }
     );
 
-    const persona = this.generatePersona(context);
+    const persona = generatePersona(context);
 
-    const techVersions = this.generateVersionedTechStack(context);
-    const commandsSection = this.generateCommandsSection(context);
+    const techVersions = generateVersionedTechStack(context);
+    const commandsSection = generateCommandsSection(context);
 
     const content =
       metadata +
-      `# ${this.getProjectName(context.projectPath)}
+      `# ${getProjectName(context.projectPath)}
 
 ${persona}
 
@@ -690,7 +709,7 @@ ${commandsSection}
 - Before creating files, consult @project-structure.mdc for correct location.
 - Reuse existing project tools — do not re-implement what already exists.
 - Follow the project's established patterns and conventions.
-${this.generatePostCodingConstraint(context)}
+${generatePostCodingConstraint(context)}
 ${
   context.techStack.frameworks.length > 0
     ? `\n${this.generateFrameworkPrinciples(context)}\n`
@@ -703,7 +722,7 @@ ${
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
-${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${this.isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(this.isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${this.isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(this.featureExists(context, "testing") || this.detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || this.detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -724,8 +743,8 @@ ${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, 
     context: RuleGenerationContext,
     missingPractices?: any[]
   ): CursorRule {
-    const langGlobs = this.getLanguageGlobs(context);
-    const metadata = this.generateRuleMetadata(
+    const langGlobs = getLanguageGlobs(context);
+    const metadata = buildRuleMetadata(
       "代码风格规范",
       "Code style, formatting, and naming conventions derived from project config",
       90,
@@ -801,7 +820,7 @@ ${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\
     await this.ensureDeepAnalysisData(context);
     
     const indexGlobs = "**/index.{ts,tsx,js,jsx}";
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "项目结构",
       "Consult when creating new files or directories to determine correct location and naming conventions",
       85,
@@ -843,7 +862,7 @@ ${this.generateDetailedStructureContent(context)}
   private generateFallbackProjectStructureRule(
     context: RuleGenerationContext
   ): CursorRule {
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "项目结构",
       "Consult when creating new files or directories to determine correct location and naming conventions",
       85,
@@ -1624,7 +1643,7 @@ ${this.generateDetailedStructureContent(context)}
     const isTS = context.techStack.languages.includes("TypeScript");
     const ext = isTS ? "ts" : "js";
     const extx = isTS ? "tsx" : "jsx";
-    const isFrontend = this.isFrontendProject(context);
+    const isFrontend = isFrontendProject(context);
 
     let content = `### 文件位置决策表\n\n`;
     content += `> 创建新文件时，先查此表找到正确目录，不确定则参考相似现有文件。\n\n`;
@@ -1694,25 +1713,6 @@ ${this.generateDetailedStructureContent(context)}
   }
 
   /**
-   * 获取架构模式名称（中文）
-   */
-  private getArchitecturePatternName(type: string): string {
-    const names: Record<string, string> = {
-      mvc: "MVC",
-      "clean-architecture": "Clean Architecture",
-      "feature-based": "Feature-based",
-      "domain-driven": "Domain-driven Design",
-      layered: "Layered",
-      "modular-monolith": "Modular Monolith",
-      microservices: "微服务",
-      monorepo: "Monorepo",
-      mixed: "混合架构",
-      unknown: "未知",
-    };
-    return names[type] || type;
-  }
-
-  /**
    * v1.3: 生成项目架构规则（约 200 行，已移除结构相关内容）
    * v1.5: 补充缺失的最佳实践
    * v1.8: 移除文件组织相关内容，改为引用 project-structure.mdc
@@ -1721,8 +1721,8 @@ ${this.generateDetailedStructureContent(context)}
     context: RuleGenerationContext,
     missingPractices?: any[]
   ): CursorRule {
-    const srcGlobs = this.getLanguageGlobs(context);
-    const metadata = this.generateRuleMetadata(
+    const srcGlobs = getLanguageGlobs(context);
+    const metadata = buildRuleMetadata(
       "项目架构",
       "Consult when designing features, adding modules, or making architectural decisions",
       90,
@@ -1804,7 +1804,7 @@ ${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices
    */
   private generateCustomToolsRule(context: RuleGenerationContext): CursorRule {
     const hookGlobs = this.getHookGlobs(context);
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "项目自定义工具",
       "Consult before implementing features — lists project-specific hooks, utilities, and API clients that MUST be reused",
       95,
@@ -1847,8 +1847,8 @@ ${this.generateCustomToolsRules(context)}
     context: RuleGenerationContext,
     missingPractices?: any[]
   ): CursorRule {
-    const langGlobsForErr = this.getLanguageGlobs(context);
-    const metadata = this.generateRuleMetadata(
+    const langGlobsForErr = getLanguageGlobs(context);
+    const metadata = buildRuleMetadata(
       "错误处理规范",
       "Error handling patterns, logging, and recovery strategies based on project conventions",
       80,
@@ -1910,7 +1910,7 @@ ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n`
     const mobxPattern = isMobX ? await this.detectMobXPattern(context) : 'makeAutoObservable';
 
     const storeGlobs = this.getStoreGlobs(context);
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "状态管理规范",
       `Consult when implementing state management, data flow, or ${stateLib?.name || "store"}-related code`,
       85,
@@ -1955,7 +1955,7 @@ ${this.generateStateManagementContent(context, stateLib?.name, mobxPattern)}
     const compDir = org?.componentLocation?.[0]?.replace(/\/$/, '') || 'src/components';
     const viewDir = 'src/views';
     const uiGlobs = `${compDir}/**/*.{tsx,jsx,vue,svelte}, ${viewDir}/**/*.{tsx,jsx,vue,svelte}`;
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "UI/UX 设计规范",
       "UI component patterns and conventions for this project's UI library",
       75,
@@ -1998,8 +1998,8 @@ ${this.generateUIUXGuidelines(context)}
     context: RuleGenerationContext
   ): CursorRule {
     const router = context.frontendRouter!;
-    const routeGlobs = this.getRouteGlobs(router, "frontend");
-    const metadata = this.generateRuleMetadata(
+    const routeGlobs = getRouteGlobs(router, "frontend");
+    const metadata = buildRuleMetadata(
       "前端路由规范",
       `${router.info.framework} routing organization, navigation patterns, and URL conventions`,
       85,
@@ -2022,7 +2022,7 @@ ${this.generateUIUXGuidelines(context)}
 **路由系统**: ${router.info.framework}${
         router.info.version ? ` (${router.info.version})` : ""
       }  
-**路由类型**: ${this.getRouterTypeDescription(router.info.type)}  
+**路由类型**: ${getRouterTypeDescription(router.info.type)}  
 **路由位置**: ${router.info.location.map((l) => `\`@${l}\``).join(", ")}
 
 ${this.generateFrontendRouterContent(router, context)}
@@ -2050,8 +2050,8 @@ ${this.generateFrontendRouterContent(router, context)}
     context: RuleGenerationContext
   ): CursorRule {
     const router = context.backendRouter!;
-    const apiRouteGlobs = this.getRouteGlobs(router, "backend");
-    const metadata = this.generateRuleMetadata(
+    const apiRouteGlobs = getRouteGlobs(router, "backend");
+    const metadata = buildRuleMetadata(
       "API 路由规范",
       `${router.info.framework} API route handlers, middleware, and endpoint conventions`,
       85,
@@ -2072,7 +2072,7 @@ ${this.generateFrontendRouterContent(router, context)}
 ## 项目当前使用
 
 **路由系统**: ${router.info.framework}  
-**路由类型**: ${this.getRouterTypeDescription(router.info.type)}  
+**路由类型**: ${getRouterTypeDescription(router.info.type)}  
 **路由位置**: ${router.info.location.map((l) => `\`@${l}\``).join(", ")}
 
 ${this.generateBackendRouterContent(router, context)}
@@ -2111,7 +2111,7 @@ ${this.generateBackendRouterContent(router, context)}
 
     // 路由组织方式
     content += `## 路由组织方式\n\n`;
-    content += `**组织模式**: ${this.getOrganizationDescription(
+    content += `**组织模式**: ${getOrganizationDescription(
       pattern.organization
     )}\n`;
     content += `**URL 命名**: ${pattern.urlNaming}\n`;
@@ -2185,7 +2185,7 @@ ${this.generateBackendRouterContent(router, context)}
 
     // API 路由组织
     content += `## API 路由组织\n\n`;
-    content += `**组织模式**: ${this.getOrganizationDescription(
+    content += `**组织模式**: ${getOrganizationDescription(
       pattern.organization
     )}\n`;
     content += `**URL 命名**: ${pattern.urlNaming}\n\n`;
@@ -2373,32 +2373,6 @@ pages/
   }
 
   /**
-   * 获取路由类型描述
-   */
-  private getRouterTypeDescription(type: string): string {
-    const descriptions: Record<string, string> = {
-      "file-based": "文件系统路由（约定式）",
-      "config-based": "配置式路由（声明式）",
-      programmatic: "编程式路由（代码定义）",
-      mixed: "混合模式",
-    };
-    return descriptions[type] || type;
-  }
-
-  /**
-   * 获取组织方式描述
-   */
-  private getOrganizationDescription(org: string): string {
-    const descriptions: Record<string, string> = {
-      centralized: "集中管理",
-      distributed: "分散定义",
-      "feature-based": "按功能模块组织",
-      mixed: "混合方式",
-    };
-    return descriptions[org] || org;
-  }
-
-  /**
    * 生成动态路由章节（带确定性标注）
    */
   private generateDynamicRoutingSection(analysis: any): string {
@@ -2488,10 +2462,10 @@ pages/
    * v1.3: 生成测试规则（约 220 行或简短）
    */
   private generateTestingRule(context: RuleGenerationContext): CursorRule {
-    const hasTests = this.featureExists(context, "testing");
+    const hasTests = featureExists(context, "testing");
 
     const testGlobs = "**/*.{test,spec}.{ts,tsx,js,jsx}";
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "测试规范",
       hasTests ? "Testing patterns, organization, and best practices" : "Testing recommendations for the project",
       70,
@@ -2549,7 +2523,7 @@ ${this.generateConditionalTestingRules(context)}
     const hasErrorHandling = apiClient?.hasErrorHandling ?? false;
 
     const globs = `${apiDir}/**`;
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "API 调用规范",
       "How to call backend APIs: file location, client usage, error handling",
       80,
@@ -2643,7 +2617,7 @@ try {
    * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
    */
   private async generateFeatureRecipeRule(context: RuleGenerationContext): Promise<CursorRule> {
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       "端到端功能创建指南",
       "Step-by-step recipe for adding a complete feature: types → API → store → component → route",
       88,
@@ -2951,7 +2925,7 @@ const mockEverything = ${mockFn}(() => ${mockFn}(() => ${mockFn}()));
     }多模块项目，包含以下模块：\n\n`;
 
     for (const [type, modules] of modulesByType) {
-      desc += `**${this.getModuleTypeName(type)}模块：**\n`;
+      desc += `**${getModuleTypeName(type)}模块：**\n`;
       desc += modules.map((m) => `- ${m.name}`).join("\n") + "\n\n";
     }
 
@@ -3060,7 +3034,7 @@ ${
     guidelines += this.generateConditionalTestingRules(context);
 
     // 添加 UI/UX 规范（前端项目）
-    if (this.isFrontendProject(context)) {
+    if (isFrontendProject(context)) {
       guidelines += this.generateUIUXGuidelines(context);
     }
 
@@ -3077,23 +3051,6 @@ ${
     }
 
     return guidelines || "遵循项目现有代码风格和约定。";
-  }
-
-  /**
-   * 判断是否为前端项目
-   */
-  private isFrontendProject(context: RuleGenerationContext): boolean {
-    const frontendFrameworks = [
-      "React",
-      "Vue",
-      "Angular",
-      "Svelte",
-      "Next.js",
-      "Nuxt",
-    ];
-    return context.techStack.frameworks.some((f) =>
-      frontendFrameworks.includes(f)
-    );
   }
 
   /**
@@ -3731,7 +3688,7 @@ ${p.content}
     if (module.type === "shared") {
       guide += `5. **模块边界**: 此模块为共享模块，代码必须保持通用性，避免特定业务逻辑\n\n`;
     } else {
-      guide += `5. **模块边界**: 此模块为 ${this.getModuleTypeName(module.type)} 类型，代码需符合该类型职责范围\n\n`;
+      guide += `5. **模块边界**: 此模块为 ${getModuleTypeName(module.type)} 类型，代码需符合该类型职责范围\n\n`;
     }
 
     // 文件存放规则（从 project-structure 获取）
@@ -3900,117 +3857,6 @@ ${p.content}
     return lines.join("\n");
   }
 
-  /**
-   * 生成规则元数据（v1.3 增强）
-   */
-  private generateRuleMetadata(
-    _title: string,
-    description: string,
-    _priority: number,
-    _techStack: string[],
-    _tags: string[],
-    _type?: string,
-    _depends?: string[],
-    activation?: {
-      alwaysApply?: boolean;
-      globs?: string | string[];
-    }
-  ): string {
-    let metadata = `---\ndescription: ${description}\n`;
-
-    if (activation?.alwaysApply) {
-      metadata += `alwaysApply: true\n`;
-    } else if (activation?.globs) {
-      metadata += `alwaysApply: false\n`;
-      const globsValue = Array.isArray(activation.globs)
-        ? activation.globs.join(", ")
-        : activation.globs;
-      metadata += `globs: ${globsValue}\n`;
-    } else {
-      metadata += `alwaysApply: false\n`;
-    }
-
-    metadata += `---\n\n`;
-    return metadata;
-  }
-
-  private generateVersionedTechStack(context: RuleGenerationContext): string {
-    const lines: string[] = [];
-    const deps = context.techStack.dependencies || [];
-
-    const primaryWithVersions = context.techStack.primary.map((tech) => {
-      const dep = deps.find(
-        (d) => d.name.toLowerCase() === tech.toLowerCase() ||
-          d.name.toLowerCase().includes(tech.toLowerCase())
-      );
-      return dep ? `${tech} ${dep.version}` : tech;
-    });
-
-    lines.push(`**Primary**: ${primaryWithVersions.join(", ")}`);
-    lines.push(`**Languages**: ${context.techStack.languages.join(", ")}`);
-    lines.push(`**Package Manager**: ${context.techStack.packageManagers.join(", ")}`);
-    if (context.techStack.frameworks.length > 0) {
-      const fwWithVersions = context.techStack.frameworks.map((fw) => {
-        const dep = deps.find(
-          (d) => d.name.toLowerCase() === fw.toLowerCase() ||
-            d.name.toLowerCase().includes(fw.toLowerCase())
-        );
-        return dep ? `${fw} ${dep.version}` : fw;
-      });
-      lines.push(`**Frameworks**: ${fwWithVersions.join(", ")}`);
-    }
-
-    return lines.join("  \n");
-  }
-
-  private generateCommandsSection(context: RuleGenerationContext): string {
-    const cmds = context.projectConfig?.commands;
-    if (!cmds) return "";
-
-    const entries: string[] = [];
-    if (cmds.build) entries.push(`| Build | \`${cmds.build}\` |`);
-    if (cmds.dev) entries.push(`| Dev | \`${cmds.dev}\` |`);
-    if (cmds.start) entries.push(`| Start | \`${cmds.start}\` |`);
-    if (cmds.test) entries.push(`| Test | \`${cmds.test}\` |`);
-    if (cmds.lint) entries.push(`| Lint | \`${cmds.lint}\` |`);
-    if (cmds.lintFix) entries.push(`| Lint Fix | \`${cmds.lintFix}\` |`);
-    if (cmds.format) entries.push(`| Format | \`${cmds.format}\` |`);
-    // typeCheck 已在 config-parser 层通过命令值判断排除复合命令，展示侧直接使用
-    if (cmds.typeCheck) entries.push(`| Type Check | \`${cmds.typeCheck}\` |`);
-
-    if (entries.length === 0) return "";
-
-    return `\n## Commands\n\n| Task | Command |\n|------|---------|
-${entries.join("\n")}\n`;
-  }
-
-  private getLanguageGlobs(context: RuleGenerationContext): string {
-    const langs = context.techStack.languages.map((l) => l.toLowerCase());
-    const exts: string[] = [];
-    if (langs.includes("typescript") || langs.includes("javascript")) {
-      exts.push("ts", "tsx", "js", "jsx");
-    }
-    if (langs.includes("python")) exts.push("py");
-    if (langs.includes("go")) exts.push("go");
-    if (langs.includes("rust")) exts.push("rs");
-    if (langs.includes("java")) exts.push("java");
-    if (langs.includes("ruby")) exts.push("rb");
-    if (langs.includes("php")) exts.push("php");
-    if (exts.length === 0) exts.push("ts", "tsx", "js", "jsx");
-    return `**/*.{${exts.join(",")}}`;
-  }
-
-  private getRouteGlobs(router: any, type: "frontend" | "backend"): string {
-    const locations: string[] = (router?.info?.location || [])
-      .filter((loc: string) => !path.isAbsolute(loc));
-    if (locations.length > 0) {
-      return locations.map((loc: string) => `${loc}**`).join(", ");
-    }
-    return type === "frontend"
-      ? "**/routes/**, **/pages/**, **/app/**"
-      : "**/routes/**, **/api/**, **/controllers/**";
-  }
-
   private getHookGlobs(context: RuleGenerationContext): string | null {
     // 直接使用 path.dirname 从 hook 文件路径获取其所在目录
     // 不过滤路径名语义或深度：hooks 可能在 composables/、features/xxx/hooks/ 等任意位置
@@ -4060,38 +3906,6 @@ ${entries.join("\n")}\n`;
       return allDirs.map((d) => `${d.replace(/\/$/, '')}/**`).join(', ');
     }
     return '**/store/**, **/stores/**, **/slice/**';
-  }
-
-  /**
-   * 生成角色定义（Persona）
-   */
-  private generatePersona(context: RuleGenerationContext): string {
-    const allTech = [
-      ...context.techStack.primary,
-      ...context.techStack.frameworks.filter(
-        (f) => !context.techStack.primary.includes(f)
-      ),
-    ];
-
-    const isFrontend = this.isFrontendProject(context);
-    const backendIndicators = ["express", "fastify", "koa", "nestjs", "django", "flask", "spring"];
-    const isBackend = [
-      ...context.techStack.primary,
-      ...context.techStack.frameworks
-    ].some((tech) => backendIndicators.some(b => tech.toLowerCase().includes(b)));
-
-    let role: string;
-    if (isFrontend && isBackend) {
-      role = "full-stack development";
-    } else if (isFrontend) {
-      role = "frontend development";
-    } else if (isBackend) {
-      role = "backend development";
-    } else {
-      role = "software engineering";
-    }
-
-    return `You are an expert in ${allTech.join(", ")} with deep knowledge of ${role} best practices.`;
   }
 
   /**
@@ -4394,7 +4208,7 @@ ${bestPractices}
     module: Module
   ): Promise<CursorRule> {
     const moduleOverviewGlobs = `${module.path}/**`;
-    const metadata = this.generateRuleMetadata(
+    const metadata = buildRuleMetadata(
       `${module.name} 模块规则`,
       module.description || `Development conventions for the ${module.name} module`,
       50,
@@ -4432,7 +4246,7 @@ ${bestPractices}
     content += `## 📦 模块标识\n\n`;
     content += `- **包名称**: \`${effectivePackageName}\`\n`;
     content += `- **模块名称**: \`${module.name}\`\n`;
-    content += `- **模块类型**: ${this.getModuleTypeName(module.type)}\n`;
+    content += `- **模块类型**: ${getModuleTypeName(module.type)}\n`;
     if (packageInfo?.description) {
       content += `- **描述**: ${packageInfo.description}\n`;
     }
@@ -4467,18 +4281,11 @@ ${bestPractices}
       moduleName: module.name,
       modulePath: module.path,
       content,
-      fileName: `${this.sanitizeFileName(module.name)}-overview.mdc`,
+      fileName: `${sanitizeFileName(module.name)}-overview.mdc`,
       priority: 50,
       type: "overview",
       depends: ["global-rules"],
     };
-  }
-
-  /**
-   * 获取项目名称
-   */
-  private getProjectName(projectPath: string): string {
-    return path.basename(projectPath);
   }
 
   /**
@@ -4639,21 +4446,6 @@ ${bestPractices}
   }
 
   /**
-   * 获取模块类型名称
-   */
-  private getModuleTypeName(type: string): string {
-    const names: Record<string, string> = {
-      frontend: "前端",
-      backend: "后端",
-      shared: "共享",
-      service: "服务",
-      package: "包",
-      other: "其他",
-    };
-    return names[type] || type;
-  }
-
-  /**
    * 评估深度分析数据的质量
    */
   private assessDeepAnalysisQuality(
@@ -4718,17 +4510,6 @@ ${bestPractices}
   }
 
   /**
-   * 清理文件名
-   */
-  private sanitizeFileName(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
-
-  /**
    * 生成基于项目配置的代码风格规则（v1.2）
    */
   generateConfigBasedStyleRules(context: RuleGenerationContext): string {
@@ -4752,62 +4533,54 @@ ${bestPractices}
       rules += `- **尾随逗号**: ${p.trailingComma || "none"}\n\n`;
       rules += `**配置文件**: @.prettierrc\n\n`;
 
-      rules += `### ⚠️ 代码格式化要求\n\n`;
-      rules += `**生成代码时**，Cursor 必须：\n`;
-      rules += `1. 尽量遵循上述 Prettier 配置\n`;
-      rules += `2. 使用${p.singleQuote ? "单引号" : "双引号"}包裹字符串\n`;
-      rules += `3. 使用 ${
+      rules += `### 代码格式化要求\n\n`;
+      rules += `生成代码时遵循上述 Prettier 配置：\n`;
+      rules += `- 使用${p.singleQuote ? "单引号" : "双引号"}包裹字符串\n`;
+      rules += `- 使用 ${
         p.useTabs ? "Tab" : `${p.tabWidth || 2} 个空格`
       }缩进\n`;
-      rules += `4. ${p.semi ? "添加" : "不添加"}分号\n\n`;
-
-      rules += `**生成代码后**，必须运行格式化命令：\n\n`;
-
-      if (context.projectConfig.commands?.format) {
-        rules += `\`\`\`bash\n`;
-        rules += `${context.projectConfig.commands.format}\n`;
-        rules += `\`\`\`\n\n`;
-        rules += `**提示**: 生成代码后，请主动询问：\n`;
-        rules += `\`\`\`\n`;
-        rules += `需要我运行格式化命令吗？\n`;
-        rules += `${context.projectConfig.commands.format}\n`;
-        rules += `\`\`\`\n\n`;
-      } else {
-        rules += `\`\`\`bash\n`;
-        rules += `npx prettier --write [文件路径]\n`;
-        rules += `\`\`\`\n\n`;
-      }
+      rules += `- ${p.semi ? "添加" : "不添加"}分号\n\n`;
     } else if (context.projectPractice?.codeStyle) {
-      // 使用分析出的代码风格
+      // 使用分析出的代码风格：仅输出能明确判定的项，"mixed"/不确定的项一律省略，
+      // 避免产出对 AI 无指导价值的「混合」占位内容（置信度闸门）
       const style = context.projectPractice.codeStyle;
-      rules += `### 项目当前实践（分析得出）\n\n`;
-      rules += `通过分析项目代码，发现以下风格模式：\n\n`;
-      // TypeScript/modern JS 项目不可能以 var 为主，若检测为 var 优先使用 const/let 作为保底
       const isTS = context.techStack.languages.includes("TypeScript");
-      const varDisplay = (isTS && style.variableDeclaration === "var")
-        ? "const/let（TypeScript 项目标准）"
-        : style.variableDeclaration === "const-let" ? "const/let" : style.variableDeclaration === "var" ? "var" : "const/let（混合）";
-      rules += `- **变量声明**: 主要使用 ${varDisplay}\n`;
-      rules += `- **函数风格**: ${
-        style.functionStyle === "arrow" ? "箭头函数" : "function 声明"
-      }\n`;
-      rules += `- **字符串引号**: ${
-        style.stringQuote === "single"
-          ? "单引号"
-          : style.stringQuote === "double"
-          ? "双引号"
-          : "混合"
-      }\n`;
-      rules += `- **分号**: ${
-        style.semicolon === "always"
-          ? "使用"
-          : style.semicolon === "never"
-          ? "不使用"
-          : "混合"
-      }\n\n`;
-      // 移除建议，改为收集到 SuggestionCollector
-      rules += `### 当前实践\n\n`;
-      rules += `✅ 保持与现有代码一致的风格\n\n`;
+      const styleLines: string[] = [];
+
+      // TypeScript/modern JS 项目不可能以 var 为主，若检测为 var 优先纠正为 const/let
+      if (style.variableDeclaration === "const-let") {
+        styleLines.push(`- **变量声明**: 使用 const/let`);
+      } else if (style.variableDeclaration === "var") {
+        styleLines.push(
+          isTS ? `- **变量声明**: 使用 const/let` : `- **变量声明**: 使用 var`
+        );
+      }
+
+      if (style.functionStyle === "arrow") {
+        styleLines.push(`- **函数风格**: 箭头函数`);
+      } else if (style.functionStyle === "function") {
+        styleLines.push(`- **函数风格**: function 声明`);
+      }
+
+      if (style.stringQuote === "single") {
+        styleLines.push(`- **字符串引号**: 单引号`);
+      } else if (style.stringQuote === "double") {
+        styleLines.push(`- **字符串引号**: 双引号`);
+      } else if (style.stringQuote === "backtick") {
+        styleLines.push(`- **字符串引号**: 模板字符串`);
+      }
+
+      if (style.semicolon === "always") {
+        styleLines.push(`- **分号**: 使用`);
+      } else if (style.semicolon === "never") {
+        styleLines.push(`- **分号**: 不使用`);
+      }
+
+      if (styleLines.length > 0) {
+        rules += `### 项目当前实践（分析得出）\n\n`;
+        rules += `生成代码时保持与现有代码一致的风格：\n\n`;
+        rules += styleLines.join("\n") + "\n\n";
+      }
     }
 
     // ESLint 配置说明（只描述工具存在，不重复输出命令）
@@ -4820,42 +4593,28 @@ ${bestPractices}
       // 命令由下方「代码生成后标准流程」统一输出，此处不重复
     }
 
-    // 代码生成后的完整流程（唯一输出命令的位置）
+    // 代码生成后必须运行的命令（唯一输出命令的位置）
+    // 仅在存在实际命令时输出，作为对 AI 的约束，而非面向用户的交互提示
     if (context.projectConfig.commands) {
-      rules += `### 代码生成后的标准流程\n\n`;
-      rules += `**每次生成代码后，Cursor 必须提示运行**：\n\n`;
-      rules += `\`\`\`bash\n`;
-
       const steps: string[] = [];
       if (context.projectConfig.commands.format) {
-        steps.push(`# 1. 格式化代码\n${context.projectConfig.commands.format}`);
+        steps.push(`# 格式化代码\n${context.projectConfig.commands.format}`);
       }
       if (context.projectConfig.commands.lintFix) {
-        steps.push(
-          `# 2. 修复 lint 问题\n${context.projectConfig.commands.lintFix}`
-        );
+        steps.push(`# 修复 lint 问题\n${context.projectConfig.commands.lintFix}`);
       } else if (context.projectConfig.commands.lint) {
-        steps.push(`# 2. 检查 lint\n${context.projectConfig.commands.lint}`);
+        steps.push(`# 检查 lint\n${context.projectConfig.commands.lint}`);
       }
       if (context.projectConfig.commands.typeCheck) {
-        steps.push(
-          `# 3. 类型检查\n${context.projectConfig.commands.typeCheck}`
-        );
+        steps.push(`# 类型检查\n${context.projectConfig.commands.typeCheck}`);
       }
 
-      rules += steps.join("\n\n");
-      rules += `\n\`\`\`\n\n`;
-
-      rules += `**Cursor 的标准提示**：\n`;
-      rules += `\`\`\`\n`;
-      rules += `代码已生成。需要我运行以下命令确保代码符合项目规范吗？\n\n`;
-      if (context.projectConfig.commands.format) {
-        rules += `${context.projectConfig.commands.format}  # 格式化\n`;
+      if (steps.length > 0) {
+        rules += `### 代码生成后必须运行\n\n`;
+        rules += `\`\`\`bash\n`;
+        rules += steps.join("\n\n");
+        rules += `\n\`\`\`\n\n`;
       }
-      if (context.projectConfig.commands.lintFix) {
-        rules += `${context.projectConfig.commands.lintFix}  # 修复问题\n`;
-      }
-      rules += `\`\`\`\n\n`;
     }
 
     // 添加路径别名信息
@@ -5221,7 +4980,7 @@ ${bestPractices}
       return "项目架构模式：标准架构（基于目录结构推断）\n\n";
     }
 
-    let content = `项目采用 **${this.getArchitecturePatternName(pattern.type)}** 架构模式。\n\n`;
+    let content = `项目采用 **${getArchitecturePatternName(pattern.type)}** 架构模式。\n\n`;
 
     // 注意：置信度（confidence）和识别依据（indicators）是生成器内部分析元数据，
     // 不应出现在规则内容中 — 规则只输出对 AI Agent 有指导意义的约束。
@@ -5283,7 +5042,7 @@ ${bestPractices}
     let content = `项目包含 **${context.modules.length}** 个模块：\n\n`;
 
     for (const [type, modules] of modulesByType) {
-      content += `### ${this.getModuleTypeName(type)}模块\n\n`;
+      content += `### ${getModuleTypeName(type)}模块\n\n`;
       for (const module of modules) {
         content += `- **${module.name}** (\`${module.path}\`)\n`;
         if (module.description) {
@@ -5343,7 +5102,7 @@ ${bestPractices}
       if (!dirsByCategory.has(category)) continue;
 
       const dirs = dirsByCategory.get(category)!;
-      const categoryName = this.getCategoryDisplayName(category);
+      const categoryName = getCategoryDisplayName(category);
 
       content += `### ${categoryName}\n\n`;
 
@@ -5382,24 +5141,6 @@ ${bestPractices}
   }
 
   /**
-   * 获取类别显示名称
-   */
-  private getCategoryDisplayName(category: string): string {
-    const names: Record<string, string> = {
-      package: "包/库模块",
-      project: "项目模块",
-      module: "功能模块",
-      component: "组件模块",
-      service: "服务模块",
-      api: "API 模块",
-      shared: "共享模块",
-      common: "公共模块",
-      other: "其他目录",
-    };
-    return names[category] || category;
-  }
-
-  /**
    * 生成架构设计原则
    */
   private generateArchitecturePrinciples(context: RuleGenerationContext): string {
@@ -5431,38 +5172,10 @@ ${bestPractices}
   }
 
   /**
-   * 检查功能是否在项目中存在
-   */
-  private featureExists(
-    context: RuleGenerationContext,
-    featureName: string
-  ): boolean {
-    // 检查代码特征
-    if (context.codeFeatures[featureName]) {
-      return context.codeFeatures[featureName].frequency > 0;
-    }
-
-    // 检查依赖
-    const featureDeps: Record<string, string[]> = {
-      testing: ["jest", "vitest", "mocha", "@testing-library"],
-      "state-management": ["redux", "zustand", "mobx", "pinia", "vuex"],
-      styling: ["styled-components", "@emotion", "tailwindcss", "@mui"],
-    };
-
-    if (featureDeps[featureName]) {
-      return context.techStack.dependencies.some((d) =>
-        featureDeps[featureName].some((lib) => d.name.includes(lib))
-      );
-    }
-
-    return false;
-  }
-
-  /**
    * 生成按需的测试规则（v1.2）
    */
   generateConditionalTestingRules(context: RuleGenerationContext): string {
-    const hasTests = this.featureExists(context, "testing");
+    const hasTests = featureExists(context, "testing");
 
     if (!hasTests) {
       // 项目没有测试 - 简短提示

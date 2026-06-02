@@ -1,0 +1,1442 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`rules generation snapshots (refactor safety net) > produces stable rules for express-api 1`] = `
+[
+  {
+    "content": "---
+description: Express API route handlers, middleware, and endpoint conventions
+alwaysApply: false
+globs: src/routes/**, src/api/**
+---
+
+
+# API 路由规范
+
+参考: @global-rules.mdc, @architecture.mdc
+
+## 项目当前使用
+
+**路由系统**: Express  
+**路由类型**: 编程式路由（代码定义）  
+**路由位置**: \`@src/routes/\`, \`@src/api/\`
+
+## API 路由组织
+
+**组织模式**: 集中管理
+**URL 命名**: kebab-case
+
+## RESTful API 设计
+
+项目 API 遵循 RESTful 设计原则：
+
+- \`GET /resources\` - 获取列表
+- \`GET /resources/:id\` - 获取单个
+- \`POST /resources\` - 创建
+- \`PUT /resources/:id\` - 更新
+- \`DELETE /resources/:id\` - 删除
+
+## 新建 API 路由时
+
+### 步骤
+
+1. 在 \`routes/\` 目录创建或选择模块文件
+2. 定义路由处理器
+3. 使用 \`express.Router()\` 导出
+4. 在主文件注册路由
+
+## 短期规范
+
+✅ 保持 RESTful API 设计原则
+✅ 遵循现有的路由组织方式
+
+
+---
+
+*API 路由要保持 RESTful 设计，清晰的资源组织。*
+",
+    "fileName": "api-routing.mdc",
+  },
+  {
+    "content": "---
+description: Consult when designing features, adding modules, or making architectural decisions
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# Project Architecture
+
+See also: @global-rules.mdc, @project-structure.mdc
+
+## Architecture Pattern
+
+项目架构模式：标准架构（基于目录结构推断）
+
+
+
+## Module Structure
+
+基于项目目录结构分析，项目主要包含以下模块和目录：
+
+> 💡 **提示**: 详细的目录结构和职能说明请参考 @project-structure.mdc。
+
+
+
+## Design Principles
+
+### 核心原则
+
+- **模块化**: 按功能模块组织代码，保持模块间的低耦合
+- **可维护性**: 代码结构清晰，易于理解和修改
+- **可扩展性**: 支持功能扩展而不影响现有代码
+- **单一职责**: 每个模块、组件、函数只负责一个功能
+
+
+
+
+",
+    "fileName": "architecture.mdc",
+  },
+  {
+    "content": "---
+description: Code style, formatting, and naming conventions derived from project config
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# Code Style
+
+## 代码风格（基于项目配置）
+
+### 项目当前实践（分析得出）
+
+生成代码时保持与现有代码一致的风格：
+
+- **变量声明**: 使用 const/let
+- **函数风格**: function 声明
+- **字符串引号**: 单引号
+- **分号**: 使用
+
+### 代码生成后必须运行
+
+\`\`\`bash
+# 类型检查
+npm run build
+\`\`\`
+
+
+
+## Do / Don't
+
+\`\`\`typescript
+// DON'T: use any — 失去类型保护
+function process(data: any) { return data.value; }
+
+// DO: 使用精确类型
+function process(data: ProcessInput): ProcessOutput {
+  return data.value;
+}
+\`\`\`
+
+\`\`\`typescript
+// DON'T: 隐式类型 + 可变默认
+var count = 0;
+
+// DO: 显式类型 + 不可变优先
+const count: number = 0;
+\`\`\`
+
+> 错误处理规范请参考 **@error-handling.mdc**
+
+
+",
+    "fileName": "code-style.mdc",
+  },
+  {
+    "content": "---
+description: Project-wide conventions, tech stack, and core development principles. Always loaded.
+alwaysApply: true
+---
+
+# express-api
+
+You are an expert in Express, TypeScript with deep knowledge of backend development best practices.
+
+## Tech Stack
+
+**Primary**: Express ^4.19.0, TypeScript ^5.4.0  
+**Languages**: JavaScript, TypeScript  
+**Package Manager**: npm  
+**Frameworks**: Express ^4.19.0
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Build | \`npm run build\` |
+| Start | \`npm run start\` |
+| Type Check | \`npm run build\` |
+
+## Hard Constraints
+
+- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.
+- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
+- NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
+- NEVER generate markdown documentation files — express intent through code, types, and naming.
+- Before creating files, consult @project-structure.mdc for correct location.
+- Reuse existing project tools — do not re-implement what already exists.
+- Follow the project's established patterns and conventions.
+- After writing code, run \`npm run build\` before considering the task complete.
+
+- 遵循框架的官方最佳实践
+
+## Rule Index
+
+| Rule | Scope |
+|------|-------|
+| @code-style.mdc | Formatting and naming conventions |
+| @project-structure.mdc | Directory layout and file placement |
+| @architecture.mdc | Module structure and design patterns |
+| @api-routing.mdc | API endpoint conventions |
+
+",
+    "fileName": "global-rules.mdc",
+  },
+  {
+    "content": "---
+description: Consult when creating new files or directories to determine correct location and naming conventions
+alwaysApply: false
+globs: **/index.{ts,tsx,js,jsx}
+---
+
+
+# 项目结构
+
+参考: @global-rules.mdc
+
+## 📁 目录结构树
+
+项目主要目录结构：
+
+\`\`\`text
+└── src/ # 源码
+    ├── controllers/ # 控制层
+    └── routes/ # 路由表
+\`\`\`
+
+
+## 📋 主要目录职能说明
+
+以下是重要目录的详细职能说明，包含文件类型、命名规范等信息：
+
+> 💡 命名规范和代码风格请参考 @code-style.mdc
+
+### \`src/controllers/\`
+
+**职能**: 控制层
+
+
+### \`src/routes/\`
+
+**职能**: 路由表
+
+
+
+## 🎯 文件组织规范（快速参考）
+
+以下是常见文件类型的存放位置，用于快速查找：
+
+
+## ✨ 新建文件指南
+
+### 文件位置决策表
+
+> 创建新文件时，先查此表找到正确目录，不确定则参考相似现有文件。
+
+| 要创建的文件类型 | 放到哪里 | 示例文件名 |
+|-----------------|---------|----------|
+
+
+
+
+---
+*新建文件前，请参考此文件确定正确的目录位置和命名规范。*
+",
+    "fileName": "project-structure.mdc",
+  },
+]
+`;
+
+exports[`rules generation snapshots (refactor safety net) > produces stable rules for react-full 1`] = `
+[
+  {
+    "content": "---
+description: How to call backend APIs: file location, client usage, error handling
+alwaysApply: false
+globs: src/api/**
+---
+
+
+# API 调用规范
+
+## 核心约定
+
+- 所有 API 函数集中放在 \`src/api/\` 目录下，按业务模块分文件
+- **禁止**在组件/Store 中直接 \`fetch\`/\`axios.get\`，必须通过封装函数
+- 每个函数只做一件事：请求 + 返回数据（副作用在调用方处理）
+
+## HTTP 客户端
+
+项目已封装 \`apiClient\`，位于 \`src/api/index.ts\`：
+
+\`\`\`ts
+import { apiClient } from "@/api/index";
+\`\`\`
+
+
+
+
+## 标准函数结构
+
+\`\`\`ts
+// src/api/feature.ts
+import { apiClient } from "@/api/index";
+import type { FeatureItem, FeatureListParams } from "@/interface/feature";
+
+export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
+  const { data } = await apiClient.get("/api/features", { params });
+  return data;
+}
+
+export async function createFeature(payload: Partial<FeatureItem>): Promise<FeatureItem> {
+  const { data } = await apiClient.post("/api/features", payload);
+  return data;
+}
+\`\`\`
+
+## Do / Don't
+
+\`\`\`ts
+// ❌ 组件内直接 fetch
+useEffect(() => {
+  axios.get("/api/features").then(setList);
+}, []);
+
+// ✅ 调用封装函数
+useEffect(() => {
+  fetchFeatureList({ page: 1, pageSize: 20 }).then(setList);
+}, []);
+\`\`\`
+
+## 错误处理
+
+每个 API 函数必须处理异常，或在调用方 try-catch：
+
+\`\`\`ts
+try {
+  const list = await fetchFeatureList(params);
+  setList(list);
+} catch (error) {
+  message.error("加载失败");
+}
+\`\`\`
+
+参考: @error-handling.mdc
+",
+    "fileName": "api-patterns.mdc",
+  },
+  {
+    "content": "---
+description: Consult when designing features, adding modules, or making architectural decisions
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# Project Architecture
+
+See also: @global-rules.mdc, @project-structure.mdc
+
+## Architecture Pattern
+
+项目架构模式：标准架构（基于目录结构推断）
+
+
+
+## Module Structure
+
+基于项目目录结构分析，项目主要包含以下模块和目录：
+
+### 组件模块
+
+- **\`src/\`** - 源码
+  - 包含 2 个文件
+  - 包含 4 个子目录
+
+> 💡 **提示**: 详细的目录结构和职能说明请参考 @project-structure.mdc。
+
+
+
+## Core Code Patterns
+
+- 项目使用自定义组件结构
+- 使用 zustand 进行状态管理
+
+## Design Principles
+
+### 核心原则
+
+- **模块化**: 按功能模块组织代码，保持模块间的低耦合
+- **可维护性**: 代码结构清晰，易于理解和修改
+- **可扩展性**: 支持功能扩展而不影响现有代码
+- **单一职责**: 每个模块、组件、函数只负责一个功能
+
+
+
+
+",
+    "fileName": "architecture.mdc",
+  },
+  {
+    "content": "---
+description: Code style, formatting, and naming conventions derived from project config
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# Code Style
+
+## 代码风格（基于项目配置）
+
+### 项目当前实践（分析得出）
+
+生成代码时保持与现有代码一致的风格：
+
+- **变量声明**: 使用 const/let
+- **函数风格**: 箭头函数
+- **字符串引号**: 单引号
+- **分号**: 使用
+
+### 代码生成后必须运行
+
+\`\`\`bash
+# 类型检查
+npm run type-check
+\`\`\`
+
+
+
+## Do / Don't
+
+\`\`\`typescript
+// DON'T: use any — 失去类型保护
+function process(data: any) { return data.value; }
+
+// DO: 使用精确类型
+function process(data: ProcessInput): ProcessOutput {
+  return data.value;
+}
+\`\`\`
+
+\`\`\`typescript
+// DON'T: 隐式类型 + 可变默认
+var count = 0;
+
+// DO: 显式类型 + 不可变优先
+const count: number = 0;
+\`\`\`
+
+> 错误处理规范请参考 **@error-handling.mdc**
+
+
+",
+    "fileName": "code-style.mdc",
+  },
+  {
+    "content": "---
+description: Consult before implementing features — lists project-specific hooks, utilities, and API clients that MUST be reused
+alwaysApply: false
+globs: src/store/**
+---
+
+
+# 项目自定义工具
+
+参考: @global-rules.mdc
+
+## 项目自定义工具（优先使用）
+
+### 自定义 Hooks
+
+项目定义了以下自定义 hooks，**生成代码时必须优先使用**：
+
+**useUserStore** 
+- 位置: \`src/store/useUserStore.ts\`
+- 使用频率: 低 ⚠️ 低频（仅 1 处使用，仅在明确匹配使用场景时优先）
+- 使用方式:
+  \`\`\`typescript
+  const result = useUserStore()
+  \`\`\`
+
+### 自定义工具函数
+
+项目定义了以下工具函数，**生成代码时必须优先使用**：
+
+**通用工具**:
+- \`safeFetch\` (src/utils/safeFetch.ts)
+  \`\`\`typescript
+  export async function safeFetch(url: string): Promise<unknown> 
+  \`\`\`
+
+### ⚠️ 重要规则
+
+1. **优先使用项目自定义工具**，不要重新实现或引入第三方替代
+2. **保持一致性**，使用相同的工具确保代码可维护性
+3. **新增工具时**，遵循现有工具的命名和组织方式
+
+
+
+---
+
+*使用项目工具保持代码一致性，避免重复实现。*
+",
+    "fileName": "custom-tools.mdc",
+  },
+  {
+    "content": "---
+description: Error handling patterns, logging, and recovery strategies based on project conventions
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# 错误处理规范
+
+参考: @global-rules.mdc, @custom-tools.mdc
+
+## 项目错误处理规范
+
+项目主要使用 **try-catch** 处理错误。
+
+### Do ✅
+
+\`\`\`typescript
+// 异步操作：捕获并记录，向上层暴露有意义的错误
+async function fetchData(id: string) {
+  try {
+    return await api.get(id);
+  } catch (err) {
+    console.error('[fetchData] failed', { id, err });
+    throw err; // 让调用方决定如何展示
+  }
+}
+\`\`\`
+
+### Don't ❌
+
+\`\`\`typescript
+// 吞掉错误 — 导致静默失败，难以排查
+try { await doSomething(); } catch (_) {}
+
+// 记录但不抛出 — 上层不知道操作失败
+try { await doSomething(); } catch (err) { console.error(err); }
+\`\`\`
+
+### 规则
+
+- **catch 块不能为空**：必须 log + re-throw 或显式处理。
+- **日志包含上下文**：\`console.error('[scope]', { ...params, err })\`
+- **区分错误类型**：业务错误（可恢复）vs 系统错误（不可恢复），后者直接 throw。
+- **用户提示友好**：展示给用户的消息不含技术细节，记录原始错误到日志。
+
+
+
+
+---
+
+*遵循项目现有的错误处理模式，保持一致性。*
+",
+    "fileName": "error-handling.mdc",
+  },
+  {
+    "content": "---
+description: Step-by-step recipe for adding a complete feature: types → API → store → component → route
+alwaysApply: false
+---
+
+
+# 端到端功能创建指南
+
+> 新增一个完整功能时，按此顺序创建文件，避免缺漏。
+
+## 标准步骤
+
+### 1. 类型定义
+
+\`\`\`ts
+// src/types/feature.ts
+export interface FeatureItem {
+  id: string;
+  name: string;
+  // ...项目实际字段
+}
+
+export interface FeatureListParams {
+  page: number;
+  pageSize: number;
+}
+\`\`\`
+
+### 2. API 函数
+
+\`\`\`ts
+// src/api/feature.ts
+import type { FeatureItem, FeatureListParams } from "@/types/feature";
+import { apiClient } from "@/api";
+
+export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
+  const { data } = await apiClient.get("/api/features", { params });
+  return data;
+}
+
+export async function fetchFeatureById(id: string): Promise<FeatureItem> {
+  const { data } = await apiClient.get(\`/api/features/\${id}\`);
+  return data;
+}
+\`\`\`
+
+### 3. Store（Zustand）
+
+\`\`\`ts
+// src/store/featureStore.ts
+import { create } from "zustand";
+import type { FeatureItem } from "@/types/feature";
+
+interface FeatureStore {
+  items: FeatureItem[];
+  loading: boolean;
+  fetchItems: () => Promise<void>;
+}
+
+export const useFeatureStore = create<FeatureStore>((set) => ({
+  items: [],
+  loading: false,
+  fetchItems: async () => {
+    set({ loading: true });
+    const items = await fetchFeatureList();
+    set({ items, loading: false });
+  },
+}));
+\`\`\`
+
+### 4. 可复用 Hook（可选）
+
+\`\`\`ts
+// src/hooks/useFeature.ts
+export function useFeature(id: string) {
+  // 封装数据获取、loading 状态、错误处理
+  // 组件直接调用，不重复写 fetch 逻辑
+}
+\`\`\`
+
+### 5. 页面组件
+
+\`\`\`tsx
+// src/pages/FeatureList/FeatureList.tsx
+// 只负责渲染，业务逻辑在 Hook / Store 中
+export function FeatureList() {
+  // 1. 从 store/hook 获取数据
+  // 2. 处理 loading / error 状态
+  // 3. 渲染列表
+}
+\`\`\`
+
+### 6. 路由注册
+
+\`\`\`tsx
+// pages/index.tsx 或路由配置文件
+{ path: "/features", element: <FeatureList /> }
+{ path: "/features/:id", element: <FeatureDetail /> }
+\`\`\`
+
+## 文件检查清单
+
+新建功能后确认以下文件已创建/更新：
+
+- [ ] \`src/types/feature.ts\` — 类型定义
+- [ ] \`src/api/feature.ts\` — API 函数
+- [ ] \`src/store/featureStore.ts\` — Store
+- [ ] \`src/hooks/useFeature.ts\` — 数据 Hook（可选）
+- [ ] \`src/pages/FeatureList/\` — 页面组件
+- [ ] 路由配置已更新
+
+---
+
+*遵循此模式保持项目一致性。参考 @project-structure.mdc 确认各类文件的实际目录位置。*
+",
+    "fileName": "feature-recipe.mdc",
+  },
+  {
+    "content": "---
+description: Next.js routing organization, navigation patterns, and URL conventions
+alwaysApply: false
+globs: pages/**
+---
+
+
+# 前端路由规范
+
+参考: @global-rules.mdc, @architecture.mdc
+
+## 项目当前使用
+
+**路由系统**: Next.js (Pages Router)  
+**路由类型**: 文件系统路由（约定式）  
+**路由位置**: \`@pages/\`
+
+## 路由组织方式
+
+**组织模式**: 分散定义
+**URL 命名**: kebab-case
+**文件命名**: [name].tsx
+
+## 实际路由示例
+
+### 静态路由
+
+- **@src/pages/Home.tsx** → \`/Home.tsx\`
+
+## 新建路由时
+
+
+
+---
+
+*路由是应用的骨架，保持清晰的路由结构。*
+",
+    "fileName": "frontend-routing.mdc",
+  },
+  {
+    "content": "---
+description: Project-wide conventions, tech stack, and core development principles. Always loaded.
+alwaysApply: true
+---
+
+# react-full
+
+You are an expert in React, TypeScript with deep knowledge of frontend development best practices.
+
+## Tech Stack
+
+**Primary**: React ^18.2.0, TypeScript ^5.4.0  
+**Languages**: JavaScript, TypeScript  
+**Package Manager**: npm  
+**Frameworks**: React ^18.2.0
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Build | \`npm run build\` |
+| Test | \`npm run test\` |
+| Type Check | \`npm run type-check\` |
+
+## Hard Constraints
+
+- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.
+- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
+- NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
+- NEVER generate markdown documentation files — express intent through code, types, and naming.
+- Before creating files, consult @project-structure.mdc for correct location.
+- Reuse existing project tools — do not re-implement what already exists.
+- Follow the project's established patterns and conventions.
+- After writing code, run \`npm run type-check\` before considering the task complete.
+
+- **React**: 
+  - 使用函数组件和 Hooks，避免类组件
+  - 保持组件单一职责原则
+  - 合理使用 \`useMemo\` 和 \`useCallback\` 优化性能
+  - 使用 TypeScript 进行类型检查
+
+
+## Rule Index
+
+| Rule | Scope |
+|------|-------|
+| @code-style.mdc | Formatting and naming conventions |
+| @project-structure.mdc | Directory layout and file placement |
+| @architecture.mdc | Module structure and design patterns |
+| @custom-tools.mdc | Project-specific hooks, utils, API clients |
+| @error-handling.mdc | Error handling and logging patterns |
+| @state-management.mdc | State management conventions |
+| @frontend-routing.mdc | Frontend routing patterns |
+| @ui-ux.mdc | UI component and UX patterns |
+| @api-patterns.mdc | API call conventions and HTTP client usage |
+| @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @testing.mdc | Testing patterns and organization |
+
+",
+    "fileName": "global-rules.mdc",
+  },
+  {
+    "content": "---
+description: Consult when creating new files or directories to determine correct location and naming conventions
+alwaysApply: false
+globs: **/index.{ts,tsx,js,jsx}
+---
+
+
+# 项目结构
+
+参考: @global-rules.mdc
+
+## 📁 目录结构树
+
+项目主要目录结构：
+
+\`\`\`text
+└── src/ # 源码
+    ├── api/ # 接口定义
+    ├── pages/ # 页面
+    ├── store/ # 状态管理
+    └── utils/ # 工具函数
+\`\`\`
+
+
+## 📋 主要目录职能说明
+
+以下是重要目录的详细职能说明，包含文件类型、命名规范等信息：
+
+> 💡 命名规范和代码风格请参考 @code-style.mdc
+
+### \`src/api/\`
+
+**职能**: 接口定义
+
+
+### \`src/pages/\`
+
+**职能**: 页面
+
+
+### \`src/store/\`
+
+**职能**: 状态管理
+
+
+### \`src/utils/\`
+
+**职能**: 工具函数
+
+
+
+## 🎯 文件组织规范（快速参考）
+
+以下是常见文件类型的存放位置，用于快速查找：
+
+### 工具函数目录
+
+**位置**: \`src/utils/\`
+
+**组织方式**: 按功能分类创建文件（如 \`date.ts\`, \`validation.ts\`）
+
+### API 目录
+
+**位置**: \`src/api/\`
+
+
+## ✨ 新建文件指南
+
+### 文件位置决策表
+
+> 创建新文件时，先查此表找到正确目录，不确定则参考相似现有文件。
+
+| 要创建的文件类型 | 放到哪里 | 示例文件名 |
+|-----------------|---------|----------|
+| 页面 / 可复用组件 | \`src/pages/\` | \`UserList.tsx\` |
+| 工具函数 | \`src/utils/\` | \`format.ts\`, \`validate.ts\` |
+| API / Service | \`src/api/\` | \`user.api.ts\` |
+
+
+
+
+---
+*新建文件前，请参考此文件确定正确的目录位置和命名规范。*
+",
+    "fileName": "project-structure.mdc",
+  },
+  {
+    "content": "---
+description: Consult when implementing state management, data flow, or zustand-related code
+alwaysApply: false
+globs: src/store/**
+---
+
+
+# 状态管理规范
+
+参考: @global-rules.mdc
+
+## Zustand 状态管理
+
+### 使用规范
+
+- 使用 create 创建 store
+- 保持 store 扁平化
+- 使用 immer 中间件处理复杂状态
+
+---
+
+*状态管理是项目的核心，遵循既定模式。*
+",
+    "fileName": "state-management.mdc",
+  },
+  {
+    "content": "---
+description: Testing patterns, organization, and best practices
+alwaysApply: false
+globs: **/*.{test,spec}.{ts,tsx,js,jsx}
+---
+
+
+# Testing
+
+**Framework**: Vitest ^2.1.0
+**Run tests**: \`npm run test\`
+
+
+> 💡 **基础规范**: 测试文件命名和组织规范请参考 **@code-style.mdc**
+
+## 测试规范
+
+> 💡 **详细规范**: 完整的测试指南请参考 **@testing.mdc**
+
+### 测试原则
+- **独立性**：每个测试应该独立运行，不依赖其他测试
+- **可重复性**：测试结果应该是确定的，不受运行顺序影响
+- **快速执行**：单元测试应该快速完成
+- **清晰性**：测试应该清楚地表达意图
+
+### 快速参考
+- **测试文件**: \`ComponentName.test.ts\` 或 \`ComponentName.spec.ts\`
+- **AAA 模式**: Arrange（准备）→ Act（执行）→ Assert（验证）
+- **覆盖率目标**: 核心业务逻辑达到 80%+ 覆盖率
+- **优先级**:
+  1. 关键业务逻辑
+  2. 边界情况和错误处理
+  3. 复杂的算法和数据转换
+- **不需要测试**：
+  - 简单的 getter/setter
+  - 第三方库的功能
+  - 纯 UI 布局（可以用 E2E 测试）
+
+### Mock and Stub
+- Use mocks to isolate external dependencies
+- Do not over-mock; keep tests meaningful
+- Create mocks for API calls, database operations, and other I/O
+
+\`\`\`typescript
+// ✅ Good mock usage
+const mockApiClient = {
+  fetchUser: vi.fn().mockResolvedValue({ id: 1, name: 'John' })
+};
+
+// ❌ Over-mocking
+const mockEverything = vi.fn(() => vi.fn(() => vi.fn()));
+\`\`\`
+
+### 测试类型
+- **单元测试**：测试单个函数或类的行为
+- **集成测试**：测试多个模块的协作
+- **E2E 测试**：测试完整的用户流程
+
+### 最佳实践
+- 一个测试只验证一个行为
+- 使用有意义的断言消息
+- 测试失败时应该清楚地指出问题所在
+- 定期运行测试，不要让测试过时
+- 失败的测试应该立即修复
+
+
+",
+    "fileName": "testing.mdc",
+  },
+  {
+    "content": "---
+description: UI component patterns and conventions for this project's UI library
+alwaysApply: false
+globs: src/components/**/*.{tsx,jsx,vue,svelte}, src/views/**/*.{tsx,jsx,vue,svelte}
+---
+
+
+# UI/UX 设计规范
+
+参考: @global-rules.mdc, @code-style.mdc
+
+## 项目 UI 方案
+
+**当前使用**: 自定义 CSS/CSS Modules
+
+### 无障碍（A11y）最低要求
+
+- 交互元素必须有 \`aria-label\` 或可见文本
+- 图标按钮加 \`title\` 属性
+- 表单字段关联 \`label\`（htmlFor）
+
+
+
+---
+
+*UI/UX 规范确保良好的用户体验和无障碍访问。*
+",
+    "fileName": "ui-ux.mdc",
+  },
+]
+`;
+
+exports[`rules generation snapshots (refactor safety net) > produces stable rules for react-ts-app 1`] = `
+[
+  {
+    "content": "---
+description: Consult when designing features, adding modules, or making architectural decisions
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# Project Architecture
+
+See also: @global-rules.mdc, @project-structure.mdc
+
+## Architecture Pattern
+
+项目架构模式：标准架构（基于目录结构推断）
+
+
+
+## Module Structure
+
+基于项目目录结构分析，项目主要包含以下模块和目录：
+
+### 组件模块
+
+- **\`src/\`** - 源码
+  - 包含 1 个文件
+  - 包含 3 个子目录
+
+> 💡 **提示**: 详细的目录结构和职能说明请参考 @project-structure.mdc。
+
+
+
+## Core Code Patterns
+
+- 项目使用自定义组件结构
+
+## Design Principles
+
+### 核心原则
+
+- **模块化**: 按功能模块组织代码，保持模块间的低耦合
+- **可维护性**: 代码结构清晰，易于理解和修改
+- **可扩展性**: 支持功能扩展而不影响现有代码
+- **单一职责**: 每个模块、组件、函数只负责一个功能
+
+
+
+
+",
+    "fileName": "architecture.mdc",
+  },
+  {
+    "content": "---
+description: Code style, formatting, and naming conventions derived from project config
+alwaysApply: false
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+
+# Code Style
+
+## 代码风格（基于项目配置）
+
+### 项目配置 (Prettier)
+
+项目使用 Prettier 进行代码格式化，配置如下：
+
+- **缩进**: 2 个空格
+- **引号**: 单引号
+- **分号**: 使用分号
+- **行长度**: 80 字符
+- **尾随逗号**: none
+
+**配置文件**: @.prettierrc
+
+### 代码格式化要求
+
+生成代码时遵循上述 Prettier 配置：
+- 使用单引号包裹字符串
+- 使用 2 个空格缩进
+- 添加分号
+
+### ESLint 代码检查
+
+### 代码生成后必须运行
+
+\`\`\`bash
+# 检查 lint
+npm run lint
+
+# 类型检查
+npm run type-check
+\`\`\`
+
+
+
+## Do / Don't
+
+\`\`\`typescript
+// DON'T: use any — 失去类型保护
+function process(data: any) { return data.value; }
+
+// DO: 使用精确类型
+function process(data: ProcessInput): ProcessOutput {
+  return data.value;
+}
+\`\`\`
+
+\`\`\`typescript
+// DON'T: 隐式类型 + 可变默认
+var count = 0;
+
+// DO: 显式类型 + 不可变优先
+const count: number = 0;
+\`\`\`
+
+> 错误处理规范请参考 **@error-handling.mdc**
+
+
+",
+    "fileName": "code-style.mdc",
+  },
+  {
+    "content": "---
+description: Consult before implementing features — lists project-specific hooks, utilities, and API clients that MUST be reused
+alwaysApply: false
+globs: src/hooks/**
+---
+
+
+# 项目自定义工具
+
+参考: @global-rules.mdc
+
+## 项目自定义工具（优先使用）
+
+### 自定义 Hooks
+
+项目定义了以下自定义 hooks，**生成代码时必须优先使用**：
+
+**useCounter** 
+- 位置: \`src/hooks/useCounter.ts\`
+- 使用频率: 中 (4 处)
+- 使用方式:
+  \`\`\`typescript
+  function useCounter()
+  \`\`\`
+
+### 自定义工具函数
+
+项目定义了以下工具函数，**生成代码时必须优先使用**：
+
+**格式化**:
+- \`formatName\` (src/utils/format.ts)
+  \`\`\`typescript
+  export function formatName(first: string, last: string): string 
+  \`\`\`
+
+### ⚠️ 重要规则
+
+1. **优先使用项目自定义工具**，不要重新实现或引入第三方替代
+2. **保持一致性**，使用相同的工具确保代码可维护性
+3. **新增工具时**，遵循现有工具的命名和组织方式
+
+
+
+---
+
+*使用项目工具保持代码一致性，避免重复实现。*
+",
+    "fileName": "custom-tools.mdc",
+  },
+  {
+    "content": "---
+description: Step-by-step recipe for adding a complete feature: types → API → store → component → route
+alwaysApply: false
+---
+
+
+# 端到端功能创建指南
+
+> 新增一个完整功能时，按此顺序创建文件，避免缺漏。
+
+## 标准步骤
+
+### 1. 类型定义
+
+\`\`\`ts
+// src/types/feature.ts
+export interface FeatureItem {
+  id: string;
+  name: string;
+  // ...项目实际字段
+}
+
+export interface FeatureListParams {
+  page: number;
+  pageSize: number;
+}
+\`\`\`
+
+### 2. API 函数
+
+\`\`\`ts
+// src/api/feature.ts
+import type { FeatureItem, FeatureListParams } from "@/types/feature";
+
+
+export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
+  const { data } = await fetch(\`/api/features?page=\${params.page}\`);
+  return data;
+}
+
+export async function fetchFeatureById(id: string): Promise<FeatureItem> {
+  const { data } = await fetch(\`/api/features/\${id}\`);
+  return data;
+}
+\`\`\`
+
+### 3. 可复用 Hook（可选）
+
+\`\`\`ts
+// src/hooks/useFeature.ts
+export function useFeature(id: string) {
+  // 封装数据获取、loading 状态、错误处理
+  // 组件直接调用，不重复写 fetch 逻辑
+}
+\`\`\`
+
+### 4. 页面组件
+
+\`\`\`tsx
+// src/components/FeatureList/FeatureList.tsx
+// 只负责渲染，业务逻辑在 Hook / Store 中
+export function FeatureList() {
+  // 1. 从 store/hook 获取数据
+  // 2. 处理 loading / error 状态
+  // 3. 渲染列表
+}
+\`\`\`
+
+### 5. 路由注册
+
+\`\`\`tsx
+// src/routes/index.tsx 或路由配置文件
+{ path: "/features", element: <FeatureList /> }
+{ path: "/features/:id", element: <FeatureDetail /> }
+\`\`\`
+
+## 文件检查清单
+
+新建功能后确认以下文件已创建/更新：
+
+- [ ] \`src/types/feature.ts\` — 类型定义
+- [ ] \`src/api/feature.ts\` — API 函数
+- [ ] \`src/hooks/useFeature.ts\` — 数据 Hook（可选）
+- [ ] \`src/components/FeatureList/\` — 页面组件
+- [ ] 路由配置已更新
+
+---
+
+*遵循此模式保持项目一致性。参考 @project-structure.mdc 确认各类文件的实际目录位置。*
+",
+    "fileName": "feature-recipe.mdc",
+  },
+  {
+    "content": "---
+description: Project-wide conventions, tech stack, and core development principles. Always loaded.
+alwaysApply: true
+---
+
+# react-ts-app
+
+You are an expert in React, TypeScript with deep knowledge of frontend development best practices.
+
+## Tech Stack
+
+**Primary**: React ^18.2.0, TypeScript ^5.4.0  
+**Languages**: JavaScript, TypeScript  
+**Package Manager**: npm  
+**Frameworks**: React ^18.2.0
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Build | \`npm run build\` |
+| Lint | \`npm run lint\` |
+| Type Check | \`npm run type-check\` |
+
+## Hard Constraints
+
+- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.
+- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
+- NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
+- NEVER generate markdown documentation files — express intent through code, types, and naming.
+- Before creating files, consult @project-structure.mdc for correct location.
+- Reuse existing project tools — do not re-implement what already exists.
+- Follow the project's established patterns and conventions.
+- After writing code, run \`npm run lint\` and \`npm run type-check\` before considering the task complete.
+
+- **React**: 
+  - 使用函数组件和 Hooks，避免类组件
+  - 保持组件单一职责原则
+  - 合理使用 \`useMemo\` 和 \`useCallback\` 优化性能
+  - 使用 TypeScript 进行类型检查
+
+
+## Rule Index
+
+| Rule | Scope |
+|------|-------|
+| @code-style.mdc | Formatting and naming conventions |
+| @project-structure.mdc | Directory layout and file placement |
+| @architecture.mdc | Module structure and design patterns |
+| @custom-tools.mdc | Project-specific hooks, utils, API clients |
+| @ui-ux.mdc | UI component and UX patterns |
+| @feature-recipe.mdc | End-to-end guide for adding a new feature |
+
+",
+    "fileName": "global-rules.mdc",
+  },
+  {
+    "content": "---
+description: Consult when creating new files or directories to determine correct location and naming conventions
+alwaysApply: false
+globs: **/index.{ts,tsx,js,jsx}
+---
+
+
+# 项目结构
+
+参考: @global-rules.mdc
+
+## 📁 目录结构树
+
+项目主要目录结构：
+
+\`\`\`text
+└── src/ # 源码
+    ├── components/ # 通用组件
+    ├── hooks/ # 逻辑复用
+    └── utils/ # 工具函数
+\`\`\`
+
+
+## 📋 主要目录职能说明
+
+以下是重要目录的详细职能说明，包含文件类型、命名规范等信息：
+
+> 💡 命名规范和代码风格请参考 @code-style.mdc
+
+### \`src/components/\`
+
+**职能**: 通用组件
+
+
+### \`src/hooks/\`
+
+**职能**: 逻辑复用
+
+
+### \`src/utils/\`
+
+**职能**: 工具函数
+
+
+
+## 🎯 文件组织规范（快速参考）
+
+以下是常见文件类型的存放位置，用于快速查找：
+
+### 组件目录
+
+**位置**: \`src/components/\`
+
+**命名规范**: PascalCase
+
+
+### 工具函数目录
+
+**位置**: \`src/utils/\`
+
+**组织方式**: 按功能分类创建文件（如 \`date.ts\`, \`validation.ts\`）
+
+### Hooks 目录
+
+**位置**: \`src/hooks/\`
+
+
+## ✨ 新建文件指南
+
+### 文件位置决策表
+
+> 创建新文件时，先查此表找到正确目录，不确定则参考相似现有文件。
+
+| 要创建的文件类型 | 放到哪里 | 示例文件名 |
+|-----------------|---------|----------|
+| 组件（含页面）| \`src/components/\` | \`UserList.tsx\` |
+| 工具函数 | \`src/utils/\` | \`format.ts\`, \`validate.ts\` |
+| 自定义 Hook | \`src/hooks/\` | \`useXxx.ts\` |
+
+
+
+
+---
+*新建文件前，请参考此文件确定正确的目录位置和命名规范。*
+",
+    "fileName": "project-structure.mdc",
+  },
+  {
+    "content": "---
+description: UI component patterns and conventions for this project's UI library
+alwaysApply: false
+globs: src/components/**/*.{tsx,jsx,vue,svelte}, src/views/**/*.{tsx,jsx,vue,svelte}
+---
+
+
+# UI/UX 设计规范
+
+参考: @global-rules.mdc, @code-style.mdc
+
+## 项目 UI 方案
+
+**当前使用**: 自定义 CSS/CSS Modules
+
+### 无障碍（A11y）最低要求
+
+- 交互元素必须有 \`aria-label\` 或可见文本
+- 图标按钮加 \`title\` 属性
+- 表单字段关联 \`label\`（htmlFor）
+
+
+
+---
+
+*UI/UX 规范确保良好的用户体验和无障碍访问。*
+",
+    "fileName": "ui-ux.mdc",
+  },
+]
+`;

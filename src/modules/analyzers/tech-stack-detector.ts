@@ -264,7 +264,9 @@ export class TechStackDetector {
       primary.push(...importantDeps.map((d) => d.name));
     }
 
-    return primary.length > 0 ? primary : ["Unknown"];
+    // 未检测到任何主技术栈时返回空数组，而非 "Unknown" 占位。
+    // 空技术栈交由生成入口的护栏统一判定（拒绝生成），避免下游产出无意义的占位规则。
+    return primary;
   }
 }
 
