@@ -21,6 +21,16 @@ import {
 import { ModuleStructureAnalyzer } from '../analyzers/module-structure-analyzer.js';
 import { ModuleBusinessAnalyzer } from '../analyzers/module-business-analyzer.js';
 import { buildRuleMetadata } from '../generators/rules/rule-metadata.js';
+import { generateApiPatternsRule } from '../generators/rules/api-patterns-rule.js';
+import {
+  generateErrorHandlingRule,
+  generatePracticeBasedErrorHandling,
+  generateErrorHandlingGuidelines,
+} from '../generators/rules/error-handling-rule.js';
+import {
+  generateUIUXRule,
+  generateUIUXGuidelines,
+} from '../generators/rules/ui-ux-rule.js';
 import {
   featureExists,
   isFrontendProject,
@@ -37,7 +47,13 @@ import {
   getArchitecturePatternName,
   getModuleTypeName,
   getCategoryDisplayName,
+  formatMissingPractices,
+  detectTestFramework,
 } from '../generators/rules/rule-helpers.js';
+import {
+  generateTestingRule,
+  generateConditionalTestingRules,
+} from '../generators/rules/testing-rule.js';
 
 /**
  * 职能文件夹关键词（用于区分职能目录与业务目录）
@@ -411,7 +427,7 @@ export class RulesGenerator {
 
     // 6. 错误处理规则（按需，约 180 行）
     if (this.hasErrorHandling(context)) {
-      const errorHandlingRule = this.generateErrorHandlingRule(
+      const errorHandlingRule = generateErrorHandlingRule(
         context,
         missingPractices
       );
@@ -433,7 +449,7 @@ export class RulesGenerator {
       requirements.some((r) => r.ruleType === "ui-ux") ||
       isFrontendProject(context);
     if (needsUIUX) {
-      const uiUxRule = this.generateUIUXRule(context);
+      const uiUxRule = generateUIUXRule(context);
       rules.push(uiUxRule);
     }
 
@@ -603,10 +619,10 @@ export class RulesGenerator {
     // 11. 测试规则：仅在有测试框架或显式测试需求时生成（无框架 = 跳过，不生成空文件）
     const needsTesting = requirements.some((r) => r.ruleType === "testing");
     const hasTestingFeature = featureExists(context, "testing");
-    const hasTestFramework = this.detectTestFramework(context) !== null;
+    const hasTestFramework = detectTestFramework(context) !== null;
     const isFrontend = isFrontendProject(context);
     if (needsTesting || hasTestingFeature || hasTestFramework) {
-      const testingRule = this.generateTestingRule(context);
+      const testingRule = generateTestingRule(context);
       rules.push(testingRule);
     }
 
@@ -614,7 +630,7 @@ export class RulesGenerator {
     const hasApiClient = context.customPatterns?.apiClient?.exists;
     const hasAxiosDep = context.techStack.dependencies.some((d) => d.name === "axios");
     if (isFrontend && (hasApiClient || hasAxiosDep)) {
-      const apiPatternsRule = this.generateApiPatternsRule(context);
+      const apiPatternsRule = generateApiPatternsRule(context);
       rules.push(apiPatternsRule);
     }
 
@@ -722,7 +738,7 @@ ${
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
-${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || this.detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -758,7 +774,7 @@ ${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, 
     // 补充缺失的最佳实践
     const codeStylePractices =
       missingPractices?.filter((p) => p.category === "code-style") || [];
-    const additionalPractices = this.formatMissingPractices(codeStylePractices);
+    const additionalPractices = formatMissingPractices(codeStylePractices);
 
     const content =
       metadata +
@@ -1736,7 +1752,7 @@ ${this.generateDetailedStructureContent(context)}
     // 补充缺失的最佳实践
     const architecturePractices =
       missingPractices?.filter((p) => p.category === "architecture") || [];
-    const additionalPractices = this.formatMissingPractices(
+    const additionalPractices = formatMissingPractices(
       architecturePractices
     );
 
@@ -1841,59 +1857,6 @@ ${this.generateCustomToolsRules(context)}
   }
 
   /**
-   * v1.3: 生成错误处理规则（约 180 行）
-   */
-  private generateErrorHandlingRule(
-    context: RuleGenerationContext,
-    missingPractices?: any[]
-  ): CursorRule {
-    const langGlobsForErr = getLanguageGlobs(context);
-    const metadata = buildRuleMetadata(
-      "错误处理规范",
-      "Error handling patterns, logging, and recovery strategies based on project conventions",
-      80,
-      context.techStack.primary,
-      ["error-handling", "practice"],
-      "practice",
-      ["global-rules", "custom-tools"],
-      { globs: langGlobsForErr }
-    );
-
-    // 补充缺失的最佳实践
-    const errorHandlingPractices =
-      missingPractices?.filter((p) => p.category === "error-handling") || [];
-    const additionalPractices = this.formatMissingPractices(
-      errorHandlingPractices
-    );
-
-    const content =
-      metadata +
-      `
-# 错误处理规范
-
-参考: @global-rules.mdc, @custom-tools.mdc
-
-${this.generatePracticeBasedErrorHandling(context)}
-
-${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n` : ""}
-
----
-
-*遵循项目现有的错误处理模式，保持一致性。*
-`;
-
-    return {
-      scope: "specialized",
-      modulePath: context.projectPath,
-      content,
-      fileName: "error-handling.mdc",
-      priority: 80,
-      type: "practice",
-      depends: ["global-rules", "custom-tools"],
-    };
-  }
-
-  /**
    * v1.3: 生成状态管理规则（约 200 行）
    */
   private async generateStateManagementRule(
@@ -1943,51 +1906,6 @@ ${this.generateStateManagementContent(context, stateLib?.name, mobxPattern)}
       priority: 85,
       type: "practice",
       depends: ["global-rules"],
-    };
-  }
-
-  /**
-   * v1.3: 生成 UI/UX 规则（约 250 行）
-   */
-  private generateUIUXRule(context: RuleGenerationContext): CursorRule {
-    // 收窄到 components/views 目录，避免所有 tsx 文件都触发
-    const org = context.fileOrganization;
-    const compDir = org?.componentLocation?.[0]?.replace(/\/$/, '') || 'src/components';
-    const viewDir = 'src/views';
-    const uiGlobs = `${compDir}/**/*.{tsx,jsx,vue,svelte}, ${viewDir}/**/*.{tsx,jsx,vue,svelte}`;
-    const metadata = buildRuleMetadata(
-      "UI/UX 设计规范",
-      "UI component patterns and conventions for this project's UI library",
-      75,
-      context.techStack.primary,
-      ["ui-ux", "frontend"],
-      "guideline",
-      ["global-rules", "code-style"],
-      { globs: uiGlobs }
-    );
-
-    const content =
-      metadata +
-      `
-# UI/UX 设计规范
-
-参考: @global-rules.mdc, @code-style.mdc
-
-${this.generateUIUXGuidelines(context)}
-
----
-
-*UI/UX 规范确保良好的用户体验和无障碍访问。*
-`;
-
-    return {
-      scope: "specialized",
-      modulePath: context.projectPath,
-      content,
-      fileName: "ui-ux.mdc",
-      priority: 75,
-      type: "guideline",
-      depends: ["global-rules", "code-style"],
     };
   }
 
@@ -2459,160 +2377,6 @@ pages/
   }
 
   /**
-   * v1.3: 生成测试规则（约 220 行或简短）
-   */
-  private generateTestingRule(context: RuleGenerationContext): CursorRule {
-    const hasTests = featureExists(context, "testing");
-
-    const testGlobs = "**/*.{test,spec}.{ts,tsx,js,jsx}";
-    const metadata = buildRuleMetadata(
-      "测试规范",
-      hasTests ? "Testing patterns, organization, and best practices" : "Testing recommendations for the project",
-      70,
-      context.techStack.primary,
-      ["testing"],
-      hasTests ? "practice" : "suggestion",
-      ["global-rules"],
-      { globs: testGlobs }
-    );
-
-    const testFramework = this.detectTestFramework(context);
-    const testCmd = context.projectConfig?.commands?.test;
-    const frameworkSection = testFramework
-      ? `**Framework**: ${testFramework.name}${testFramework.version ? ` ${testFramework.version}` : ""}\n`
-      : "";
-    const cmdSection = testCmd ? `**Run tests**: \`${testCmd}\`\n` : "";
-
-    const content =
-      metadata +
-      `
-# Testing
-
-${frameworkSection}${cmdSection}
-
-${this.generateConditionalTestingRules(context)}
-`;
-
-    return {
-      scope: "specialized",
-      modulePath: context.projectPath,
-      content,
-      fileName: "testing.mdc",
-      priority: 70,
-      type: hasTests ? "practice" : "suggestion",
-      depends: ["global-rules"],
-    };
-  }
-
-  /**
-   * API Patterns — 基于项目实际 API 客户端生成调用规范
-   */
-  private generateApiPatternsRule(context: RuleGenerationContext): CursorRule {
-    const org = context.fileOrganization;
-    const apiClient = context.customPatterns?.apiClient;
-    const apiDir = org?.apiLocation?.[0] || 'src/api';
-    const apiAlias = apiDir.replace(/^src\//, '@/');
-    const isTS = context.techStack.languages.includes("TypeScript");
-    const ext = isTS ? "ts" : "js";
-    const clientName = apiClient?.name || "apiClient";
-    const clientPath = apiClient?.filePath
-      ? apiClient.filePath.replace(/^.*?src\//, 'src/')
-      : `${apiDir}/index.${ext}`;
-    const clientImportAlias = clientPath.replace(/^src\//, '@/').replace(/\.(ts|js)$/, '');
-    const hasAuth = apiClient?.hasAuth ?? false;
-    const hasErrorHandling = apiClient?.hasErrorHandling ?? false;
-
-    const globs = `${apiDir}/**`;
-    const metadata = buildRuleMetadata(
-      "API 调用规范",
-      "How to call backend APIs: file location, client usage, error handling",
-      80,
-      context.techStack.primary,
-      ["api", "http"],
-      "practice",
-      ["global-rules"],
-      { globs }
-    );
-
-    const content = metadata + `
-# API 调用规范
-
-## 核心约定
-
-- 所有 API 函数集中放在 \`${apiDir}/\` 目录下，按业务模块分文件
-- **禁止**在组件/Store 中直接 \`fetch\`/\`axios.get\`，必须通过封装函数
-- 每个函数只做一件事：请求 + 返回数据（副作用在调用方处理）
-
-## HTTP 客户端
-
-项目已封装 \`${clientName}\`，位于 \`${clientPath}\`：
-
-\`\`\`${ext}
-import { ${clientName} } from "${clientImportAlias}";
-\`\`\`
-
-${hasAuth ? `> ✅ 已内置鉴权逻辑（Token 自动注入），调用方无需手动设置 Authorization header。\n` : ""}
-${hasErrorHandling ? `> ✅ 已内置统一错误处理（非 2xx 响应会统一弹出提示或跳转登录）。\n` : ""}
-
-## 标准函数结构
-
-\`\`\`${ext}
-// ${apiDir}/feature.${ext}
-import { ${clientName} } from "${clientImportAlias}";
-${isTS ? `import type { FeatureItem, FeatureListParams } from "@/interface/feature";\n` : ""}
-export async function fetchFeatureList(${isTS ? "params: FeatureListParams" : "params"}): Promise<${isTS ? "FeatureItem[]" : "any"}> {
-  const { data } = await ${clientName}.get("/api/features", { params });
-  return data;
-}
-
-export async function createFeature(${isTS ? "payload: Partial<FeatureItem>" : "payload"}): Promise<${isTS ? "FeatureItem" : "any"}> {
-  const { data } = await ${clientName}.post("/api/features", payload);
-  return data;
-}
-\`\`\`
-
-## Do / Don't
-
-\`\`\`${ext}
-// ❌ 组件内直接 fetch
-useEffect(() => {
-  axios.get("/api/features").then(setList);
-}, []);
-
-// ✅ 调用封装函数
-useEffect(() => {
-  fetchFeatureList({ page: 1, pageSize: 20 }).then(setList);
-}, []);
-\`\`\`
-
-${!hasErrorHandling ? `## 错误处理
-
-每个 API 函数必须处理异常，或在调用方 try-catch：
-
-\`\`\`${ext}
-try {
-  const list = await fetchFeatureList(params);
-  setList(list);
-} catch (error) {
-  message.error("加载失败");
-}
-\`\`\`
-
-参考: @error-handling.mdc` : ""}
-`;
-
-    return {
-      scope: "specialized",
-      modulePath: context.projectPath,
-      content,
-      fileName: "api-patterns.mdc",
-      priority: 80,
-      type: "practice",
-      depends: ["global-rules"],
-    };
-  }
-
-  /**
    * Feature Recipe — 端到端功能创建指南
    * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
    */
@@ -2871,37 +2635,6 @@ ${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] 
     };
   }
 
-  private detectTestFramework(context: RuleGenerationContext): { name: string; version?: string } | null {
-    const deps = context.techStack.dependencies || [];
-    const testLibs = [
-      { pkg: "vitest", name: "Vitest" },
-      { pkg: "jest", name: "Jest" },
-      { pkg: "mocha", name: "Mocha" },
-      { pkg: "@testing-library/react", name: "React Testing Library" },
-      { pkg: "cypress", name: "Cypress" },
-      { pkg: "playwright", name: "Playwright" },
-    ];
-    for (const lib of testLibs) {
-      const dep = deps.find(d => d.name === lib.pkg);
-      if (dep) return { name: lib.name, version: dep.version };
-    }
-    return null;
-  }
-
-  private generateMockExample(context: RuleGenerationContext): string {
-    const fw = this.detectTestFramework(context);
-    const mockFn = fw?.name === "Vitest" ? "vi.fn" : "jest.fn";
-    return `\`\`\`typescript
-// ✅ Good mock usage
-const mockApiClient = {
-  fetchUser: ${mockFn}().mockResolvedValue({ id: 1, name: 'John' })
-};
-
-// ❌ Over-mocking
-const mockEverything = ${mockFn}(() => ${mockFn}(() => ${mockFn}()));
-\`\`\``;
-  }
-
   /**
    * 生成项目结构描述
    */
@@ -3027,15 +2760,15 @@ ${
 
     // 添加错误处理指南（使用基于项目实践的版本）
     guidelines += context.projectPractice
-      ? this.generatePracticeBasedErrorHandling(context)
-      : this.generateErrorHandlingGuidelines(context);
+      ? generatePracticeBasedErrorHandling(context)
+      : generateErrorHandlingGuidelines(context);
 
     // 添加测试相关指南（按需生成）
-    guidelines += this.generateConditionalTestingRules(context);
+      guidelines += generateConditionalTestingRules(context);
 
     // 添加 UI/UX 规范（前端项目）
     if (isFrontendProject(context)) {
-      guidelines += this.generateUIUXGuidelines(context);
+      guidelines += generateUIUXGuidelines(context);
     }
 
     // 添加 API 相关指南
@@ -3053,97 +2786,6 @@ ${
     return guidelines || "遵循项目现有代码风格和约定。";
   }
 
-  /**
-   * 生成 UI/UX 规范
-   */
-  private generateUIUXGuidelines(context: RuleGenerationContext): string {
-    const deps = context.techStack.dependencies || [];
-    const hasAntd = deps.some((d) => d.name === "antd" || d.name === "@ant-design/pro-components");
-    const hasMui = deps.some((d) => d.name === "@mui/material" || d.name === "@material-ui/core");
-    const hasShadcn = deps.some((d) => d.name === "@radix-ui/react-dialog" || d.name === "shadcn-ui");
-    const hasStyledComponents = deps.some((d) => d.name === "styled-components");
-    const hasTailwind = deps.some((d) => d.name === "tailwindcss");
-    const hasLess = deps.some((d) => d.name === "less");
-    const isTS = context.techStack.languages.includes("TypeScript");
-
-    // 确定样式方案描述
-    let styleApproach = "";
-    if (hasAntd && hasStyledComponents) {
-      styleApproach = "antd 组件 + styled-components 自定义样式";
-    } else if (hasAntd && hasLess) {
-      styleApproach = "antd 组件 + Less 变量覆盖";
-    } else if (hasAntd) {
-      styleApproach = "antd 组件库";
-    } else if (hasMui) {
-      styleApproach = "Material UI";
-    } else if (hasShadcn) {
-      styleApproach = "shadcn/ui + Radix UI";
-    } else if (hasTailwind) {
-      styleApproach = "Tailwind CSS";
-    } else {
-      styleApproach = "自定义 CSS/CSS Modules";
-    }
-
-    let content = `## 项目 UI 方案\n\n`;
-    content += `**当前使用**: ${styleApproach}\n\n`;
-
-    if (hasAntd) {
-      content += `### Antd 使用约定\n\n`;
-      content += `**Do ✅**\n`;
-      content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
-      content += `// 优先使用 antd 原生 API，不要重复封装已有能力\n`;
-      content += `import { Table, Form, Modal, Button, Space } from "antd";\n\n`;
-      content += `// Form 使用 Form.useForm()，不要直接 ref\n`;
-      content += `const [form] = Form.useForm();\n\n`;
-      content += `// Table 分页统一走 onChange 回调\n`;
-      content += `<Table\n`;
-      content += `  dataSource={data}\n`;
-      content += `  columns={columns}\n`;
-      content += `  pagination={{ current, pageSize, total, onChange: handlePageChange }}\n`;
-      content += `/>;\n`;
-      content += `\`\`\`\n\n`;
-
-      content += `**Don't ❌**\n`;
-      content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
-      content += `// 不要用原生 <button> 替代 antd Button\n`;
-      content += `<button onClick={…}>提交</button>\n\n`;
-      content += `// 不要重新实现 antd 已有的 Modal.confirm / message.error\n`;
-      content += `const MyAlert = () => <div className="alert">{msg}</div>;\n`;
-      content += `\`\`\`\n\n`;
-
-      content += `### 常用场景\n\n`;
-      content += `| 场景 | 使用组件 |\n`;
-      content += `|------|---------|\n`;
-      content += `| 数据列表 | \`Table\` + \`useTable\` hook |\n`;
-      content += `| 表单提交 | \`Form\` + \`Form.useForm()\` |\n`;
-      content += `| 确认弹窗 | \`Modal.confirm()\` |\n`;
-      content += `| 操作反馈 | \`message.success/error()\` |\n`;
-      content += `| 加载状态 | \`Spin\` 或 Table \`loading\` prop |\n\n`;
-    }
-
-    if (hasStyledComponents) {
-      content += `### Styled-components 约定\n\n`;
-      content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
-      content += `// 命名：S + PascalCase（避免与组件名冲突）\n`;
-      content += `const SWrapper = styled.div\`\n`;
-      content += `  padding: 16px;\n`;
-      content += `  background: \${({ theme }) => theme.colors.background};\n`;
-      content += `\`;\n\n`;
-      content += `// 不要内联大块 CSS，抽出命名 styled 组件\n`;
-      content += `\`\`\`\n\n`;
-    } else if (hasTailwind) {
-      content += `### Tailwind 约定\n\n`;
-      content += `- 复杂样式组合提取为 \`@apply\` 或 styled 组件，不要行内堆砌超过 8 个 class\n`;
-      content += `- 响应式前缀顺序：\`sm:\` → \`md:\` → \`lg:\`\n\n`;
-    }
-
-    content += `### 无障碍（A11y）最低要求\n\n`;
-    content += `- 交互元素必须有 \`aria-label\` 或可见文本\n`;
-    content += `- 图标按钮加 \`title\` 属性\n`;
-    content += `- 表单字段关联 \`label\`（htmlFor）\n\n`;
-
-    return content;
-  }
   private generateCodeStyleGuidelines(context: RuleGenerationContext): string {
     let style = `## 通用规范
 
@@ -3314,87 +2956,6 @@ ${this.generateFileNamingRules(context)}
 - ❌ 缩写和简写（除非是广为人知的，如 \`URL\`, \`HTTP\`）
 - ❌ 匈牙利命名法（如 \`strName\`, \`intCount\`）
 - ❌ 无意义的名称（如 \`data\`, \`temp\`, \`foo\`, \`bar\`）
-
-`;
-  }
-
-  /**
-   * 生成错误处理指南
-   */
-  private generateErrorHandlingGuidelines(
-    context: RuleGenerationContext
-  ): string {
-    const isJavaScript =
-      context.techStack.languages.includes("JavaScript") ||
-      context.techStack.languages.includes("TypeScript");
-    const isPython = context.techStack.languages.includes("Python");
-
-    // v1.9: 精简版，避免与 error-handling.mdc 重复
-    return `## 错误处理规范
-
-> 💡 **详细规范**: 完整的错误处理指南请参考 **@error-handling.mdc**
-
-### 基本原则
-- 预测可能的错误并主动处理
-- 提供有意义的错误信息
-- 区分可恢复和不可恢复的错误
-- 记录错误以便调试
-
-### 快速参考
-- **Try-Catch**: 用于同步代码和 async/await
-- **自定义错误**: 创建特定的错误类型以便精确处理
-- **错误日志**: 使用适当的日志级别，包含上下文信息
-- **用户消息**: 提供友好的错误提示，不暴露技术细节
-
-`;
-  }
-
-  /**
-   * 生成测试指南（精简版）
-   * v1.9: 移除详细测试示例，避免与 testing.mdc 重复
-   */
-  private generateTestingGuidelines(context: RuleGenerationContext): string {
-    return `## 测试规范
-
-> 💡 **详细规范**: 完整的测试指南请参考 **@testing.mdc**
-
-### 测试原则
-- **独立性**：每个测试应该独立运行，不依赖其他测试
-- **可重复性**：测试结果应该是确定的，不受运行顺序影响
-- **快速执行**：单元测试应该快速完成
-- **清晰性**：测试应该清楚地表达意图
-
-### 快速参考
-- **测试文件**: \`ComponentName.test.ts\` 或 \`ComponentName.spec.ts\`
-- **AAA 模式**: Arrange（准备）→ Act（执行）→ Assert（验证）
-- **覆盖率目标**: 核心业务逻辑达到 80%+ 覆盖率
-- **优先级**:
-  1. 关键业务逻辑
-  2. 边界情况和错误处理
-  3. 复杂的算法和数据转换
-- **不需要测试**：
-  - 简单的 getter/setter
-  - 第三方库的功能
-  - 纯 UI 布局（可以用 E2E 测试）
-
-### Mock and Stub
-- Use mocks to isolate external dependencies
-- Do not over-mock; keep tests meaningful
-- Create mocks for API calls, database operations, and other I/O
-
-${this.generateMockExample(context)}
-
-### 测试类型
-- **单元测试**：测试单个函数或类的行为
-- **集成测试**：测试多个模块的协作
-- **E2E 测试**：测试完整的用户流程
-
-### 最佳实践
-- 一个测试只验证一个行为
-- 使用有意义的断言消息
-- 测试失败时应该清楚地指出问题所在
-- 定期运行测试，不要让测试过时
-- 失败的测试应该立即修复
 
 `;
   }
@@ -4292,26 +3853,6 @@ ${bestPractices}
    * 格式化缺失的最佳实践（v1.5）
    * 将项目已使用但未声明的实践格式化为规则内容
    */
-  private formatMissingPractices(practices: any[]): string {
-    if (!practices || practices.length === 0) {
-      return "";
-    }
-
-    let content = "";
-    for (const practice of practices) {
-      content += `### ${practice.title}\n\n`;
-      content += `${practice.content}\n\n`;
-
-      if (practice.techStack && practice.techStack.length > 0) {
-        content += `**相关技术栈**: ${practice.techStack.join(", ")}\n\n`;
-      }
-
-      content += "---\n\n";
-    }
-
-    return content.trim();
-  }
-
   /**
    * 识别项目使用但规则中没有的技术栈（v1.5）
    */
@@ -4638,65 +4179,6 @@ ${bestPractices}
       rules += `import { Component } from '../../../Component';\n`;
       rules += `\`\`\`\n\n`;
     }
-
-    return rules;
-  }
-
-  /**
-   * 生成基于项目实践的错误处理规则（v1.2 - 三段式）
-   */
-  generatePracticeBasedErrorHandling(context: RuleGenerationContext): string {
-    if (!context.projectPractice?.errorHandling) {
-      return this.generateErrorHandlingGuidelines(context);
-    }
-
-    const eh = context.projectPractice.errorHandling;
-    const isTS = context.techStack.languages.includes("TypeScript");
-    const logMethod = eh.loggingMethod === "logger-library" && eh.loggerLibrary
-      ? eh.loggerLibrary
-      : "console";
-    const logCall = logMethod === "console" ? "console.error" : `${logMethod}.error`;
-
-    let rules = `## 项目错误处理规范\n\n`;
-
-    if (eh.type === "none" || eh.frequency === 0) {
-      rules += `⚠️ 项目尚未建立系统的错误处理模式，请遵循以下约定。\n\n`;
-    } else {
-      rules += `项目主要使用 **${
-        eh.type === "try-catch" ? "try-catch" : "Promise.catch()"
-      }** 处理错误`;
-      if (eh.customErrorTypes.length > 0) {
-        rules += `，自定义错误类型：${eh.customErrorTypes.map((t: string) => `\`${t}\``).join("、")}`;
-      }
-      rules += `。\n\n`;
-    }
-
-    rules += `### Do ✅\n\n`;
-    rules += `\`\`\`${isTS ? "typescript" : "javascript"}\n`;
-    rules += `// 异步操作：捕获并记录，向上层暴露有意义的错误\n`;
-    rules += `async function fetchData(id: string) {\n`;
-    rules += `  try {\n`;
-    rules += `    return await api.get(id);\n`;
-    rules += `  } catch (err) {\n`;
-    rules += `    ${logCall}('[fetchData] failed', { id, err });\n`;
-    rules += `    throw err; // 让调用方决定如何展示\n`;
-    rules += `  }\n`;
-    rules += `}\n`;
-    rules += `\`\`\`\n\n`;
-
-    rules += `### Don't ❌\n\n`;
-    rules += `\`\`\`${isTS ? "typescript" : "javascript"}\n`;
-    rules += `// 吞掉错误 — 导致静默失败，难以排查\n`;
-    rules += `try { await doSomething(); } catch (_) {}\n\n`;
-    rules += `// 记录但不抛出 — 上层不知道操作失败\n`;
-    rules += `try { await doSomething(); } catch (err) { ${logCall}(err); }\n`;
-    rules += `\`\`\`\n\n`;
-
-    rules += `### 规则\n\n`;
-    rules += `- **catch 块不能为空**：必须 log + re-throw 或显式处理。\n`;
-    rules += `- **日志包含上下文**：\`${logCall}('[scope]', { ...params, err })\`\n`;
-    rules += `- **区分错误类型**：业务错误（可恢复）vs 系统错误（不可恢复），后者直接 throw。\n`;
-    rules += `- **用户提示友好**：展示给用户的消息不含技术细节，记录原始错误到日志。\n`;
 
     return rules;
   }
@@ -5169,26 +4651,6 @@ ${bestPractices}
     }
 
     return content;
-  }
-
-  /**
-   * 生成按需的测试规则（v1.2）
-   */
-  generateConditionalTestingRules(context: RuleGenerationContext): string {
-    const hasTests = featureExists(context, "testing");
-
-    if (!hasTests) {
-      // 项目没有测试 - 简短提示
-      return `## 测试\n\n### 当前状态\n⚠️ 项目当前未配置测试框架\n\n如需添加测试，请参考相关技术栈的测试最佳实践。\n\n`;
-    }
-
-    // v1.9: 添加引用说明，避免重复基础规范
-    let rules = `> 💡 **基础规范**: 测试文件命名和组织规范请参考 **@code-style.mdc**\n\n`;
-
-    // 项目有测试 - 生成详细规则
-    rules += this.generateTestingGuidelines(context);
-    
-    return rules;
   }
 
 }

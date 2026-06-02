@@ -300,6 +300,52 @@ export function getModuleTypeName(type: string): string {
 }
 
 /**
+ * 检测项目使用的测试框架（基于依赖）。被 global-rules 与 testing 规则共享。
+ */
+export function detectTestFramework(
+  context: RuleGenerationContext
+): { name: string; version?: string } | null {
+  const deps = context.techStack.dependencies || [];
+  const testLibs = [
+    { pkg: "vitest", name: "Vitest" },
+    { pkg: "jest", name: "Jest" },
+    { pkg: "mocha", name: "Mocha" },
+    { pkg: "@testing-library/react", name: "React Testing Library" },
+    { pkg: "cypress", name: "Cypress" },
+    { pkg: "playwright", name: "Playwright" },
+  ];
+  for (const lib of testLibs) {
+    const dep = deps.find((d) => d.name === lib.pkg);
+    if (dep) return { name: lib.name, version: dep.version };
+  }
+  return null;
+}
+
+/**
+ * 将「项目已使用但规则中缺失的最佳实践」格式化为规则内容片段。
+ * 被 code-style / architecture / error-handling 规则共享。
+ */
+export function formatMissingPractices(practices: any[]): string {
+  if (!practices || practices.length === 0) {
+    return "";
+  }
+
+  let content = "";
+  for (const practice of practices) {
+    content += `### ${practice.title}\n\n`;
+    content += `${practice.content}\n\n`;
+
+    if (practice.techStack && practice.techStack.length > 0) {
+      content += `**相关技术栈**: ${practice.techStack.join(", ")}\n\n`;
+    }
+
+    content += "---\n\n";
+  }
+
+  return content.trim();
+}
+
+/**
  * 模块类别的展示名。
  */
 export function getCategoryDisplayName(category: string): string {
