@@ -31,6 +31,80 @@ interface Fixture {
 
 const fixtures: Fixture[] = [
   {
+    // 真实使用 antd（多个组件 import antd）→ active=Ant Design，ui-ux 输出 antd 规范
+    name: 'react-antd',
+    files: {
+      'package.json': JSON.stringify(
+        {
+          name: 'react-antd',
+          version: '1.0.0',
+          dependencies: {
+            react: '^18.2.0',
+            'react-dom': '^18.2.0',
+            antd: '^5.12.0',
+          },
+          devDependencies: { typescript: '^5.4.0' },
+          scripts: { build: 'tsc' },
+        },
+        null,
+        2
+      ),
+      'tsconfig.json': JSON.stringify(
+        { compilerOptions: { strict: true, jsx: 'react-jsx', target: 'ES2020' } },
+        null,
+        2
+      ),
+      'src/components/UserTable.tsx':
+        "import { Table, Button, Space } from 'antd';\n\n" +
+        'export const UserTable = () => (\n' +
+        '  <Space>\n' +
+        '    <Table dataSource={[]} columns={[]} />\n' +
+        '    <Button type="primary">Add</Button>\n' +
+        '  </Space>\n' +
+        ');\n',
+      'src/components/UserForm.tsx':
+        "import { Form, Input, Modal } from 'antd';\n\n" +
+        'export const UserForm = () => {\n' +
+        '  const [form] = Form.useForm();\n' +
+        '  return (\n' +
+        '    <Modal open>\n' +
+        '      <Form form={form}>\n' +
+        '        <Form.Item name="name"><Input /></Form.Item>\n' +
+        '      </Form>\n' +
+        '    </Modal>\n' +
+        '  );\n' +
+        '};\n',
+    },
+  },
+  {
+    // 前端框架但无组件目录、无 UI 库 → hasUISignal=false → 不生成 ui-ux
+    name: 'react-bare',
+    files: {
+      'package.json': JSON.stringify(
+        {
+          name: 'react-bare',
+          version: '1.0.0',
+          dependencies: { react: '^18.2.0', 'react-dom': '^18.2.0' },
+          devDependencies: { typescript: '^5.4.0' },
+          scripts: { build: 'tsc' },
+        },
+        null,
+        2
+      ),
+      'tsconfig.json': JSON.stringify(
+        { compilerOptions: { strict: true, jsx: 'react-jsx', target: 'ES2020' } },
+        null,
+        2
+      ),
+      'src/index.tsx':
+        "import { createRoot } from 'react-dom/client';\n\n" +
+        "const el = document.getElementById('root');\n" +
+        'if (el) {\n' +
+        '  createRoot(el).render(<div>Hello</div>);\n' +
+        '}\n',
+    },
+  },
+  {
     name: 'react-ts-app',
     files: {
       'package.json': JSON.stringify(

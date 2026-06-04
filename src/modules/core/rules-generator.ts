@@ -26,6 +26,7 @@ import {
   hasCustomTools,
   hasErrorHandling,
   hasStateManagement,
+  hasUISignal,
 } from '../generators/rules/rule-helpers.js';
 import { generateTestingRule } from '../generators/rules/testing-rule.js';
 import {
@@ -344,7 +345,7 @@ export class RulesGenerator {
     // 8. UI/UX 规则（按需，约 250 行）
     const needsUIUX =
       requirements.some((r) => r.ruleType === "ui-ux") ||
-      isFrontendProject(context);
+      (isFrontendProject(context) && hasUISignal(context));
     if (needsUIUX) {
       const uiUxRule = generateUIUXRule(context);
       rules.push(uiUxRule);

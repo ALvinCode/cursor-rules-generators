@@ -235,6 +235,32 @@ export interface RuleGenerationContext {
   architecturePattern?: ArchitecturePattern;
   // v1.8.1 新增：保存文件列表，用于重新分析
   files?: string[];
+  // UI 库真实使用分析（基于代码扫描，区分"安装"与"真实使用"）
+  uiLibraries?: UILibraryAnalysis;
+}
+
+/**
+ * 单个 UI 库的使用情况。
+ */
+export interface UILibraryUsage {
+  /** 展示名（如 "Ant Design"） */
+  name: string;
+  /** 命中的依赖包名（如 "antd"） */
+  pkg: string;
+  /** 含该库 import 的源文件数（使用程度的度量单位） */
+  fileCount: number;
+}
+
+/**
+ * UI 库真实使用分析结果。
+ *
+ * - `installed`：已安装的 UI 库（依赖中检测到）
+ * - `active`：经"真实使用 + 使用程度阈值"裁定后认定为项目实际使用的 UI 库
+ *   裁定规则：保留 fileCount ≥ 最大 fileCount / 3 的库（悬殊取主库，接近则都算）
+ */
+export interface UILibraryAnalysis {
+  installed: UILibraryUsage[];
+  active: UILibraryUsage[];
 }
 
 /**

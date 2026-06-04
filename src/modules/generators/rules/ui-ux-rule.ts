@@ -13,11 +13,16 @@ import { buildRuleMetadata } from "./rule-metadata.js";
  */
 export function generateUIUXGuidelines(context: RuleGenerationContext): string {
   const deps = context.techStack.dependencies || [];
-  const hasAntd = deps.some((d) => d.name === "antd" || d.name === "@ant-design/pro-components");
-  const hasMui = deps.some((d) => d.name === "@mui/material" || d.name === "@material-ui/core");
-  const hasShadcn = deps.some((d) => d.name === "@radix-ui/react-dialog" || d.name === "shadcn-ui");
-  const hasStyledComponents = deps.some((d) => d.name === "styled-components");
-  const hasTailwind = deps.some((d) => d.name === "tailwindcss");
+  // 基于"真实使用"的 UI 库（代码扫描裁定）而非仅安装，避免输出未实际使用的库规范
+  const activeUINames = new Set(
+    (context.uiLibraries?.active ?? []).map((l) => l.name)
+  );
+  const hasAntd = activeUINames.has("Ant Design");
+  const hasMui = activeUINames.has("Material UI");
+  const hasShadcn = activeUINames.has("shadcn/ui (Radix)");
+  const hasStyledComponents = activeUINames.has("styled-components");
+  const hasTailwind = activeUINames.has("Tailwind CSS");
+  // Less 是 CSS 预处理器（非组件库），仍按安装检测作为辅助样式信息
   const hasLess = deps.some((d) => d.name === "less");
   const isTS = context.techStack.languages.includes("TypeScript");
 

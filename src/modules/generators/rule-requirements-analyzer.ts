@@ -1,4 +1,4 @@
-import { Dependency, RuleGenerationContext, TechStack } from '../../types.js';
+import { Dependency, RuleGenerationContext } from '../../types.js';
 import { logger } from '../../utils/logger.js';
 
 /**
@@ -189,25 +189,20 @@ export class RuleRequirementsAnalyzer {
     requirements: RuleRequirement[],
     context: RuleGenerationContext
   ): void {
-    const uiDeps = this.findUIFrameworkDependencies(
-      context.techStack.dependencies
-    );
-    const hasUIFiles =
-      context.techStack.frameworks.some((f) =>
-        ["React", "Vue", "Angular", "Svelte"].includes(f)
-      ) || context.codeFeatures["custom-components"];
+    // 唯一判据：项目内真实使用的 UI 类依赖（基于代码扫描裁定）。
+    // 不以前端框架或组件目录作为判据 —— 框架存在不代表使用了 UI 库，
+    // 组件可能是业务组件而非 UI 组件。
+    const activeUI = context.uiLibraries?.active ?? [];
 
-    if (uiDeps.length > 0 || hasUIFiles) {
+    if (activeUI.length > 0) {
       requirements.push({
         ruleType: "ui-ux",
         ruleFileName: "ui-ux.mdc",
         priority: 75,
-        reason: hasUIFiles
-          ? `检测到 UI 框架文件结构`
-          : `检测到 UI 框架依赖：${uiDeps.map((d) => d.name).join(", ")}`,
-        detectedFrom: hasUIFiles ? "file-structure" : "dependency",
-        confidence: hasUIFiles ? "high" : "medium",
-        dependencies: uiDeps.map((d) => d.name),
+        reason: `检测到真实使用的 UI 库：${activeUI.map((l) => l.name).join(", ")}`,
+        detectedFrom: "dependency",
+        confidence: "high",
+        dependencies: activeUI.map((l) => l.pkg),
       });
     }
   }
@@ -424,21 +419,6 @@ export class RuleRequirementsAnalyzer {
 
     return dependencies.filter((dep) =>
       stateKeywords.some((keyword) =>
-        dep.name.toLowerCase().includes(keyword.toLowerCase())
-      )
-    );
-  }
-
-  /**
-   * 查找 UI 框架依赖
-   */
-  private findUIFrameworkDependencies(
-    dependencies: Dependency[]
-  ): Dependency[] {
-    const uiKeywords = ["react", "vue", "angular", "svelte", "preact", "solid"];
-
-    return dependencies.filter((dep) =>
-      uiKeywords.some((keyword) =>
         dep.name.toLowerCase().includes(keyword.toLowerCase())
       )
     );

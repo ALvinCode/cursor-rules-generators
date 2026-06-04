@@ -1007,6 +1007,7 @@ class CursorRulesGeneratorsServer {
         frontendRouter,
         backendRouter,
         files, // v1.8.1: 保存文件列表，用于可能的重新分析
+        uiLibraries: analysisContext.uiLibraries,
       },
       webSearchResults
     );

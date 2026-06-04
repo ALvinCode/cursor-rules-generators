@@ -20,6 +20,7 @@ import { CustomPatternDetector } from '../analyzers/custom-pattern-detector.js';
 import { FileStructureLearner } from '../analyzers/file-structure-learner.js';
 import { DeepDirectoryAnalyzer } from '../analyzers/deep-directory-analyzer.js';
 import { RouterDetector } from '../analyzers/router-detector.js';
+import { UILibraryDetector } from '../analyzers/ui-library-detector.js';
 import { Context7Integration } from '../integrations/context7-integration.js';
 import { ConsistencyChecker } from '../validators/consistency-checker.js';
 import { logger } from '../../utils/logger.js';
@@ -40,6 +41,7 @@ export type AnalysisStage =
   | 'project-config'
   | 'practices'
   | 'custom-patterns'
+  | 'ui-libraries'
   | 'file-organization'
   | 'deep-directory'
   | 'architecture-pattern'
@@ -89,6 +91,7 @@ const ALL_STAGES: AnalysisStage[] = [
   'project-config',
   'practices',
   'custom-patterns',
+  'ui-libraries',
   'file-organization',
   'deep-directory',
   'architecture-pattern',
@@ -105,6 +108,7 @@ const OPTIONAL_STAGES: Record<AnalysisStage, keyof AnalysisPipelineOptions | nul
   'project-config': null,
   'practices': null,
   'custom-patterns': null,
+  'ui-libraries': null,
   'file-organization': null,
   'deep-directory': null,
   'architecture-pattern': null,
@@ -124,6 +128,7 @@ export class AnalysisPipeline {
   private fileStructureLearner = new FileStructureLearner();
   private deepDirectoryAnalyzer = new DeepDirectoryAnalyzer();
   private routerDetector = new RouterDetector();
+  private uiLibraryDetector = new UILibraryDetector();
   private context7Integration = new Context7Integration();
   private consistencyChecker = new ConsistencyChecker();
 
@@ -225,6 +230,20 @@ export class AnalysisPipeline {
     const customPatterns = { customHooks, customUtils, apiClient };
     emit('custom-patterns', '识别自定义模式', [
       `发现 ${customHooks.length} 个 Hooks、${customUtils.length} 个工具函数`,
+    ]);
+
+    // 7.5) UI 库真实使用分析（安装 + 代码扫描 + 使用程度裁定）
+    const uiLibraries = await this.uiLibraryDetector.detect(
+      projectPath,
+      files,
+      techStack.dependencies
+    );
+    emit('ui-libraries', '分析 UI 库使用', [
+      uiLibraries.active.length
+        ? `真实使用：${uiLibraries.active.map((l) => l.name).join('，')}`
+        : uiLibraries.installed.length
+          ? '已安装 UI 库但未检测到真实使用'
+          : '未检测到 UI 库',
     ]);
 
     // 8) 文件组织
@@ -388,6 +407,7 @@ export class AnalysisPipeline {
       frontendRouter,
       backendRouter,
       files,
+      uiLibraries,
     };
 
     return { context, consistencyReport };

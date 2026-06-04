@@ -64,6 +64,16 @@ export function hasStateManagement(context: RuleGenerationContext): boolean {
 }
 
 /**
+ * 是否存在 UI 信号，用于决定是否生成 ui-ux 规则。
+ *
+ * 唯一判据：项目内真实使用的 UI 类依赖（基于代码扫描裁定，非仅安装）。
+ * 不以组件目录作为判据 —— 组件可能是业务组件而非 UI 组件，存在性不代表使用了 UI 库。
+ */
+export function hasUISignal(context: RuleGenerationContext): boolean {
+  return (context.uiLibraries?.active ?? []).length > 0;
+}
+
+/**
  * 是否为前端项目（基于已识别的前端框架）。
  */
 export function isFrontendProject(context: RuleGenerationContext): boolean {
