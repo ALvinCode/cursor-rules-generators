@@ -18,8 +18,6 @@ import { SuggestionCollector } from '../generators/suggestion-collector.js';
 import {
     findBestTechStackMatches, MultiCategoryMatch, TechStackMatch
 } from '../generators/tech-stack-matcher.js';
-import { ModuleStructureAnalyzer } from '../analyzers/module-structure-analyzer.js';
-import { ModuleBusinessAnalyzer } from '../analyzers/module-business-analyzer.js';
 import { buildRuleMetadata } from '../generators/rules/rule-metadata.js';
 import { generateApiPatternsRule } from '../generators/rules/api-patterns-rule.js';
 import {
@@ -63,6 +61,8 @@ import {
   generateProjectStructureRule,
   generateFallbackProjectStructureRule,
 } from '../generators/rules/structure-rule.js';
+import { generateCodeStyleRule } from '../generators/rules/code-style-rule.js';
+import { generateModuleOverviewRule } from '../generators/rules/module-rule.js';
 
 /**
  * 规则生成引擎
@@ -76,17 +76,12 @@ export class RulesGenerator {
   private bestPracticeComparator: BestPracticeComparator;
   private webSearcher: BestPracticeWebSearcher;
   private requirementsAnalyzer: RuleRequirementsAnalyzer;
-  private moduleStructureAnalyzer: ModuleStructureAnalyzer;
-  private moduleBusinessAnalyzer: ModuleBusinessAnalyzer;
-
   constructor() {
     this.suggestionCollector = new SuggestionCollector();
     this.bestPracticeExtractor = new BestPracticeExtractor();
     this.bestPracticeComparator = new BestPracticeComparator();
     this.webSearcher = new BestPracticeWebSearcher();
     this.requirementsAnalyzer = new RuleRequirementsAnalyzer();
-    this.moduleStructureAnalyzer = new ModuleStructureAnalyzer();
-    this.moduleBusinessAnalyzer = new ModuleBusinessAnalyzer();
   }
 
   /**
@@ -320,7 +315,7 @@ export class RulesGenerator {
     rules.push(globalRule);
 
     // 2. 代码风格规则（必需，约 200 行）
-    const codeStyleRule = this.generateCodeStyleRule(context, missingPractices);
+    const codeStyleRule = generateCodeStyleRule(context, missingPractices);
     rules.push(codeStyleRule);
 
     // 3. 项目结构规则（v1.8 新增，必需，约 300 行）
@@ -566,7 +561,7 @@ export class RulesGenerator {
     if (context.includeModuleRules && context.modules.length > 1) {
       for (const module of context.modules) {
         try {
-        const moduleRule = await this.generateModuleOverviewRule(context, module);
+        const moduleRule = await generateModuleOverviewRule(context, module);
         rules.push(moduleRule);
         } catch (error) {
           logger.error(`生成模块规则失败: ${module.name}`, error);
@@ -670,78 +665,6 @@ ${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, 
       fileName: "global-rules.mdc",
       priority: 100,
       type: "overview",
-    };
-  }
-
-  /**
-   * v1.3: 生成代码风格规则（约 200 行）
-   * v1.5: 补充缺失的最佳实践
-   */
-  private generateCodeStyleRule(
-    context: RuleGenerationContext,
-    missingPractices?: any[]
-  ): CursorRule {
-    const langGlobs = getLanguageGlobs(context);
-    const metadata = buildRuleMetadata(
-      "代码风格规范",
-      "Code style, formatting, and naming conventions derived from project config",
-      90,
-      context.techStack.primary,
-      ["style", "formatting"],
-      "guideline",
-      ["global-rules"],
-      { globs: langGlobs }
-    );
-
-    // 补充缺失的最佳实践
-    const codeStylePractices =
-      missingPractices?.filter((p) => p.category === "code-style") || [];
-    const additionalPractices = formatMissingPractices(codeStylePractices);
-
-    const content =
-      metadata +
-      `
-# Code Style
-
-${
-  context.projectConfig
-    ? this.generateConfigBasedStyleRules(context)
-    : this.generateCodeStyleGuidelines(context)
-}
-
-## Do / Don't
-
-\`\`\`typescript
-// DON'T: use any — 失去类型保护
-function process(data: any) { return data.value; }
-
-// DO: 使用精确类型
-function process(data: ProcessInput): ProcessOutput {
-  return data.value;
-}
-\`\`\`
-
-\`\`\`typescript
-// DON'T: 隐式类型 + 可变默认
-var count = 0;
-
-// DO: 显式类型 + 不可变优先
-const count: number = 0;
-\`\`\`
-
-> 错误处理规范请参考 **@error-handling.mdc**
-
-${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}
-`;
-
-    return {
-      scope: "specialized",
-      modulePath: context.projectPath,
-      content,
-      fileName: "code-style.mdc",
-      priority: 90,
-      type: "guideline",
-      depends: ["global-rules"],
     };
   }
 
@@ -1192,211 +1115,6 @@ ${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] 
     return guidelines || "遵循项目现有代码风格和约定。";
   }
 
-  private generateCodeStyleGuidelines(context: RuleGenerationContext): string {
-    let style = `## 通用规范
-
-- 使用有意义的变量和函数名
-- 保持函数简短，单一职责
-- 添加必要的注释，解释"为什么"而非"是什么"
-- 保持代码格式一致
-
-`;
-
-    // 根据语言添加特定风格
-    if (
-      context.techStack.languages.includes("JavaScript") ||
-      context.techStack.languages.includes("TypeScript")
-    ) {
-      style += this.generateJavaScriptStyleGuide(context);
-    }
-
-    if (context.techStack.languages.includes("Python")) {
-      style += this.generatePythonStyleGuide();
-    }
-
-    // 添加格式化和命名约定
-    style += this.generateFormattingRules(context);
-    style += this.generateNamingConventions(context);
-
-    return style;
-  }
-
-  /**
-   * 生成 JavaScript/TypeScript 风格指南
-   */
-  private generateJavaScriptStyleGuide(context: RuleGenerationContext): string {
-    const isTypeScript = context.techStack.languages.includes("TypeScript");
-
-    return `## JavaScript/TypeScript 代码风格
-
-### 基本规范
-- 使用 \`const\` 和 \`let\`，避免 \`var\`
-- 优先使用箭头函数
-- 使用模板字符串而非字符串拼接
-- 使用解构赋值简化代码
-- 使用 async/await 处理异步操作
-
-### 格式化规则
-- **字符串**：优先使用单引号 \`'string'\`，除非需要插值则使用反引号 \`\\\`template\\\`\`
-- **分号**：保持一致（推荐使用分号）
-- **行长度**：限制每行最多 100 个字符
-- **缩进**：使用 2 个空格（或根据项目配置）
-- **尾随逗号**：多行对象/数组最后一项添加逗号
-
-### 代码组织
-- **导入顺序**：
-  1. 外部库导入
-  2. 内部模块导入
-  3. 相对路径导入
-  ${isTypeScript ? "4. 类型导入（使用 `import type`）" : ""}
-- **导出**：优先使用命名导出，避免默认导出（提高可维护性）
-
-${
-  isTypeScript
-    ? `### TypeScript 特定规范
-- 优先使用 \`interface\` 定义对象类型
-- 使用 \`type\` 定义联合类型和工具类型
-- 避免使用 \`any\`，使用 \`unknown\` 代替
-- 为函数参数和返回值显式添加类型
-- 使用严格模式（\`strict: true\`）
-- 使用类型守卫而非类型断言
-`
-    : ""
-}
-`;
-  }
-
-  /**
-   * 生成 Python 风格指南
-   */
-  private generatePythonStyleGuide(): string {
-    return `## Python 代码风格
-
-### PEP 8 规范
-- **缩进**：使用 4 个空格
-- **行长度**：限制每行最多 79 个字符（文档字符串/注释 72 个字符）
-- **空行**：
-  - 顶级函数和类定义之间空 2 行
-  - 类内方法之间空 1 行
-- **字符串引号**：保持一致（推荐单引号）
-
-### 命名规范
-- **函数/变量**：snake_case (例如：\`get_user_data\`)
-- **类名**：PascalCase (例如：\`UserProfile\`)
-- **常量**：UPPER_CASE (例如：\`MAX_RETRY_COUNT\`)
-- **私有属性**：单下划线前缀 (例如：\`_internal_method\`)
-- **特殊方法**：双下划线前后 (例如：\`__init__\`)
-
-### 导入规范
-- **导入顺序**：
-  1. 标准库导入
-  2. 第三方库导入
-  3. 本地应用/库导入
-- 每组之间空一行
-- 避免通配符导入 (\`from module import *\`)
-
-### 类型注解
-- 为函数参数添加类型注解
-- 为函数返回值添加类型注解
-- 使用 \`typing\` 模块的类型（List, Dict, Optional 等）
-- 使用 \`mypy\` 进行静态类型检查
-
-`;
-  }
-
-  /**
-   * 生成格式化规则
-   */
-  private generateFormattingRules(context: RuleGenerationContext): string {
-    return `## 代码格式化
-
-### 空格和缩进
-- 运算符两侧添加空格：\`a + b\` 而非 \`a+b\`
-- 逗号后添加空格：\`[1, 2, 3]\` 而非 \`[1,2,3]\`
-- 关键字后添加空格：\`if (condition)\` 而非 \`if(condition)\`
-- 不要在括号内侧添加空格：\`func(a, b)\` 而非 \`func( a, b )\`
-
-### 代码块
-- 始终使用花括号，即使只有一行代码
-- \`else\` 语句与关闭花括号在同一行（JavaScript/TypeScript）
-- 花括号的左括号不换行（K&R 风格）
-
-### 注释规范
-- 单行注释使用 \`//\`（JavaScript/TypeScript）或 \`#\`（Python）
-- 多行注释使用 \`/* */\`（JavaScript/TypeScript）或 \`"""\`（Python）
-- 注释应该解释"为什么"而不是"是什么"
-- 保持注释与代码同步更新
-
-`;
-  }
-
-  /**
-   * 生成命名约定
-   */
-  private generateNamingConventions(context: RuleGenerationContext): string {
-    return `## 命名约定
-
-### 通用规则
-- **组件/类/接口**：PascalCase
-  - 示例：\`UserProfile\`, \`DataService\`, \`IUserRepository\`
-- **变量/函数/方法**：camelCase
-  - 示例：\`userName\`, \`getUserData()\`, \`handleClick()\`
-- **常量**：UPPER_CASE
-  - 示例：\`MAX_RETRY_COUNT\`, \`API_BASE_URL\`, \`DEFAULT_TIMEOUT\`
-- **私有属性**：前缀 \`_\`（约定）或使用 \`#\`（JavaScript 私有字段）
-  - 示例：\`_privateMethod\`, \`#privateField\`
-
-### 文件命名
-${this.generateFileNamingRules(context)}
-
-### 特定场景
-- **布尔变量**：使用 \`is\`、\`has\`、\`should\` 前缀
-  - 示例：\`isActive\`, \`hasPermission\`, \`shouldUpdate\`
-- **事件处理器**：使用 \`handle\` 或 \`on\` 前缀
-  - 示例：\`handleClick\`, \`onSubmit\`, \`handleUserLogin\`
-- **获取器/设置器**：使用 \`get\`/\`set\` 前缀
-  - 示例：\`getUser\`, \`setUser\`, \`getUserName\`
-
-### 避免的命名
-- ❌ 单字母变量（除了循环计数器 \`i\`, \`j\`, \`k\`）
-- ❌ 缩写和简写（除非是广为人知的，如 \`URL\`, \`HTTP\`）
-- ❌ 匈牙利命名法（如 \`strName\`, \`intCount\`）
-- ❌ 无意义的名称（如 \`data\`, \`temp\`, \`foo\`, \`bar\`）
-
-`;
-  }
-
-  /**
-   * 生成文件命名规则
-   */
-  private generateFileNamingRules(context: RuleGenerationContext): string {
-    const hasReact = context.techStack.frameworks.includes("React");
-    const hasVue = context.techStack.frameworks.includes("Vue");
-
-    let rules = "";
-
-    if (hasReact) {
-      rules += `- **React 组件**：PascalCase.tsx/jsx
-  - 示例：\`UserProfile.tsx\`, \`Button.tsx\`
-`;
-    }
-
-    if (hasVue) {
-      rules += `- **Vue 组件**：PascalCase.vue 或 kebab-case.vue
-  - 示例：\`UserProfile.vue\` 或 \`user-profile.vue\`
-`;
-    }
-
-    rules += `- **工具/辅助文件**：camelCase 或 kebab-case
-  - 示例：\`formatDate.ts\`, \`api-client.ts\`
-- **类型定义文件**：types.ts 或 interfaces.ts
-- **测试文件**：与源文件同名 + \`.test\` 或 \`.spec\`
-  - 示例：\`UserProfile.test.tsx\`, \`utils.spec.ts\`
-`;
-
-    return rules;
-  }
-
   /**
    * 生成最佳实践部分
    */
@@ -1466,194 +1184,6 @@ ${p.content}
     }
 
     return cautions.map((c) => c).join("\n");
-  }
-
-  /**
-   * 生成模块职责说明
-   */
-  private generateModuleResponsibilities(
-    module: Module,
-    businessAnalysis?: any
-  ): string {
-    let description = "";
-
-    // 如果有业务分析，使用业务领域信息
-    if (businessAnalysis?.businessDomain) {
-      description = `负责 ${businessAnalysis.businessDomain} 相关的功能`;
-    } else {
-    const typeDescriptions: Record<string, string> = {
-      frontend: "负责用户界面展示和交互逻辑",
-      backend: "负责业务逻辑处理和数据管理",
-      shared: "提供跨模块共享的工具和类型定义",
-      service: "提供特定领域的服务功能",
-      package: "作为独立包提供特定功能",
-      other: "提供项目所需的功能",
-    };
-      description = typeDescriptions[module.type] || "提供项目所需的功能";
-    }
-
-    // 如果有主要功能，添加到描述中
-    if (businessAnalysis?.mainFeatures && businessAnalysis.mainFeatures.length > 0) {
-      description += `，主要包括：${businessAnalysis.mainFeatures.slice(0, 3).join("、")}`;
-    }
-
-    return description;
-  }
-
-  /**
-   * 获取模块的 package.json 信息
-   */
-  private async getModulePackageInfo(modulePath: string): Promise<{
-    name?: string;
-    description?: string;
-    keywords?: string[];
-    version?: string;
-  } | null> {
-    const packageJsonPath = path.join(modulePath, "package.json");
-    
-    if (await FileUtils.fileExists(packageJsonPath)) {
-      try {
-        const content = await FileUtils.readFile(packageJsonPath);
-        const data = JSON.parse(content);
-        return {
-          name: data.name,
-          description: data.description,
-          keywords: data.keywords,
-          version: data.version,
-        };
-      } catch (error) {
-        logger.debug(`读取 package.json 失败: ${packageJsonPath}`, error);
-      }
-    }
-    
-    return null;
-  }
-
-  /**
-   * 生成模块代码生成指南（优化版，符合 Cursor Rules 最佳实践）
-   */
-  private generateModuleCodeGenerationGuide(
-    module: Module,
-    context: RuleGenerationContext,
-    structureAnalysis: any,
-    businessAnalysis: any,
-    packageName: string
-  ): string {
-    let guide = "";
-
-    // 代码生成规则（使用明确的指令格式）
-    guide += `### 代码生成规则\n\n`;
-    guide += `**MUST** 遵循以下规则：\n\n`;
-    guide += `1. **文件位置**: 查看 @project-structure.mdc 中 \`${module.name}\` 模块的目录结构，根据文件类型选择正确目录\n`;
-    guide += `2. **命名规范**: 参考 @code-style.mdc 和 @project-structure.mdc\n`;
-    guide += `3. **导入路径**: 遵循依赖引用规则（见下文）\n`;
-    guide += `4. **代码风格**: 参考 @code-style.mdc 保持一致性\n`;
-    
-    if (module.type === "shared") {
-      guide += `5. **模块边界**: 此模块为共享模块，代码必须保持通用性，避免特定业务逻辑\n\n`;
-    } else {
-      guide += `5. **模块边界**: 此模块为 ${getModuleTypeName(module.type)} 类型，代码需符合该类型职责范围\n\n`;
-    }
-
-    // 文件存放规则（从 project-structure 获取）
-    guide += `### 文件存放规则\n\n`;
-    guide += `**MUST**: 参考 @project-structure.mdc 中 \`${module.name}\` 模块的目录结构和文件夹职能说明。\n\n`;
-    
-    if (structureAnalysis && structureAnalysis.mainDirectories.length > 0) {
-      const dirs = structureAnalysis.mainDirectories
-        .filter((d: any) => {
-          if (d.fileCount === 0 || !d.purpose || d.purpose === "") return false;
-          // 只判断英文，不判断中文
-          const purposeLower = d.purpose.toLowerCase();
-          return purposeLower !== 'other' && purposeLower !== 'unknown';
-        })
-        .slice(0, 8);
-      
-      if (dirs.length > 0) {
-        guide += `主要目录（完整信息见 @project-structure.mdc）：\n\n`;
-        for (const dir of dirs) {
-          const dirPath = dir.path;
-          // 计算相对于模块路径的相对路径
-          let relativePath: string;
-          try {
-            relativePath = path.relative(module.path, dirPath);
-            // 如果路径相同，使用目录名
-            if (!relativePath || relativePath === ".") {
-              relativePath = path.basename(dirPath);
-            }
-          } catch {
-            relativePath = path.basename(dirPath);
-          }
-          
-          guide += `- \`${relativePath}/\`: ${dir.purpose}`;
-          if (dir.namingPattern && dir.namingPattern !== "mixed") {
-            guide += ` (${dir.namingPattern})`;
-          }
-          guide += `\n`;
-        }
-        guide += `\n`;
-      }
-    }
-
-    // 依赖引用规则（使用明确的指令格式）
-    guide += `### 依赖引用规则\n\n`;
-    
-    guide += `**模块内部引用** (SHOULD):\n`;
-    guide += `\`\`\`typescript\n`;
-    guide += `import { X } from '../utils/helper';\n`;
-    guide += `import { X } from '@/utils/helper'; // 如果配置了别名\n`;
-    guide += `\`\`\`\n\n`;
-    
-    // 引用其他内部模块
-    if (businessAnalysis && businessAnalysis.internalDependencies.length > 0) {
-      guide += `**引用其他内部模块** (SHOULD):\n`;
-      guide += `\`\`\`typescript\n`;
-      for (const dep of businessAnalysis.internalDependencies.slice(0, 3)) {
-        guide += `import { X } from '${dep}';\n`;
-      }
-      guide += `\`\`\`\n\n`;
-    }
-    
-    // 被其他模块引用
-    if (businessAnalysis && businessAnalysis.dependentModules.length > 0) {
-      guide += `**被其他模块引用** (参考):\n`;
-      guide += `其他模块可通过包名引用：\`import { X } from '${packageName}'\`\n\n`;
-    }
-    
-    // 外部依赖
-    guide += `**外部依赖** (SHOULD):\n`;
-    guide += `\`\`\`typescript\n`;
-    guide += `import { X } from 'package-name';\n`;
-    guide += `\`\`\`\n\n`;
-
-    // 命名规范（仅在有明确模式时显示）
-    if (structureAnalysis && structureAnalysis.fileOrganizationPattern.primaryNamingPattern !== "mixed") {
-      guide += `### 命名规范\n\n`;
-      const pattern = structureAnalysis.fileOrganizationPattern.primaryNamingPattern;
-      guide += `主要命名模式: **${pattern}**\n\n`;
-      guide += `示例：\n`;
-      if (pattern === "PascalCase") {
-        guide += `- \`UserProfile.tsx\`, \`ApiClient.ts\`, \`UserType.ts\`\n`;
-      } else if (pattern === "camelCase") {
-        guide += `- \`getUserData.ts\`, \`apiClient.ts\`, \`userHelper.ts\`\n`;
-      } else if (pattern === "kebab-case") {
-        guide += `- \`user-profile.tsx\`, \`api-client.ts\`, \`user-helper.ts\`\n`;
-      }
-      guide += `\n`;
-      guide += `完整规范见 @code-style.mdc\n\n`;
-    }
-
-    // 导入导出模式（仅在有明确模式时显示）
-    if (structureAnalysis && structureAnalysis.fileOrganizationPattern.usesIndexFiles) {
-      guide += `### 导入导出模式\n\n`;
-      guide += `使用 \`index.ts\` 作为目录入口：\n`;
-      guide += `\`\`\`typescript\n`;
-      guide += `// 从目录导入\n`;
-      guide += `import { Component } from './components';\n`;
-      guide += `\`\`\`\n\n`;
-    }
-
-    return guide;
   }
 
   /**
@@ -2065,94 +1595,6 @@ ${bestPractices}
   }
 
   /**
-   * v1.3: 生成模块概述规则（简化版，约 200 行）
-   */
-  private async generateModuleOverviewRule(
-    context: RuleGenerationContext,
-    module: Module
-  ): Promise<CursorRule> {
-    const moduleOverviewGlobs = `${module.path}/**`;
-    const metadata = buildRuleMetadata(
-      `${module.name} 模块规则`,
-      module.description || `Development conventions for the ${module.name} module`,
-      50,
-      context.techStack.primary,
-      [module.type, "module"],
-      "overview",
-      ["global-rules"],
-      { globs: moduleOverviewGlobs }
-    );
-
-    // 分析模块结构和业务信息
-    const structureAnalysis = context.deepAnalysis
-      ? this.moduleStructureAnalyzer.analyzeModuleStructure(
-          module,
-          context.deepAnalysis,
-          context.projectPath
-        )
-      : null;
-
-    const businessAnalysis = context.deepAnalysis
-      ? await this.moduleBusinessAnalyzer.analyzeModuleBusiness(
-          module,
-          context,
-          context.deepAnalysis
-        )
-      : null;
-
-    let content = metadata + `\n# ${module.name} 模块\n\n`;
-
-    // 1. 模块标识（关键信息，用于代码生成时识别目标模块）
-    const packageName = module.packageName || module.name;
-    const packageInfo = await this.getModulePackageInfo(module.path);
-    const effectivePackageName = packageInfo?.name || packageName;
-    
-    content += `## 📦 模块标识\n\n`;
-    content += `- **包名称**: \`${effectivePackageName}\`\n`;
-    content += `- **模块名称**: \`${module.name}\`\n`;
-    content += `- **模块类型**: ${getModuleTypeName(module.type)}\n`;
-    if (packageInfo?.description) {
-      content += `- **描述**: ${packageInfo.description}\n`;
-    }
-    content += `\n`;
-
-    // 2. 模块职责
-    content += `## 🎯 模块职责\n\n`;
-    content += `${this.generateModuleResponsibilities(module, businessAnalysis)}\n\n`;
-
-    // 3. 目录结构（引用 project-structure）
-    content += `## 📁 目录结构\n\n`;
-    content += `**MUST**: 在生成代码前，查看 @project-structure.mdc 中 \`${module.name}\` 模块的目录结构和文件夹职能说明。\n\n`;
-    content += `目录结构信息位于 @project-structure.mdc，包含：\n`;
-    content += `- 完整的目录树结构\n`;
-    content += `- 每个目录的职能说明\n`;
-    content += `- 文件组织模式和命名规范\n\n`;
-
-    // 4. 代码生成指南
-    content += `## 💻 代码生成指南\n\n`;
-    content += this.generateModuleCodeGenerationGuide(module, context, structureAnalysis, businessAnalysis, effectivePackageName);
-
-    // 5. 相关规则
-    content += `## 📚 相关规则\n\n`;
-    content += `参考以下全局规则：\n\n`;
-    content += `- @../global-rules.mdc\n`;
-    content += `- @../code-style.mdc\n`;
-    content += `- @../architecture.mdc\n`;
-    content += `- @../project-structure.mdc\n\n`;
-
-    return {
-      scope: "module",
-      moduleName: module.name,
-      modulePath: module.path,
-      content,
-      fileName: `${sanitizeFileName(module.name)}-overview.mdc`,
-      priority: 50,
-      type: "overview",
-      depends: ["global-rules"],
-    };
-  }
-
-  /**
    * 格式化缺失的最佳实践（v1.5）
    * 将项目已使用但未声明的实践格式化为规则内容
    */
@@ -2287,142 +1729,6 @@ ${bestPractices}
     }
 
     return practices;
-  }
-
-  /**
-   * 评估深度分析数据的质量
-   */
-  /**
-   * 生成基于项目配置的代码风格规则（v1.2）
-   */
-  generateConfigBasedStyleRules(context: RuleGenerationContext): string {
-    if (!context.projectConfig) {
-      return this.generateCodeStyleGuidelines(context);
-    }
-
-    let rules = `## 代码风格（基于项目配置）\n\n`;
-
-    // 使用项目实际配置
-    if (context.projectConfig.prettier) {
-      const p = context.projectConfig.prettier;
-      rules += `### 项目配置 (Prettier)\n\n`;
-      rules += `项目使用 Prettier 进行代码格式化，配置如下：\n\n`;
-      rules += `- **缩进**: ${
-        p.useTabs ? "Tab" : `${p.tabWidth || 2} 个空格`
-      }\n`;
-      rules += `- **引号**: ${p.singleQuote ? "单引号" : "双引号"}\n`;
-      rules += `- **分号**: ${p.semi ? "使用分号" : "不使用分号"}\n`;
-      rules += `- **行长度**: ${p.printWidth || 80} 字符\n`;
-      rules += `- **尾随逗号**: ${p.trailingComma || "none"}\n\n`;
-      rules += `**配置文件**: @.prettierrc\n\n`;
-
-      rules += `### 代码格式化要求\n\n`;
-      rules += `生成代码时遵循上述 Prettier 配置：\n`;
-      rules += `- 使用${p.singleQuote ? "单引号" : "双引号"}包裹字符串\n`;
-      rules += `- 使用 ${
-        p.useTabs ? "Tab" : `${p.tabWidth || 2} 个空格`
-      }缩进\n`;
-      rules += `- ${p.semi ? "添加" : "不添加"}分号\n\n`;
-    } else if (context.projectPractice?.codeStyle) {
-      // 使用分析出的代码风格：仅输出能明确判定的项，"mixed"/不确定的项一律省略，
-      // 避免产出对 AI 无指导价值的「混合」占位内容（置信度闸门）
-      const style = context.projectPractice.codeStyle;
-      const isTS = context.techStack.languages.includes("TypeScript");
-      const styleLines: string[] = [];
-
-      // TypeScript/modern JS 项目不可能以 var 为主，若检测为 var 优先纠正为 const/let
-      if (style.variableDeclaration === "const-let") {
-        styleLines.push(`- **变量声明**: 使用 const/let`);
-      } else if (style.variableDeclaration === "var") {
-        styleLines.push(
-          isTS ? `- **变量声明**: 使用 const/let` : `- **变量声明**: 使用 var`
-        );
-      }
-
-      if (style.functionStyle === "arrow") {
-        styleLines.push(`- **函数风格**: 箭头函数`);
-      } else if (style.functionStyle === "function") {
-        styleLines.push(`- **函数风格**: function 声明`);
-      }
-
-      if (style.stringQuote === "single") {
-        styleLines.push(`- **字符串引号**: 单引号`);
-      } else if (style.stringQuote === "double") {
-        styleLines.push(`- **字符串引号**: 双引号`);
-      } else if (style.stringQuote === "backtick") {
-        styleLines.push(`- **字符串引号**: 模板字符串`);
-      }
-
-      if (style.semicolon === "always") {
-        styleLines.push(`- **分号**: 使用`);
-      } else if (style.semicolon === "never") {
-        styleLines.push(`- **分号**: 不使用`);
-      }
-
-      if (styleLines.length > 0) {
-        rules += `### 项目当前实践（分析得出）\n\n`;
-        rules += `生成代码时保持与现有代码一致的风格：\n\n`;
-        rules += styleLines.join("\n") + "\n\n";
-      }
-    }
-
-    // ESLint 配置说明（只描述工具存在，不重复输出命令）
-    if (context.projectConfig.eslint || context.projectConfig.commands?.lint) {
-      rules += `### ESLint 代码检查\n\n`;
-      if (context.projectConfig.eslint) {
-        rules += `项目使用 ESLint 进行代码质量检查。\n\n`;
-        rules += `**配置文件**: @.eslintrc\n\n`;
-      }
-      // 命令由下方「代码生成后标准流程」统一输出，此处不重复
-    }
-
-    // 代码生成后必须运行的命令（唯一输出命令的位置）
-    // 仅在存在实际命令时输出，作为对 AI 的约束，而非面向用户的交互提示
-    if (context.projectConfig.commands) {
-      const steps: string[] = [];
-      if (context.projectConfig.commands.format) {
-        steps.push(`# 格式化代码\n${context.projectConfig.commands.format}`);
-      }
-      if (context.projectConfig.commands.lintFix) {
-        steps.push(`# 修复 lint 问题\n${context.projectConfig.commands.lintFix}`);
-      } else if (context.projectConfig.commands.lint) {
-        steps.push(`# 检查 lint\n${context.projectConfig.commands.lint}`);
-      }
-      if (context.projectConfig.commands.typeCheck) {
-        steps.push(`# 类型检查\n${context.projectConfig.commands.typeCheck}`);
-      }
-
-      if (steps.length > 0) {
-        rules += `### 代码生成后必须运行\n\n`;
-        rules += `\`\`\`bash\n`;
-        rules += steps.join("\n\n");
-        rules += `\n\`\`\`\n\n`;
-      }
-    }
-
-    // 添加路径别名信息
-    if (
-      context.projectConfig?.pathAliases &&
-      Object.keys(context.projectConfig.pathAliases).length > 0
-    ) {
-      rules += `### 路径别名（必须使用）\n\n`;
-      rules += `项目配置了以下路径别名，生成代码时必须使用：\n\n`;
-      for (const [alias, target] of Object.entries(
-        context.projectConfig.pathAliases
-      )) {
-        rules += `- \`${alias}\` → \`${target}\`\n`;
-      }
-      rules += `\n示例：\n`;
-      rules += `\`\`\`typescript\n`;
-      const firstAlias = Object.keys(context.projectConfig.pathAliases)[0];
-      rules += `// ✅ 正确 - 使用路径别名\n`;
-      rules += `import { Component } from '${firstAlias}/Component';\n\n`;
-      rules += `// ❌ 错误 - 不要使用相对路径\n`;
-      rules += `import { Component } from '../../../Component';\n`;
-      rules += `\`\`\`\n\n`;
-    }
-
-    return rules;
   }
 
   /**
