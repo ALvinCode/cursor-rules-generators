@@ -36,6 +36,34 @@ export function featureExists(
 }
 
 /**
+ * 是否存在自定义工具（hooks / utils / apiClient）。被 generate 编排与 global 规则共用。
+ */
+export function hasCustomTools(context: RuleGenerationContext): boolean {
+  if (!context.customPatterns) return false;
+  return (
+    context.customPatterns.customHooks.length > 0 ||
+    context.customPatterns.customUtils.length > 0 ||
+    Boolean(context.customPatterns.apiClient?.exists)
+  );
+}
+
+/**
+ * 是否在项目实际代码中检测到错误处理实践。
+ */
+export function hasErrorHandling(context: RuleGenerationContext): boolean {
+  const errorHandling = context.projectPractice?.errorHandling;
+  if (!errorHandling) return false;
+  return errorHandling.frequency > 0;
+}
+
+/**
+ * 是否使用状态管理（基于依赖/特征）。
+ */
+export function hasStateManagement(context: RuleGenerationContext): boolean {
+  return featureExists(context, "state-management");
+}
+
+/**
  * 是否为前端项目（基于已识别的前端框架）。
  */
 export function isFrontendProject(context: RuleGenerationContext): boolean {

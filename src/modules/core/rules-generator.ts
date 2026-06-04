@@ -1,10 +1,8 @@
 import * as path from 'path';
 
 import {
-    BestPractice, CodeFeature, CursorRule, Module, RuleGenerationContext,
-    TechStack
+    CursorRule, RuleGenerationContext, TechStack
 } from '../../types.js';
-import { FileUtils } from '../../utils/file-utils.js';
 import { logger } from '../../utils/logger.js';
 import { ValidationError } from '../../utils/errors.js';
 import { BestPracticeComparator } from '../generators/best-practice-comparator.js';
@@ -18,40 +16,18 @@ import { SuggestionCollector } from '../generators/suggestion-collector.js';
 import {
     findBestTechStackMatches, MultiCategoryMatch, TechStackMatch
 } from '../generators/tech-stack-matcher.js';
-import { buildRuleMetadata } from '../generators/rules/rule-metadata.js';
 import { generateApiPatternsRule } from '../generators/rules/api-patterns-rule.js';
-import {
-  generateErrorHandlingRule,
-  generatePracticeBasedErrorHandling,
-  generateErrorHandlingGuidelines,
-} from '../generators/rules/error-handling-rule.js';
-import {
-  generateUIUXRule,
-  generateUIUXGuidelines,
-} from '../generators/rules/ui-ux-rule.js';
+import { generateErrorHandlingRule } from '../generators/rules/error-handling-rule.js';
+import { generateUIUXRule } from '../generators/rules/ui-ux-rule.js';
 import {
   featureExists,
   isFrontendProject,
-  getLanguageGlobs,
-  getRouteGlobs,
-  generateVersionedTechStack,
-  generateCommandsSection,
-  generatePersona,
-  generatePostCodingConstraint,
-  getProjectName,
-  sanitizeFileName,
-  getRouterTypeDescription,
-  getOrganizationDescription,
-  getArchitecturePatternName,
-  getModuleTypeName,
-  getCategoryDisplayName,
-  formatMissingPractices,
   detectTestFramework,
+  hasCustomTools,
+  hasErrorHandling,
+  hasStateManagement,
 } from '../generators/rules/rule-helpers.js';
-import {
-  generateTestingRule,
-  generateConditionalTestingRules,
-} from '../generators/rules/testing-rule.js';
+import { generateTestingRule } from '../generators/rules/testing-rule.js';
 import {
   generateFrontendRoutingRule,
   generateBackendRoutingRule,
@@ -63,11 +39,10 @@ import {
 } from '../generators/rules/structure-rule.js';
 import { generateCodeStyleRule } from '../generators/rules/code-style-rule.js';
 import { generateModuleOverviewRule } from '../generators/rules/module-rule.js';
-import {
-  generateStateManagementRule,
-  detectMobXPattern,
-} from '../generators/rules/state-management-rule.js';
+import { generateStateManagementRule } from '../generators/rules/state-management-rule.js';
 import { generateCustomToolsRule } from '../generators/rules/custom-tools-rule.js';
+import { generateGlobalOverviewRule } from '../generators/rules/global-rule.js';
+import { generateFeatureRecipeRule } from '../generators/rules/feature-recipe-rule.js';
 
 /**
  * 规则生成引擎
@@ -316,7 +291,7 @@ export class RulesGenerator {
     // v1.3: 生成多个专注的规则文件（每个 < 500 行）
 
     // 1. 全局概述规则（必需，约 280 行）
-    const globalRule = this.generateGlobalOverviewRule(context);
+    const globalRule = generateGlobalOverviewRule(context);
     rules.push(globalRule);
 
     // 2. 代码风格规则（必需，约 200 行）
@@ -342,13 +317,13 @@ export class RulesGenerator {
     rules.push(architectureRule);
 
     // 5. 自定义工具规则（按需，约 150 行）
-    if (this.hasCustomTools(context)) {
+    if (hasCustomTools(context)) {
       const customToolsRule = generateCustomToolsRule(context);
       rules.push(customToolsRule);
     }
 
     // 6. 错误处理规则（按需，约 180 行）
-    if (this.hasErrorHandling(context)) {
+    if (hasErrorHandling(context)) {
       const errorHandlingRule = generateErrorHandlingRule(
         context,
         missingPractices
@@ -360,7 +335,7 @@ export class RulesGenerator {
     // v1.7: 基于需求分析器结果或原有检测逻辑
     const needsStateManagement =
       requirements.some((r) => r.ruleType === "state-management") ||
-      this.hasStateManagement(context);
+      hasStateManagement(context);
     if (needsStateManagement) {
       const stateManagementRule = await generateStateManagementRule(context);
       rules.push(stateManagementRule);
@@ -558,7 +533,7 @@ export class RulesGenerator {
 
     // 11c. Feature Recipe（端到端功能创建模板，前端项目必生成）
     if (isFrontend) {
-      const featureRecipeRule = await this.generateFeatureRecipeRule(context);
+      const featureRecipeRule = await generateFeatureRecipeRule(context);
       rules.push(featureRecipeRule);
     }
 
@@ -576,525 +551,6 @@ export class RulesGenerator {
     }
 
     return rules;
-  }
-
-  /**
-   * 检查是否有自定义工具
-   */
-  private hasCustomTools(context: RuleGenerationContext): boolean {
-    if (!context.customPatterns) return false;
-    return (
-      context.customPatterns.customHooks.length > 0 ||
-      context.customPatterns.customUtils.length > 0 ||
-      Boolean(context.customPatterns.apiClient?.exists)
-    );
-  }
-
-  /**
-   * 检查是否有错误处理
-   */
-  private hasErrorHandling(context: RuleGenerationContext): boolean {
-    const errorHandling = context.projectPractice?.errorHandling;
-    if (!errorHandling) return false;
-    return errorHandling.frequency > 0;
-  }
-
-  /**
-   * 检查是否有状态管理
-   */
-  private hasStateManagement(context: RuleGenerationContext): boolean {
-    return featureExists(context, "state-management");
-  }
-
-  /**
-   * v1.3: 生成全局概述规则（约 280 行）
-   */
-  private generateGlobalOverviewRule(
-    context: RuleGenerationContext
-  ): CursorRule {
-    const metadata = buildRuleMetadata(
-      `${getProjectName(context.projectPath)} - 全局规则`,
-      "Project-wide conventions, tech stack, and core development principles. Always loaded.",
-      100,
-      context.techStack.primary,
-      ["global", "overview"],
-      "overview",
-      undefined,
-      { alwaysApply: true }
-    );
-
-    const persona = generatePersona(context);
-
-    const techVersions = generateVersionedTechStack(context);
-    const commandsSection = generateCommandsSection(context);
-
-    const content =
-      metadata +
-      `# ${getProjectName(context.projectPath)}
-
-${persona}
-
-## Tech Stack
-
-${techVersions}
-${commandsSection}
-## Hard Constraints
-
-- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.
-- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
-- NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
-- NEVER generate markdown documentation files — express intent through code, types, and naming.
-- Before creating files, consult @project-structure.mdc for correct location.
-- Reuse existing project tools — do not re-implement what already exists.
-- Follow the project's established patterns and conventions.
-${generatePostCodingConstraint(context)}
-${
-  context.techStack.frameworks.length > 0
-    ? `\n${this.generateFrameworkPrinciples(context)}\n`
-    : ""
-}
-## Rule Index
-
-| Rule | Scope |
-|------|-------|
-| @code-style.mdc | Formatting and naming conventions |
-| @project-structure.mdc | Directory layout and file placement |
-| @architecture.mdc | Module structure and design patterns |
-${this.hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${this.hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${this.hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
-`;
-
-    return {
-      scope: "global",
-      modulePath: context.projectPath,
-      content,
-      fileName: "global-rules.mdc",
-      priority: 100,
-      type: "overview",
-    };
-  }
-
-  /**
-   * Feature Recipe — 端到端功能创建指南
-   * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
-   */
-  private async generateFeatureRecipeRule(context: RuleGenerationContext): Promise<CursorRule> {
-    const metadata = buildRuleMetadata(
-      "端到端功能创建指南",
-      "Step-by-step recipe for adding a complete feature: types → API → store → component → route",
-      88,
-      context.techStack.primary,
-      ["feature", "workflow", "recipe"],
-      "guideline",
-      ["global-rules", "project-structure", "architecture"]
-    );
-
-    const isTS = context.techStack.languages.includes("TypeScript");
-    const ext = isTS ? "ts" : "js";
-    const extx = isTS ? "tsx" : "jsx";
-    const org = context.fileOrganization;
-
-    const stateLib = context.techStack.dependencies.find((d) =>
-      ["redux", "mobx", "zustand", "pinia", "vuex"].some((lib) =>
-        d.name.toLowerCase().includes(lib)
-      )
-    );
-    const hasMobX = stateLib?.name?.toLowerCase().includes("mobx");
-    const hasRedux = stateLib?.name?.toLowerCase().includes("redux");
-    const hasZustand = stateLib?.name?.toLowerCase().includes("zustand");
-
-    // 基于版本 + 实际代码检测 MobX 模式，与 state-management.mdc 保持一致
-    const mobxPattern = hasMobX ? await detectMobXPattern(context) : 'makeAutoObservable';
-
-    const apiClient = context.customPatterns?.apiClient;
-    const apiClientName = apiClient?.name || "apiClient";
-    const hasAxios = context.techStack.dependencies.some((d) => d.name === "axios");
-
-    const typeDir = org?.typesLocation?.[0] || `src/types`;
-    const apiDir = org?.apiLocation?.[0] || `src/api`;
-    const storeDir = `src/store`;
-    const compDir = org?.componentLocation?.[0] || `src/components`;
-    // 路由注册的页面组件（步骤6被 router 挂载）应放在页面目录，而非可复用组件目录
-    // 优先从 deepAnalysis 检测 views/pages/screens 目录（与 generateNewFileGuidelines 逻辑一致）
-    const PAGE_DIR_KEYWORDS = new Set(['views', 'pages', 'screens']);
-    const pageDir = (context.deepAnalysis ?? [])
-      .filter(d => PAGE_DIR_KEYWORDS.has(d.path.split('/').pop()?.toLowerCase() ?? ''))
-      .sort((a, b) => a.depth - b.depth)[0]?.path || compDir;
-    const routeDir = (context.frontendRouter?.info?.location?.[0] || `src/routes`).replace(/\/$/, '');
-    const hookDir = org?.hooksLocation?.[0] || `src/hooks`;
-
-    // 将检测到的 typeDir 转为 import 别名（src/xxx → @/xxx）
-    const typeAlias = typeDir.replace(/^src\//, '@/');
-    const apiAlias = apiDir.replace(/^src\//, '@/');
-
-    let storeStep = "";
-    if (hasMobX) {
-      // 根据检测到的实际 MobX 模式选择模板
-      const mobxStoreBody = mobxPattern === 'makeAutoObservable'
-        ? `import { makeAutoObservable } from "mobx";
-import type { FeatureItem } from "${typeAlias}/feature";
-
-class FeatureStore {
-  items: FeatureItem[] = [];
-  loading = false;
-  error: string | null = null;
-
-  constructor() { makeAutoObservable(this); }
-
-  async fetchItems() {
-    this.loading = true;
-    try {
-      this.items = await fetchFeatureList();
-    } catch (err) {
-      this.error = String(err);
-    } finally {
-      this.loading = false;
-    }
-  }
-}`
-        : `import { makeObservable, observable, action } from "mobx";
-import type { FeatureItem } from "${typeAlias}/feature";
-
-class FeatureStore {
-  @observable items: FeatureItem[] = [];
-  @observable loading = false;
-  @observable error: string | null = null;
-
-  constructor() { makeObservable(this); }
-
-  @action
-  async fetchItems() {
-    this.loading = true;
-    try {
-      this.items = await fetchFeatureList();
-    } catch (err) {
-      this.error = String(err);
-    } finally {
-      this.loading = false;
-    }
-  }
-}`;
-
-      storeStep = `
-### 3. Store（MobX）
-
-\`\`\`${ext}
-// ${storeDir}/featureStore.${ext}
-${mobxStoreBody}
-export const featureStore = new FeatureStore();
-\`\`\`
-`;
-    } else if (hasRedux) {
-      storeStep = `
-### 3. Store（Redux Toolkit）
-
-\`\`\`${ext}
-// ${storeDir}/featureSlice.${ext}
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { FeatureItem } from "${typeAlias}/feature";
-
-export const loadFeatures = createAsyncThunk("feature/load", fetchFeatureList);
-
-const featureSlice = createSlice({
-  name: "feature",
-  initialState: { items: [] as FeatureItem[], loading: false, error: null as string | null },
-  reducers: {},
-  extraReducers: (b) => {
-    b.addCase(loadFeatures.pending, (s) => { s.loading = true; });
-    b.addCase(loadFeatures.fulfilled, (s, a) => { s.loading = false; s.items = a.payload; });
-    b.addCase(loadFeatures.rejected, (s, a) => { s.loading = false; s.error = a.error.message ?? null; });
-  },
-});
-export default featureSlice.reducer;
-\`\`\`
-`;
-    } else if (hasZustand) {
-      storeStep = `
-### 3. Store（Zustand）
-
-\`\`\`${ext}
-// ${storeDir}/featureStore.${ext}
-import { create } from "zustand";
-import type { FeatureItem } from "${typeAlias}/feature";
-
-interface FeatureStore {
-  items: FeatureItem[];
-  loading: boolean;
-  fetchItems: () => Promise<void>;
-}
-
-export const useFeatureStore = create<FeatureStore>((set) => ({
-  items: [],
-  loading: false,
-  fetchItems: async () => {
-    set({ loading: true });
-    const items = await fetchFeatureList();
-    set({ items, loading: false });
-  },
-}));
-\`\`\`
-`;
-    }
-
-    const content = metadata + `
-# 端到端功能创建指南
-
-> 新增一个完整功能时，按此顺序创建文件，避免缺漏。
-
-## 标准步骤
-
-### 1. 类型定义
-
-\`\`\`${ext}
-// ${typeDir}/feature.${ext}
-export interface FeatureItem {
-  id: string;
-  name: string;
-  // ...项目实际字段
-}
-
-export interface FeatureListParams {
-  page: number;
-  pageSize: number;
-}
-\`\`\`
-
-### 2. API 函数
-
-\`\`\`${ext}
-// ${apiDir}/feature.${ext}
-import type { FeatureItem, FeatureListParams } from "${typeAlias}/feature";
-${hasAxios ? `import { ${apiClientName} } from "${apiAlias}";` : ""}
-
-export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
-  const { data } = await ${hasAxios ? apiClientName : "fetch"}${hasAxios ? `.get("/api/features", { params })` : '(`/api/features?page=${params.page}`)'};
-  return data;
-}
-
-export async function fetchFeatureById(id: string): Promise<FeatureItem> {
-  const { data } = await ${hasAxios ? `${apiClientName}.get(\`/api/features/\${id}\`)` : `fetch(\`/api/features/\${id}\`)`};
-  return data;
-}
-\`\`\`
-${storeStep}
-### ${stateLib ? "4" : "3"}. 可复用 Hook（可选）
-
-\`\`\`${ext}
-// ${hookDir}/useFeature.${ext}
-export function useFeature(id: string) {
-  // 封装数据获取、loading 状态、错误处理
-  // 组件直接调用，不重复写 fetch 逻辑
-}
-\`\`\`
-
-### ${stateLib ? "5" : "4"}. 页面组件
-
-\`\`\`${extx}
-// ${pageDir}/FeatureList/FeatureList.${extx}
-// 只负责渲染，业务逻辑在 Hook / Store 中
-export function FeatureList() {
-  // 1. 从 store/hook 获取数据
-  // 2. 处理 loading / error 状态
-  // 3. 渲染列表
-}
-\`\`\`
-
-### ${stateLib ? "6" : "5"}. 路由注册
-
-\`\`\`${extx}
-// ${routeDir}/index.${extx} 或路由配置文件
-{ path: "/features", element: <FeatureList /> }
-{ path: "/features/:id", element: <FeatureDetail /> }
-\`\`\`
-
-## 文件检查清单
-
-新建功能后确认以下文件已创建/更新：
-
-- [ ] \`${typeDir}/feature.${ext}\` — 类型定义
-- [ ] \`${apiDir}/feature.${ext}\` — API 函数
-${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/useFeature.${ext}\` — 数据 Hook（可选）
-- [ ] \`${pageDir}/FeatureList/\` — 页面组件
-- [ ] 路由配置已更新
-
----
-
-*遵循此模式保持项目一致性。参考 @project-structure.mdc 确认各类文件的实际目录位置。*
-`;
-
-    return {
-      scope: "specialized",
-      modulePath: context.projectPath,
-      content,
-      fileName: "feature-recipe.mdc",
-      priority: 88,
-      type: "guideline",
-      depends: ["global-rules", "project-structure", "architecture"],
-    };
-  }
-
-  /**
-   * 生成开发指南
-   */
-  private generateDevelopmentGuidelines(
-    context: RuleGenerationContext
-  ): string {
-    let guidelines = "";
-
-    // 根据技术栈生成指南
-    const { primary, languages } = context.techStack;
-
-    if (languages.includes("TypeScript")) {
-      guidelines += `## TypeScript 使用
-
-- 优先使用 TypeScript 编写新代码
-- 为所有公共 API 提供完整的类型定义
-- 启用严格模式 (\`strict: true\`)
-- 避免使用 \`any\`，使用 \`unknown\` 或具体类型
-
-`;
-    }
-
-    if (primary.some((p) => p.toLowerCase().includes("react"))) {
-      guidelines += `## React 开发
-
-- 使用函数组件和 Hooks，避免类组件
-- 遵循组件单一职责原则
-- 使用 PropTypes 或 TypeScript 进行类型检查
-- 合理使用 \`useMemo\` 和 \`useCallback\` 优化性能
-
-`;
-    }
-
-    if (primary.some((p) => p.toLowerCase().includes("next"))) {
-      guidelines += `## Next.js 规范
-
-- 优先使用 App Router（如果项目使用）
-- Server Components 中进行数据获取
-- 使用 \`next/image\` 优化图片
-- 配置适当的元数据以改善 SEO
-
-`;
-    }
-
-    if (primary.some((p) => p.toLowerCase().includes("vue"))) {
-      guidelines += `## Vue 开发
-
-- 使用 Composition API（Vue 3）
-- 保持组件模板简洁
-- 复杂逻辑抽取到 composables
-- 使用 TypeScript 增强类型安全
-
-`;
-    }
-
-    if (languages.includes("Python")) {
-      guidelines += `## Python 开发
-
-- 遵循 PEP 8 代码风格
-- 使用类型注解（Type Hints）
-- 编写 docstrings 文档
-- 使用虚拟环境管理依赖
-
-`;
-    }
-
-    // 添加错误处理指南（使用基于项目实践的版本）
-    guidelines += context.projectPractice
-      ? generatePracticeBasedErrorHandling(context)
-      : generateErrorHandlingGuidelines(context);
-
-    // 添加测试相关指南（按需生成）
-      guidelines += generateConditionalTestingRules(context);
-
-    // 添加 UI/UX 规范（前端项目）
-    if (isFrontendProject(context)) {
-      guidelines += generateUIUXGuidelines(context);
-    }
-
-    // 添加 API 相关指南
-    if (context.codeFeatures["api-routes"]) {
-      guidelines += `## API 开发
-
-- 使用 RESTful 设计原则
-- 提供适当的错误处理和状态码
-- 为 API 编写文档（OpenAPI/Swagger）
-- 实施适当的认证和授权
-
-`;
-    }
-
-    return guidelines || "遵循项目现有代码风格和约定。";
-  }
-
-  /**
-   * 生成最佳实践部分
-   */
-  private generateBestPracticesSection(practices: BestPractice[]): string {
-    if (practices.length === 0) {
-      return "请参考官方文档获取最佳实践建议。";
-    }
-
-    // 按优先级排序
-    const sorted = practices.sort((a, b) => b.priority - a.priority);
-
-    return sorted
-      .map(
-        (p) => `## ${p.category}
-
-${p.content}
-
-*来源：${p.source}*
-`
-      )
-      .join("\n---\n\n");
-  }
-
-  /**
-   * 生成文件组织指南（精简版）
-   * v1.9: 移除详细文件组织示例，避免与 project-structure.mdc 重复
-   */
-  private generateFileOrganizationGuidelines(
-    context: RuleGenerationContext
-  ): string {
-    return `## 文件组织原则
-
-> 💡 **详细指南**: 完整的文件组织和目录结构请参考 **@project-structure.mdc**
-
-### 基本原则
-- 按功能模块组织文件，而非按文件类型
-- 相关文件放在一起
-- 保持目录结构扁平，避免过深嵌套
-- 使用清晰的命名约定
-
-`;
-  }
-
-  /**
-   * 生成注意事项
-   */
-  private generateCautions(context: RuleGenerationContext): string {
-    const cautions: string[] = [];
-
-    cautions.push("- 提交前运行测试确保代码质量");
-    cautions.push("- 遵循项目现有的代码风格和约定");
-    cautions.push("- 更新代码时同步更新相关文档");
-
-    if (context.techStack.languages.includes("TypeScript")) {
-      cautions.push("- 避免使用类型断言（as），除非绝对必要");
-      cautions.push("- 不要禁用 TypeScript 检查（@ts-ignore）");
-    }
-
-    if (context.codeFeatures["database"]) {
-      cautions.push("- 数据库迁移需要仔细测试");
-      cautions.push("- 避免在代码中硬编码数据库凭证");
-    }
-
-    if (context.codeFeatures["api-routes"]) {
-      cautions.push("- API 变更需要考虑向后兼容性");
-      cautions.push("- 敏感数据不要记录到日志");
-    }
-
-    return cautions.map((c) => c).join("\n");
   }
 
   /**
@@ -1165,53 +621,6 @@ ${p.content}
   /**
    * 生成框架特定原则（增强版，参考 awesome-cursorrules）
    */
-  private generateFrameworkPrinciples(context: RuleGenerationContext): string {
-    const frameworks = context.techStack.frameworks;
-    let principles = "";
-
-    if (frameworks.includes("React")) {
-      principles += `- **React**: 
-  - 使用函数组件和 Hooks，避免类组件
-  - 保持组件单一职责原则
-  - 合理使用 \`useMemo\` 和 \`useCallback\` 优化性能
-  - 使用 TypeScript 进行类型检查
-`;
-    }
-    if (frameworks.includes("Vue")) {
-      principles += `- **Vue**: 
-  - 使用 Composition API（Vue 3）
-  - 保持组件模板简洁
-  - 复杂逻辑抽取到 composables
-  - 使用 TypeScript 增强类型安全
-`;
-    }
-    if (frameworks.includes("Next.js")) {
-      principles += `- **Next.js**: 
-  - 优先使用 App Router（如果项目使用）
-  - Server Components 中进行数据获取
-  - 使用 \`next/image\` 优化图片
-  - 配置适当的元数据以改善 SEO
-  - 最小化 'use client' 使用，优先使用 Server Components
-`;
-    }
-    if (frameworks.includes("Angular")) {
-      principles += `- **Angular**: 
-  - 使用组件和模块化架构
-  - 遵循 Angular 风格指南
-  - 使用 TypeScript 和依赖注入
-`;
-    }
-    if (frameworks.includes("Svelte")) {
-      principles += `- **Svelte**: 
-  - 利用 Svelte 的编译时优化
-  - 使用响应式声明和语句
-  - 保持组件简洁和高效
-`;
-    }
-
-    return principles || "- 遵循框架的官方最佳实践";
-  }
-
   /**
    * 检测项目实际使用的 MobX 模式。
    *
