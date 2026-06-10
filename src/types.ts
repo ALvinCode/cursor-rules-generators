@@ -25,6 +25,14 @@ import type {
   TSConfig,
 } from './modules/core/config-parser.js';
 import type { DynamicRoutingAnalysis } from './modules/analyzers/router-detector.js';
+import type {
+  LibraryUsage,
+  UsageRankResult,
+} from './modules/analyzers/dependency-usage-ranker.js';
+import type {
+  Platform,
+  PlatformDetection,
+} from './modules/platforms/types.js';
 
 export type {
   ErrorHandlingPattern,
@@ -38,6 +46,8 @@ export type {
   ESLintConfig,
   TSConfig,
   DynamicRoutingAnalysis,
+  Platform,
+  PlatformDetection,
 };
 
 export interface ProjectFile {
@@ -53,6 +63,9 @@ export interface TechStack {
   packageManagers: string[]; // npm, yarn, pnpm 等
   frameworks: string[];
   languages: string[];
+  // 平台/生态维度（阶段 0 引入）：基于清单文件与依赖检测的目标平台。
+  // 当前仅作信息记录，尚未被规则生成消费，后续阶段按平台分流生成。
+  platforms?: PlatformDetection[];
 }
 
 export interface Dependency {
@@ -236,32 +249,13 @@ export interface RuleGenerationContext {
   // v1.8.1 新增：保存文件列表，用于重新分析
   files?: string[];
   // UI 库真实使用分析（基于代码扫描，区分"安装"与"真实使用"）
-  uiLibraries?: UILibraryAnalysis;
+  uiLibraries?: UsageRankResult;
 }
 
-/**
- * 单个 UI 库的使用情况。
- */
-export interface UILibraryUsage {
-  /** 展示名（如 "Ant Design"） */
-  name: string;
-  /** 命中的依赖包名（如 "antd"） */
-  pkg: string;
-  /** 含该库 import 的源文件数（使用程度的度量单位） */
-  fileCount: number;
-}
-
-/**
- * UI 库真实使用分析结果。
- *
- * - `installed`：已安装的 UI 库（依赖中检测到）
- * - `active`：经"真实使用 + 使用程度阈值"裁定后认定为项目实际使用的 UI 库
- *   裁定规则：保留 fileCount ≥ 最大 fileCount / 3 的库（悬殊取主库，接近则都算）
- */
-export interface UILibraryAnalysis {
-  installed: UILibraryUsage[];
-  active: UILibraryUsage[];
-}
+/** UI 库使用情况 — 通用 LibraryUsage 的领域别名，保持下游引用不变。 */
+export type UILibraryUsage = LibraryUsage;
+/** UI 库分析结果 — 通用 UsageRankResult 的领域别名。 */
+export type UILibraryAnalysis = UsageRankResult;
 
 /**
  * 单条生成说明：描述某个规则文件为何被生成、何时生效。

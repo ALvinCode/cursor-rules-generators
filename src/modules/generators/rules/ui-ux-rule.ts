@@ -109,11 +109,27 @@ export function generateUIUXGuidelines(context: RuleGenerationContext): string {
  * 生成 UI/UX 设计规范规则文件。
  */
 export function generateUIUXRule(context: RuleGenerationContext): CursorRule {
-  // 收窄到 components/views 目录，避免所有 tsx 文件都触发
+  // 收窄到 components/views 目录，文件扩展名根据项目实际框架动态决定
   const org = context.fileOrganization;
   const compDir = org?.componentLocation?.[0]?.replace(/\/$/, '') || 'src/components';
   const viewDir = 'src/views';
-  const uiGlobs = `${compDir}/**/*.{tsx,jsx,vue,svelte}, ${viewDir}/**/*.{tsx,jsx,vue,svelte}`;
+  const frameworks = context.techStack.frameworks.map((f) => f.toLowerCase());
+  const uiExts: string[] = [];
+  if (frameworks.some((f) => f.includes("react") || f.includes("next") || f.includes("preact"))) {
+    uiExts.push("tsx", "jsx");
+  }
+  if (frameworks.includes("vue") || frameworks.includes("nuxt")) {
+    uiExts.push("vue");
+  }
+  if (frameworks.includes("svelte")) {
+    uiExts.push("svelte");
+  }
+  if (frameworks.includes("astro")) {
+    uiExts.push("astro");
+  }
+  if (uiExts.length === 0) uiExts.push("tsx", "jsx");
+  const extGlob = uiExts.length === 1 ? `*.${uiExts[0]}` : `*.{${uiExts.join(",")}}`;
+  const uiGlobs = `${compDir}/**/${extGlob}, ${viewDir}/**/${extGlob}`;
   const metadata = buildRuleMetadata(
     "UI/UX 设计规范",
     "UI component patterns and conventions for this project's UI library",

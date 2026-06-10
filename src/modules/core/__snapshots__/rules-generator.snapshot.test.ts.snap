@@ -149,6 +149,13 @@ const count: number = 0;
 
 > 错误处理规范请参考 **@error-handling.mdc**
 
+## Additional Best Practices
+
+### Code Style:
+
+Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
+
+**相关技术栈**: TypeScript
 
 ",
     "fileName": "code-style.mdc",
@@ -371,6 +378,13 @@ const count: number = 0;
 
 > 错误处理规范请参考 **@error-handling.mdc**
 
+## Additional Best Practices
+
+### Code Style:
+
+Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
+
+**相关技术栈**: TypeScript
 
 ",
     "fileName": "code-style.mdc",
@@ -483,7 +497,8 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 **Primary**: React ^18.2.0, TypeScript ^5.4.0  
 **Languages**: JavaScript, TypeScript  
 **Package Manager**: npm  
-**Frameworks**: React ^18.2.0
+**Frameworks**: React ^18.2.0  
+**Key Libraries**: antd ^5.12.0
 
 ## Commands
 
@@ -591,7 +606,7 @@ globs: **/index.{ts,tsx,js,jsx}
     "content": "---
 description: UI component patterns and conventions for this project's UI library
 alwaysApply: false
-globs: src/components/**/*.{tsx,jsx,vue,svelte}, src/views/**/*.{tsx,jsx,vue,svelte}
+globs: src/components/**/*.{tsx,jsx}, src/views/**/*.{tsx,jsx}
 ---
 
 
@@ -756,6 +771,13 @@ const count: number = 0;
 
 > 错误处理规范请参考 **@error-handling.mdc**
 
+## Additional Best Practices
+
+### Code Style:
+
+Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
+
+**相关技术栈**: TypeScript
 
 ",
     "fileName": "code-style.mdc",
@@ -990,32 +1012,7 @@ globs: src/api/**
 
 ## HTTP 客户端
 
-项目已封装 \`apiClient\`，位于 \`src/api/index.ts\`：
-
-\`\`\`ts
-import { apiClient } from "@/api/index";
-\`\`\`
-
-
-
-
-## 标准函数结构
-
-\`\`\`ts
-// src/api/feature.ts
-import { apiClient } from "@/api/index";
-import type { FeatureItem, FeatureListParams } from "@/interface/feature";
-
-export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
-  const { data } = await apiClient.get("/api/features", { params });
-  return data;
-}
-
-export async function createFeature(payload: Partial<FeatureItem>): Promise<FeatureItem> {
-  const { data } = await apiClient.post("/api/features", payload);
-  return data;
-}
-\`\`\`
+> ⚠️ 未自动识别到项目封装的 HTTP 客户端。请检查项目中的 API 请求封装文件，并确保通过封装函数调用。
 
 ## Do / Don't
 
@@ -1033,18 +1030,7 @@ useEffect(() => {
 
 ## 错误处理
 
-每个 API 函数必须处理异常，或在调用方 try-catch：
-
-\`\`\`ts
-try {
-  const list = await fetchFeatureList(params);
-  setList(list);
-} catch (error) {
-  message.error("加载失败");
-}
-\`\`\`
-
-参考: @error-handling.mdc
+每个 API 函数必须处理异常，或在调用方 try-catch。参考: @error-handling.mdc
 ",
     "fileName": "api-patterns.mdc",
   },
@@ -1152,6 +1138,13 @@ const count: number = 0;
 
 > 错误处理规范请参考 **@error-handling.mdc**
 
+## Additional Best Practices
+
+### Code Style:
+
+Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
+
+**相关技术栈**: TypeScript
 
 ",
     "fileName": "code-style.mdc",
@@ -1174,13 +1167,7 @@ globs: src/store/**
 
 项目定义了以下自定义 hooks，**生成代码时必须优先使用**：
 
-**useUserStore** 
-- 位置: \`src/store/useUserStore.ts\`
-- 使用频率: 低 ⚠️ 低频（仅 1 处使用，仅在明确匹配使用场景时优先）
-- 使用方式:
-  \`\`\`typescript
-  const result = useUserStore()
-  \`\`\`
+> 项目中的自定义 hooks 尚未检测到使用记录，请参考 @project-structure.mdc 确认 hooks 目录位置。
 
 ### 自定义工具函数
 
@@ -1255,8 +1242,12 @@ try { await doSomething(); } catch (err) { console.error(err); }
 
 
 
+## 补充的最佳实践
 
----
+### Exceptions
+
+Use exceptions to handle errors you don't expect.
+
 
 *遵循项目现有的错误处理模式，保持一致性。*
 ",
@@ -1358,7 +1349,7 @@ export function FeatureList() {
 ### 6. 路由注册
 
 \`\`\`tsx
-// pages/index.tsx 或路由配置文件
+// src/index.tsx 或路由配置文件
 { path: "/features", element: <FeatureList /> }
 { path: "/features/:id", element: <FeatureDetail /> }
 \`\`\`
@@ -1382,9 +1373,9 @@ export function FeatureList() {
   },
   {
     "content": "---
-description: Next.js routing organization, navigation patterns, and URL conventions
+description: React Router routing organization, navigation patterns, and URL conventions
 alwaysApply: false
-globs: pages/**
+globs: src/**
 ---
 
 
@@ -1394,23 +1385,32 @@ globs: pages/**
 
 ## 项目当前使用
 
-**路由系统**: Next.js (Pages Router)  
-**路由类型**: 文件系统路由（约定式）  
-**路由位置**: \`@pages/\`
+**路由系统**: React Router  
+**路由类型**: 配置式路由（声明式）  
+**路由位置**: \`@src/\`
 
 ## 路由组织方式
 
-**组织模式**: 分散定义
+**组织模式**: 集中管理
 **URL 命名**: kebab-case
-**文件命名**: [name].tsx
-
-## 实际路由示例
-
-### 静态路由
-
-- **@src/pages/Home.tsx** → \`/Home.tsx\`
+**文件命名**: 配置式
 
 ## 新建路由时
+
+### 新增路由
+
+1. 在路由配置目录 \`src/\` 中添加路由定义
+2. 创建对应的页面组件
+
+### 路由注册格式
+
+\`\`\`tsx
+// src/router/index.tsx 或路由配置文件
+{
+  path: '/feature-name',
+  element: <FeatureName />,
+}
+\`\`\`
 
 
 
@@ -1435,7 +1435,8 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 **Primary**: React ^18.2.0, TypeScript ^5.4.0  
 **Languages**: JavaScript, TypeScript  
 **Package Manager**: npm  
-**Frameworks**: React ^18.2.0
+**Frameworks**: React ^18.2.0  
+**Key Libraries**: zustand ^4.5.0
 
 ## Commands
 
@@ -1607,8 +1608,6 @@ globs: **/*.{test,spec}.{ts,tsx,js,jsx}
 
 **Framework**: Vitest ^2.1.0
 **Run tests**: \`npm run test\`
-
-
 > 💡 **基础规范**: 测试文件命名和组织规范请参考 **@code-style.mdc**
 
 ## 测试规范
@@ -1788,6 +1787,13 @@ const count: number = 0;
 
 > 错误处理规范请参考 **@error-handling.mdc**
 
+## Additional Best Practices
+
+### Code Style:
+
+Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
+
+**相关技术栈**: TypeScript
 
 ",
     "fileName": "code-style.mdc",

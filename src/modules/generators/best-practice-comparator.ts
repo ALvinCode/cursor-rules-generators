@@ -133,8 +133,7 @@ export class BestPracticeComparator {
     // 检查项目是否使用该实践
     const usage = await this.checkProjectUsage(practice, context);
     
-    // 检查是否已在规则中声明（通过检查规则内容）
-    const inRules = await this.checkInRules(practice, context);
+    const inRules = this.checkInRules(practice, context);
     
     // 判断是否应该添加
     const shouldAdd = this.shouldAddPractice(practice, usage);
@@ -364,10 +363,10 @@ export class BestPracticeComparator {
     // 检查文件组织方式（需要分析文件结构）
     if (practiceLower.includes('feature-based') || practiceLower.includes('feature based')) {
       // 检查是否有按功能组织的目录结构
-      const fileOrg = (context as any).fileOrganization;
+      const fileOrg = context.fileOrganization;
       if (fileOrg?.structure) {
         const hasFeatureBased = fileOrg.structure.some(
-          (s: any) => s.purpose === 'feature' || s.purpose === 'module'
+          (s) => s.purpose === 'feature' || s.purpose === 'module'
         );
         if (hasFeatureBased) {
           percentage = 0.7;
@@ -459,15 +458,15 @@ export class BestPracticeComparator {
   }
 
   /**
-   * 检查是否已在规则中声明
+   * 检查实践是否已在已有规则文件中声明。
+   *
+   * 当前总返回 false：规则在比较阶段尚未生成，无法反向检查。
+   * 后续若引入增量生成（只补缺失规则），可在此对接已有 .mdc 内容。
    */
-  private async checkInRules(
-    practice: ExtractedBestPractice,
-    context: RuleGenerationContext
-  ): Promise<boolean> {
-    // 这里需要检查已生成的规则内容
-    // 由于规则还未生成，我们暂时返回 false
-    // 实际实现中，可以检查规则生成上下文或已存在的规则文件
+  private checkInRules(
+    _practice: ExtractedBestPractice,
+    _context: RuleGenerationContext
+  ): boolean {
     return false;
   }
 

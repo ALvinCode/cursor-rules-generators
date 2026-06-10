@@ -77,25 +77,48 @@ export class DeepDirectoryAnalyzer {
     // 2. 提取所有目录
     const directories = this.extractAllDirectories(projectPath, files);
 
-    // 3. 分析每个目录
-    const analyses: DeepDirectoryAnalysis[] = [];
+    // 2.b. 预构建 parent→children 邻接表：供 analyzeDirectory 合并子文件时
+    // 从 O(全部 map keys) 降为 O(直接子目录数)。
+    const dirChildren = new Map<string, string[]>();
+    for (const d of dirToDirectFiles.keys()) {
+      const parent = path.dirname(d);
+      if (parent === d) continue;
+      const siblings = dirChildren.get(parent);
+      if (siblings) {
+        siblings.push(d);
+      } else {
+        dirChildren.set(parent, [d]);
+      }
+    }
 
-    for (const dir of directories) {
-      try {
-        const analysis = await this.analyzeDirectory(
-          dir,
-          projectPath,
-          files,
-          fileTypeMap,
-          modules,
-          directoryTree,
-          dirToDirectFiles
-        );
-        if (analysis) {
-          analyses.push(analysis);
-        }
-      } catch (error) {
-        logger.debug(`分析目录失败: ${dir}`, error);
+    // 3. 分批并行分析目录（每批 8 个，避免文件句柄耗尽）
+    const BATCH_SIZE = 8;
+    const analyses: DeepDirectoryAnalysis[] = [];
+    const dirArray = [...directories];
+
+    for (let i = 0; i < dirArray.length; i += BATCH_SIZE) {
+      const batch = dirArray.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map(async (dir) => {
+          try {
+            return await this.analyzeDirectory(
+              dir,
+              projectPath,
+              files,
+              fileTypeMap,
+              modules,
+              directoryTree,
+              dirToDirectFiles,
+              dirChildren
+            );
+          } catch (error) {
+            logger.debug(`分析目录失败: ${dir}`, error);
+            return null;
+          }
+        }),
+      );
+      for (const r of results) {
+        if (r) analyses.push(r);
       }
     }
 
@@ -115,24 +138,39 @@ export class DeepDirectoryAnalyzer {
     fileTypeMap: Map<string, FileTypeInfo>,
     modules: Array<{ name: string; path: string }>,
     directoryTree: Map<string, string[]>,
-    dirToDirectFiles?: Map<string, string[]>
+    dirToDirectFiles?: Map<string, string[]>,
+    dirChildren?: Map<string, string[]>
   ): Promise<DeepDirectoryAnalysis | null> {
     const fullPath = path.join(projectPath, dirPath);
     let filesInDir: string[];
     let directFiles: string[];
 
     if (dirToDirectFiles) {
-      // 快路径：使用预计算索引。O(子目录) 而非 O(文件)。
       directFiles = dirToDirectFiles.get(dirPath) ?? [];
       filesInDir = [...directFiles];
-      const prefix = dirPath + path.sep;
-      for (const [childDir, childFiles] of dirToDirectFiles) {
-        if (childDir !== dirPath && childDir.startsWith(prefix)) {
-          filesInDir.push(...childFiles);
+
+      if (dirChildren) {
+        // O(children)：通过邻接表递归收集子目录文件
+        const collectDescendants = (parent: string): void => {
+          const children = dirChildren.get(parent);
+          if (!children) return;
+          for (const child of children) {
+            const childFiles = dirToDirectFiles.get(child);
+            if (childFiles) filesInDir.push(...childFiles);
+            collectDescendants(child);
+          }
+        };
+        collectDescendants(dirPath);
+      } else {
+        // 旧路径：O(全部 map keys) 前缀匹配
+        const prefix = dirPath + path.sep;
+        for (const [childDir, childFiles] of dirToDirectFiles) {
+          if (childDir !== dirPath && childDir.startsWith(prefix)) {
+            filesInDir.push(...childFiles);
+          }
         }
       }
     } else {
-      // 兼容路径：保留旧的 O(文件) 扫描，供未传索引的调用使用。
       filesInDir = allFiles.filter((f) => {
         const fileDir = path.dirname(FileUtils.getRelativePath(projectPath, f));
         return fileDir === dirPath || fileDir.startsWith(dirPath + path.sep);

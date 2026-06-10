@@ -155,11 +155,12 @@ export class ModuleStructureAnalyzer {
 
     const tree: string[] = [];
 
+    type AdjustedDir = DeepDirectoryAnalysis & { adjustedDepth: number };
     const buildTree = (
-      dir: any,
+      dir: AdjustedDir,
       prefix: string,
       isLast: boolean,
-      allDirs: any[]
+      allDirs: AdjustedDir[]
     ) => {
       const connector = isLast ? "└── " : "├── ";
       const dirName = path.basename(dir.path);

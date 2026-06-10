@@ -27,6 +27,7 @@ export async function generateStateManagementRule(
     // MobX 时基于版本 + 实际代码检测使用模式
     const isMobX = stateLib?.name?.toLowerCase().includes('mobx') ?? false;
     const mobxPattern = isMobX ? await detectMobXPattern(context) : 'makeAutoObservable';
+    const mobxAccess = isMobX ? await detectMobXAccessPattern(context) : undefined;
 
     const storeGlobs = getStoreGlobs(context);
     const metadata = buildRuleMetadata(
@@ -47,7 +48,7 @@ export async function generateStateManagementRule(
 
 参考: @global-rules.mdc
 
-${generateStateManagementContent(context, stateLib?.name, mobxPattern)}
+${generateStateManagementContent(context, stateLib?.name, mobxPattern, mobxAccess)}
 
 ---
 
@@ -159,13 +160,75 @@ export async function detectMobXPattern(
     return 'makeAutoObservable';
 }
 
+export interface MobXAccessInfo {
+  /** mobx-react | mobx-react-lite */
+  observerPackage: string;
+  /** direct-import | useStores | context | inject */
+  accessPattern: "direct-import" | "useStores" | "context" | "inject";
+  /** 实际 import 示例（如 "import { GlobalStore } from '@/store'"） */
+  importExample?: string;
+}
+
+/**
+ * 检测组件中如何访问 MobX store（直接 import vs useStores vs inject 等）。
+ * 同时检测使用的是 mobx-react 还是 mobx-react-lite。
+ */
+export async function detectMobXAccessPattern(
+  context: RuleGenerationContext
+): Promise<MobXAccessInfo> {
+  const deps = context.techStack.dependencies.map((d) => d.name);
+  const hasMobxReact = deps.includes("mobx-react");
+  const hasMobxReactLite = deps.includes("mobx-react-lite");
+  const observerPackage = hasMobxReactLite && !hasMobxReact
+    ? "mobx-react-lite"
+    : hasMobxReact ? "mobx-react" : "mobx-react-lite";
+
+  const srcFiles = (context.files ?? [])
+    .filter((f) => /\.(tsx|jsx)$/.test(f) && !f.includes(".test.") && !f.includes("node_modules"))
+    .slice(0, 50);
+
+  let directImportCount = 0;
+  let useStoresCount = 0;
+  let injectCount = 0;
+  let importExample = "";
+
+  for (const file of srcFiles) {
+    const content = await FileUtils.readFile(file);
+    if (!content.includes("observer") && !content.includes("store")) continue;
+
+    if (/import\s+.*(?:Store|store).*from\s+['"]@?\/?(?:src\/)?store/i.test(content)) {
+      directImportCount++;
+      if (!importExample) {
+        const match = content.match(/import\s+\{?\s*\w+Store\s*\}?\s*from\s+['"][^'"]+['"]/);
+        if (match) importExample = match[0];
+      }
+    }
+    if (content.includes("useStores") || content.includes("useStore(")) {
+      useStoresCount++;
+    }
+    if (content.includes("@inject") || content.includes("inject(")) {
+      injectCount++;
+    }
+  }
+
+  let accessPattern: MobXAccessInfo["accessPattern"] = "direct-import";
+  if (useStoresCount > directImportCount && useStoresCount > injectCount) {
+    accessPattern = "useStores";
+  } else if (injectCount > directImportCount && injectCount > useStoresCount) {
+    accessPattern = "inject";
+  }
+
+  return { observerPackage, accessPattern, importExample };
+}
+
 /**
  * 生成状态管理内容
  */
 function generateStateManagementContent(
   context: RuleGenerationContext,
   libName?: string,
-  mobxPattern: 'makeAutoObservable' | 'decorator' = 'makeAutoObservable'
+  mobxPattern: 'makeAutoObservable' | 'decorator' = 'makeAutoObservable',
+  mobxAccess?: MobXAccessInfo
 ): string {
     if (!libName) {
       return "项目使用状态管理，请遵循一致的状态更新模式。";
@@ -293,11 +356,12 @@ ${storeExample}
 
 **在组件中使用**:
 \`\`\`typescript
-import { observer } from 'mobx-react-lite'
+import { observer } from '${mobxAccess?.observerPackage || "mobx-react-lite"}'
+${mobxAccess?.accessPattern === "direct-import" && mobxAccess.importExample ? mobxAccess.importExample : `import { SomeStore } from '@/${storeDir}'`}
 
 export const UserProfile = observer(() => {
-  const { user } = useStores()  // 获取 Store
-  return <div>{user.name}</div>
+  ${mobxAccess?.accessPattern === "direct-import" ? "// 直接导入 Store 实例使用" : mobxAccess?.accessPattern === "useStores" ? "const { someStore } = useStores()" : "// 按项目约定获取 Store"}
+  return <div>{/* ... */}</div>
 })
 \`\`\`
 

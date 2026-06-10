@@ -13,12 +13,14 @@ import {
   generateVersionedTechStack,
   generateCommandsSection,
   generatePostCodingConstraint,
+  isJsTsProject,
   isFrontendProject,
   featureExists,
   detectTestFramework,
   hasCustomTools,
   hasErrorHandling,
   hasStateManagement,
+  getPlatformSections,
 } from "./rule-helpers.js";
 
 /**
@@ -39,9 +41,9 @@ export function generateGlobalOverviewRule(
     );
 
     const persona = generatePersona(context);
-
     const techVersions = generateVersionedTechStack(context);
     const commandsSection = generateCommandsSection(context);
+    const platformGlobal = getPlatformSections(context, "global-overview");
 
     const content =
       metadata +
@@ -55,8 +57,7 @@ ${techVersions}
 ${commandsSection}
 ## Hard Constraints
 
-- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.
-- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
+${isJsTsProject(context) ? `- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.\n` : ""}- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
 - NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
 - NEVER generate markdown documentation files — express intent through code, types, and naming.
 - Before creating files, consult @project-structure.mdc for correct location.
@@ -67,7 +68,7 @@ ${
   context.techStack.frameworks.length > 0
     ? `\n${generateFrameworkPrinciples(context)}\n`
     : ""
-}
+}${platformGlobal ? `\n${platformGlobal}\n` : ""}
 ## Rule Index
 
 | Rule | Scope |

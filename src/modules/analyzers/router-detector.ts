@@ -22,10 +22,15 @@ export class RouterDetector {
     files: string[],
     dependencies?: Array<{ name: string; version?: string }>
   ): Promise<RouterInfo | null> {
+    const depNames = new Set(
+      (dependencies ?? []).map((d) => d.name.toLowerCase())
+    );
+
     // 首先从文件结构检测
     const fileBasedRouter = await this.detectFrontendRouterFromFiles(
       projectPath,
-      files
+      files,
+      depNames
     );
     if (fileBasedRouter) {
       return fileBasedRouter;
@@ -48,51 +53,56 @@ export class RouterDetector {
    */
   private async detectFrontendRouterFromFiles(
     projectPath: string,
-    files: string[]
+    files: string[],
+    depNames: Set<string> = new Set()
   ): Promise<RouterInfo | null> {
-    // 1. 检测 Next.js App Router
-    const appRouterFiles = files.filter(
-      (f) => f.includes("/app/") && f.endsWith("/page.tsx")
-    );
-    if (appRouterFiles.length > 0) {
-      return {
-        exists: true,
-        type: "file-based",
-        framework: "Next.js",
-        version: "App Router",
-        location: ["app/"],
-      };
+    // 1. 检测 Next.js App Router（需 next 依赖 + app/page.tsx 结构）
+    if (depNames.has("next")) {
+      const appRouterFiles = files.filter(
+        (f) => f.includes("/app/") && f.endsWith("/page.tsx")
+      );
+      if (appRouterFiles.length > 0) {
+        return {
+          exists: true,
+          type: "file-based",
+          framework: "Next.js",
+          version: "App Router",
+          location: ["app/"],
+        };
+      }
+
+      // 2. 检测 Next.js Pages Router（需 next 依赖 + pages/ 结构）
+      const pagesRouterFiles = files.filter(
+        (f) =>
+          f.includes("/pages/") &&
+          /\.(tsx?|jsx?)$/.test(f) &&
+          !f.includes("_app") &&
+          !f.includes("_document")
+      );
+      if (pagesRouterFiles.length > 0) {
+        return {
+          exists: true,
+          type: "file-based",
+          framework: "Next.js",
+          version: "Pages Router",
+          location: ["pages/"],
+        };
+      }
     }
 
-    // 2. 检测 Next.js Pages Router
-    const pagesRouterFiles = files.filter(
-      (f) =>
-        f.includes("/pages/") &&
-        /\.(tsx?|jsx?)$/.test(f) &&
-        !f.includes("_app") &&
-        !f.includes("_document")
-    );
-    if (pagesRouterFiles.length > 0) {
-      return {
-        exists: true,
-        type: "file-based",
-        framework: "Next.js",
-        version: "Pages Router",
-        location: ["pages/"],
-      };
-    }
-
-    // 3. 检测 Nuxt
-    const nuxtPagesFiles = files.filter(
-      (f) => f.includes("/pages/") && f.endsWith(".vue")
-    );
-    if (nuxtPagesFiles.length > 0) {
-      return {
-        exists: true,
-        type: "file-based",
-        framework: "Nuxt",
-        location: ["pages/"],
-      };
+    // 3. 检测 Nuxt（需 nuxt 依赖 + pages/*.vue 结构）
+    if (depNames.has("nuxt") || depNames.has("nuxt3")) {
+      const nuxtPagesFiles = files.filter(
+        (f) => f.includes("/pages/") && f.endsWith(".vue")
+      );
+      if (nuxtPagesFiles.length > 0) {
+        return {
+          exists: true,
+          type: "file-based",
+          framework: "Nuxt",
+          location: ["pages/"],
+        };
+      }
     }
 
     // 4. 检测 React Router（配置式）
@@ -131,17 +141,23 @@ export class RouterDetector {
       }
     }
 
-    // 6. 检测 Remix
-    const remixRoutes = files.filter(
-      (f) => f.includes("/routes/") && f.endsWith(".tsx")
-    );
-    if (remixRoutes.length > 0) {
-      return {
-        exists: true,
-        type: "file-based",
-        framework: "Remix",
-        location: ["app/routes/"],
-      };
+    // 6. 检测 Remix（需 @remix-run/* 或 remix 依赖 + routes/ 结构）
+    if (
+      depNames.has("@remix-run/react") ||
+      depNames.has("@remix-run/node") ||
+      depNames.has("remix")
+    ) {
+      const remixRoutes = files.filter(
+        (f) => f.includes("/routes/") && f.endsWith(".tsx")
+      );
+      if (remixRoutes.length > 0) {
+        return {
+          exists: true,
+          type: "file-based",
+          framework: "Remix",
+          location: ["app/routes/"],
+        };
+      }
     }
 
     return null;
@@ -237,10 +253,15 @@ export class RouterDetector {
     files: string[],
     dependencies?: Array<{ name: string; version?: string }>
   ): Promise<RouterInfo | null> {
+    const depNames = new Set(
+      (dependencies ?? []).map((d) => d.name.toLowerCase())
+    );
+
     // 首先从文件结构检测
     const fileBasedRouter = await this.detectBackendRouterFromFiles(
       projectPath,
-      files
+      files,
+      depNames
     );
     if (fileBasedRouter) {
       return fileBasedRouter;
@@ -263,89 +284,100 @@ export class RouterDetector {
    */
   private async detectBackendRouterFromFiles(
     projectPath: string,
-    files: string[]
+    files: string[],
+    depNames: Set<string> = new Set()
   ): Promise<RouterInfo | null> {
-    // 1. 检测 Express
-    const expressRoutes = files.filter((f) => {
-      return (
-        f.includes("/routes/") ||
-        f.includes("/api/") ||
-        f.includes("/controllers/")
+    // 1. 检测 Express（需 express 依赖 + 文件内容验证）
+    if (depNames.has("express")) {
+      const expressRoutes = files.filter((f) => {
+        return (
+          f.includes("/routes/") ||
+          f.includes("/api/") ||
+          f.includes("/controllers/")
+        );
+      });
+
+      for (const file of expressRoutes.slice(0, 10)) {
+        const content = await FileUtils.readFile(file);
+        if (
+          content.includes("express.Router") ||
+          content.includes("router.get(") ||
+          content.includes("app.get(")
+        ) {
+          return {
+            exists: true,
+            type: "programmatic",
+            framework: "Express",
+            location: expressRoutes
+              .map((f) => this.relDir(projectPath, f))
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .slice(0, 3),
+          };
+        }
+      }
+    }
+
+    // 2. 检测 Fastify（需 fastify 依赖 + 文件内容验证）
+    if (depNames.has("fastify")) {
+      for (const file of files.slice(0, 20)) {
+        const content = await FileUtils.readFile(file);
+        if (
+          content.includes("fastify.route") ||
+          content.includes("fastify.get")
+        ) {
+          return {
+            exists: true,
+            type: "programmatic",
+            framework: "Fastify",
+            location: ["src/routes/"],
+          };
+        }
+      }
+    }
+
+    // 3. 检测 NestJS（需 @nestjs/core 依赖 + 内容验证）
+    if (depNames.has("@nestjs/core") || depNames.has("@nestjs/common")) {
+      const nestControllers = files.filter(
+        (f) => f.includes("controller") && f.endsWith(".ts")
       );
-    });
+      if (nestControllers.length > 0) {
+        const content = await FileUtils.readFile(nestControllers[0]);
+        if (content.includes("@Controller") || content.includes("@nestjs")) {
+          return {
+            exists: true,
+            type: "programmatic",
+            framework: "NestJS",
+            location: nestControllers.map((f) => this.relDir(projectPath, f)).slice(0, 3),
+          };
+        }
+      }
+    }
 
-    for (const file of expressRoutes.slice(0, 10)) {
-      const content = await FileUtils.readFile(file);
-      if (
-        content.includes("express.Router") ||
-        content.includes("router.get(") ||
-        content.includes("app.get(")
-      ) {
+    // 4. 检测 Django（需 django 依赖 + urls.py 文件）
+    if (depNames.has("django")) {
+      const djangoUrls = files.filter((f) => f.endsWith("urls.py"));
+      if (djangoUrls.length > 0) {
         return {
           exists: true,
-          type: "programmatic",
-          framework: "Express",
-          location: expressRoutes
-            .map((f) => this.relDir(projectPath, f))
-            .filter((v, i, a) => a.indexOf(v) === i)
-            .slice(0, 3),
+          type: "config-based",
+          framework: "Django",
+          location: djangoUrls.map((f) => this.relDir(projectPath, f)),
         };
       }
     }
 
-    // 2. 检测 Fastify
-    for (const file of files.slice(0, 20)) {
-      const content = await FileUtils.readFile(file);
-      if (
-        content.includes("fastify.route") ||
-        content.includes("fastify.get")
-      ) {
-        return {
-          exists: true,
-          type: "programmatic",
-          framework: "Fastify",
-          location: ["src/routes/"],
-        };
-      }
-    }
-
-    // 3. 检测 NestJS
-    const nestControllers = files.filter(
-      (f) => f.includes("controller") && f.endsWith(".ts")
-    );
-    if (nestControllers.length > 0) {
-      const content = await FileUtils.readFile(nestControllers[0]);
-      if (content.includes("@Controller") || content.includes("@nestjs")) {
-        return {
-          exists: true,
-          type: "programmatic",
-          framework: "NestJS",
-          location: nestControllers.map((f) => this.relDir(projectPath, f)).slice(0, 3),
-        };
-      }
-    }
-
-    // 4. 检测 Django
-    const djangoUrls = files.filter((f) => f.endsWith("urls.py"));
-    if (djangoUrls.length > 0) {
-      return {
-        exists: true,
-        type: "config-based",
-        framework: "Django",
-        location: djangoUrls.map((f) => this.relDir(projectPath, f)),
-      };
-    }
-
-    // 5. 检测 Flask
-    for (const file of files.filter((f) => f.endsWith(".py")).slice(0, 20)) {
-      const content = await FileUtils.readFile(file);
-      if (content.includes("@app.route") || content.includes("@bp.route")) {
-        return {
-          exists: true,
-          type: "programmatic",
-          framework: "Flask",
-          location: ["app/"],
-        };
+    // 5. 检测 Flask（需 flask 依赖 + 文件内容验证）
+    if (depNames.has("flask")) {
+      for (const file of files.filter((f) => f.endsWith(".py")).slice(0, 20)) {
+        const content = await FileUtils.readFile(file);
+        if (content.includes("@app.route") || content.includes("@bp.route")) {
+          return {
+            exists: true,
+            type: "programmatic",
+            framework: "Flask",
+            location: ["app/"],
+          };
+        }
       }
     }
 
@@ -784,8 +816,10 @@ export class RouterDetector {
         });
       }
     } else if (routerInfo.type === "config-based") {
-      // 配置式路由（需要解析配置文件）
-      // 暂时返回占位
+      // 配置式路由：读取路由配置文件提取实际路由定义
+      await this.extractConfigBasedRoutes(
+        files, routerInfo, examples, projectPath
+      );
     } else if (routerInfo.type === "programmatic") {
       // 编程式路由（后端API）
       await this.extractProgrammaticRoutes(
@@ -816,6 +850,38 @@ export class RouterDetector {
     relativePath = relativePath.replace(/\/\([^)]+\)/g, "");
 
     return "/" + relativePath.replace(/^\//, "");
+  }
+
+  /**
+   * 提取配置式路由（React Router 配置文件、Vue Router 等）
+   */
+  private async extractConfigBasedRoutes(
+    files: string[],
+    routerInfo: RouterInfo,
+    examples: RouteExample[],
+    projectPath: string
+  ): Promise<void> {
+    // 找到路由配置文件
+    const routerFile = files.find((f) =>
+      routerInfo.location.some((loc) => f.includes(loc)) &&
+      (f.includes("router") || f.includes("routes")) &&
+      /\.(ts|tsx|js|jsx)$/.test(f)
+    );
+    if (!routerFile) return;
+
+    const content = await FileUtils.readFile(routerFile);
+    // 提取 path: '/xxx' 模式
+    const pathMatches = content.matchAll(/path:\s*['"]([^'"]+)['"]/g);
+    for (const match of pathMatches) {
+      const url = match[1];
+      if (url === "*" || url === "/") continue;
+      examples.push({
+        filePath: FileUtils.getRelativePath(projectPath, routerFile),
+        url,
+        type: url.includes(":") || url.includes("*") ? "dynamic" : "static",
+      });
+      if (examples.length >= 10) break;
+    }
   }
 
   /**
@@ -1207,8 +1273,8 @@ export class RouterDetector {
    * 评估总体置信度
    */
   private evaluateOverallConfidence(
-    scriptsAnalysis: any,
-    commandsAnalysis: any
+    scriptsAnalysis: { scripts: string[]; confidence: "high" | "medium" | "low" },
+    commandsAnalysis: { commands: string[]; confidence: "high" | "medium" | "low" }
   ): "high" | "medium" | "low" {
     // 如果命令和脚本都只有一个，且一致
     if (
@@ -1238,8 +1304,8 @@ export class RouterDetector {
    * 步骤 6：生成确认问题
    */
   private generateConfirmationQuestions(
-    scripts: any,
-    documentation: any
+    scripts: { files: string[]; commands: string[]; confidence: "high" | "medium" | "low" },
+    documentation: DynamicRoutingAnalysis["documentation"]
   ): ConfirmationQuestion[] {
     const questions: ConfirmationQuestion[] = [];
 
@@ -1268,7 +1334,7 @@ export class RouterDetector {
   /**
    * 解释选择理由
    */
-  private explainChoice(choice: string, scripts: any): string {
+  private explainChoice(choice: string, scripts: { files: string[]; commands: string[] }): string {
     if (scripts.commands.includes(choice)) {
       return `选择此命令因为：在 package.json 中找到，命令名称包含 'generate' 和 'route'`;
     }
@@ -1281,7 +1347,7 @@ export class RouterDetector {
   /**
    * 获取备选方案
    */
-  private getAlternatives(current: string, scripts: any): string[] {
+  private getAlternatives(current: string, scripts: { files: string[]; commands: string[] }): string[] {
     const all = [...scripts.commands, ...scripts.files];
     return all.filter((item) => item !== current);
   }

@@ -28,6 +28,10 @@ export interface APIClientInfo {
   exists: boolean;
   name?: string;
   filePath?: string;
+  /** 实际导出名（如 ajax、request），用于生成正确的 import 语句 */
+  exportName?: string;
+  /** default | named */
+  importStyle?: "default" | "named";
   methods?: string[];
   hasErrorHandling: boolean;
   hasAuth: boolean;
@@ -41,9 +45,7 @@ export class CustomPatternDetector {
     projectPath: string,
     files: string[]
   ): Promise<CustomHook[]> {
-    const hooks: CustomHook[] = [];
-    
-    // 查找 hooks 文件
+    // 策略 1：文件名以 use[A-Z] 开头的文件
     const hookFiles = files.filter((f) => {
       const basename = path.basename(f);
       return (
@@ -54,36 +56,76 @@ export class CustomPatternDetector {
       );
     });
 
-    for (const file of hookFiles) {
-      const content = await FileUtils.readFile(file);
+    // 策略 2：hooks/ 目录下的所有 ts/tsx/js/jsx 文件（可能导出 useXxx 但文件名不以 use 开头）
+    const hookDirFiles = files.filter((f) => {
+      const inHooksDir = /\/hooks?\//.test(f);
+      return (
+        inHooksDir &&
+        /\.(ts|tsx|js|jsx)$/.test(f) &&
+        !f.includes("node_modules") &&
+        !f.includes(".test.") && !f.includes(".spec.") &&
+        !hookFiles.includes(f)
+      );
+    });
+
+    const allHookSourceFiles = [...hookFiles, ...hookDirFiles];
+
+    // 1) 先从 hook 文件中提取所有 symbol 名
+    const hookCandidates: Array<{
+      name: string;
+      file: string;
+      content: string;
+    }> = [];
+    const seenNames = new Set<string>();
+
+    const hookContents = await Promise.all(
+      allHookSourceFiles.map((f) => FileUtils.readFile(f)),
+    );
+
+    for (let i = 0; i < allHookSourceFiles.length; i++) {
+      const file = allHookSourceFiles[i];
+      const content = hookContents[i];
       const basename = path.basename(file, path.extname(file));
 
-      // 提取 hook 名称
-      const exportMatch =
-        content.match(new RegExp(`export.*(?:function|const)\\s+(${basename})`)) ||
-        content.match(/export\s+(?:function|const)\s+(use[A-Z]\w+)/);
+      // 匹配文件中所有导出的 use[A-Z] 开头函数
+      const exportMatches = content.matchAll(
+        /export\s+(?:function|const)\s+(use[A-Z]\w+)/g
+      );
+      for (const match of exportMatches) {
+        if (!seenNames.has(match[1])) {
+          seenNames.add(match[1]);
+          hookCandidates.push({ name: match[1], file, content });
+        }
+      }
 
-      if (exportMatch) {
-        const hookName = exportMatch[1];
-
-        // 统计使用频率（在其他文件中搜索导入）
-        const frequency = await this.countUsageInProject(hookName, files);
-
-        // 提取使用示例
-        const usageExample = this.extractHookUsage(content, hookName);
-
-        hooks.push({
-          name: hookName,
-          filePath: file,
-          relativePath: FileUtils.getRelativePath(projectPath, file),
-          usage: usageExample,
-          frequency,
-          description: this.extractCommentDescription(content, hookName),
-        });
+      // 也匹配文件名本身如果以 use 开头
+      if (basename.match(/^use[A-Z]/) && !seenNames.has(basename)) {
+        const nameMatch = content.match(
+          new RegExp(`export.*(?:function|const)\\s+(${basename})`)
+        );
+        if (nameMatch) {
+          seenNames.add(nameMatch[1]);
+          hookCandidates.push({ name: nameMatch[1], file, content });
+        }
       }
     }
 
-    // 按使用频率排序
+    // 2) 批量构建使用频率索引（一次遍历 300 个文件，替代 N×300）
+    const names = hookCandidates.map((h) => h.name);
+    const usageIndex = names.length > 0
+      ? await this.buildUsageIndex(names, files)
+      : new Map<string, number>();
+
+    // 3) 组装结果
+    const hooks: CustomHook[] = hookCandidates.map((h) => ({
+      name: h.name,
+      filePath: h.file,
+      relativePath: FileUtils.getRelativePath(projectPath, h.file),
+      usage: this.extractHookUsage(h.content, h.name),
+      frequency: usageIndex.get(h.name) ?? 0,
+      description: this.extractCommentDescription(h.content, h.name),
+    }));
+
     return hooks.sort((a, b) => b.frequency - a.frequency);
   }
 
@@ -94,9 +136,6 @@ export class CustomPatternDetector {
     projectPath: string,
     files: string[]
   ): Promise<CustomUtil[]> {
-    const utils: CustomUtil[] = [];
-
-    // 查找工具文件目录
     const utilFiles = files.filter(
       (f) =>
         (f.includes("/utils/") ||
@@ -107,29 +146,51 @@ export class CustomPatternDetector {
         !path.basename(f).startsWith("index")
     );
 
-    for (const file of utilFiles) {
-      const content = await FileUtils.readFile(file);
+    // 1) 并行读取所有 util 文件，提取 symbol 名
+    const utilContents = await Promise.all(
+      utilFiles.map((f) => FileUtils.readFile(f)),
+    );
+
+    const candidates: Array<{
+      name: string;
+      file: string;
+      content: string;
+      category: string;
+    }> = [];
+
+    for (let i = 0; i < utilFiles.length; i++) {
+      const file = utilFiles[i];
+      const content = utilContents[i];
       const category = this.categorizeUtil(file);
 
-      // 提取导出的函数
       const functionMatches = content.matchAll(
         /export\s+(?:async\s+)?(?:function|const)\s+(\w+)/g
       );
 
       for (const match of functionMatches) {
-        const funcName = match[1];
-        const frequency = await this.countUsageInProject(funcName, files);
+        candidates.push({ name: match[1], file, content, category });
+      }
+    }
 
-        if (frequency > 0) {
-          utils.push({
-            name: funcName,
-            filePath: file,
-            relativePath: FileUtils.getRelativePath(projectPath, file),
-            category,
-            frequency,
-            signature: this.extractFunctionSignature(content, funcName),
-          });
-        }
+    // 2) 批量构建使用频率索引
+    const names = candidates.map((c) => c.name);
+    const usageIndex = names.length > 0
+      ? await this.buildUsageIndex(names, files)
+      : new Map<string, number>();
+
+    // 3) 过滤 frequency > 0 并组装
+    const utils: CustomUtil[] = [];
+    for (const c of candidates) {
+      const frequency = usageIndex.get(c.name) ?? 0;
+      if (frequency > 0) {
+        utils.push({
+          name: c.name,
+          filePath: c.file,
+          relativePath: FileUtils.getRelativePath(projectPath, c.file),
+          category: c.category,
+          frequency,
+          signature: this.extractFunctionSignature(c.content, c.name),
+        });
       }
     }
 
@@ -138,78 +199,163 @@ export class CustomPatternDetector {
 
   /**
    * 检测 API 客户端
+   *
+   * 策略：
+   * 1. 精确文件名匹配（api-client.ts, request.ts 等）
+   * 2. 在 lib/, utils/, services/ 下扫描 axios.create() / export default axios 等模式
    */
   async detectAPIClient(
     projectPath: string,
     files: string[]
   ): Promise<APIClientInfo> {
-    // 常见的 API 客户端文件名
-    const apiClientPatterns = [
-      "api-client",
-      "apiClient",
-      "http-client",
-      "httpClient",
-      "request",
-      "api",
+    const namePatterns = [
+      "api-client", "apiClient", "http-client", "httpClient",
+      "request", "api", "axios", "http",
     ];
 
-    for (const pattern of apiClientPatterns) {
+    // 策略 1：精确文件名匹配
+    for (const pattern of namePatterns) {
       const apiFile = files.find(
         (f) =>
           path.basename(f, path.extname(f)) === pattern &&
           /\.(ts|tsx|js|jsx)$/.test(f)
       );
-
       if (apiFile) {
-        const content = await FileUtils.readFile(apiFile);
-
-        return {
-          exists: true,
-          name: pattern,
-          filePath: apiFile,
-          methods: this.extractAPIMethods(content),
-          hasErrorHandling: content.includes("catch") || content.includes("try"),
-          hasAuth:
-            content.includes("auth") ||
-            content.includes("token") ||
-            content.includes("Authorization"),
-        };
+        const result = await this.analyzeHttpClientFile(projectPath, apiFile);
+        if (result) return result;
       }
     }
 
-    // 检测是否使用 axios 或其他库（暂时跳过异步检测）
-    return {
-      exists: false,
-      hasErrorHandling: false,
-      hasAuth: false,
-    };
+    // 策略 2：扫描 lib/, utils/, services/ 下的文件查找 axios 实例
+    const scanDirs = ["lib/", "utils/", "services/", "common/", "helpers/"];
+    const candidates = files.filter(
+      (f) =>
+        scanDirs.some((d) => f.includes(`/${d}`)) &&
+        /\.(ts|js)$/.test(f) &&
+        !f.includes(".test.") && !f.includes(".spec.")
+    );
+    for (const file of candidates.slice(0, 30)) {
+      const content = await FileUtils.readFile(file);
+      if (
+        content.includes("axios.create") ||
+        content.includes("axios.defaults") ||
+        (content.includes("import axios") && content.includes("export"))
+      ) {
+        const result = await this.analyzeHttpClientFile(projectPath, file, content);
+        if (result) return result;
+      }
+    }
+
+    return { exists: false, hasErrorHandling: false, hasAuth: false };
   }
 
   /**
-   * 统计在项目中的使用次数（只扫描源码文件，排除 dist/node_modules）
+   * 分析单个 HTTP 客户端文件，提取导出名、import 风格等信息
    */
-  private async countUsageInProject(
-    name: string,
-    files: string[]
-  ): Promise<number> {
-    let count = 0;
+  private async analyzeHttpClientFile(
+    projectPath: string,
+    filePath: string,
+    existingContent?: string
+  ): Promise<APIClientInfo | null> {
+    const content = existingContent ?? await FileUtils.readFile(filePath);
+    if (!content) return null;
+
+    const relPath = FileUtils.getRelativePath(projectPath, filePath);
+    const hasErrorHandling = content.includes("catch") || content.includes("interceptors.response");
+    const hasAuth =
+      content.includes("auth") ||
+      content.includes("token") ||
+      content.includes("Authorization");
+
+    // 检测 default export 的名称
+    const defaultExportMatch =
+      content.match(/export\s+default\s+(\w+)/) ||
+      content.match(/export\s*\{\s*(\w+)\s+as\s+default\s*\}/);
+    if (defaultExportMatch) {
+      return {
+        exists: true,
+        name: defaultExportMatch[1],
+        exportName: defaultExportMatch[1],
+        importStyle: "default",
+        filePath: relPath,
+        methods: this.extractAPIMethods(content),
+        hasErrorHandling,
+        hasAuth,
+      };
+    }
+
+    // 检测 named export（如 export const ajax = ...）
+    const namedExportMatch = content.match(
+      /export\s+(?:const|function)\s+(\w+)\s*=?\s*(?:axios\.create|axios\.defaults)/
+    );
+    if (namedExportMatch) {
+      return {
+        exists: true,
+        name: namedExportMatch[1],
+        exportName: namedExportMatch[1],
+        importStyle: "named",
+        filePath: relPath,
+        methods: this.extractAPIMethods(content),
+        hasErrorHandling,
+        hasAuth,
+      };
+    }
+
+    // 兜底：文件包含 axios 相关内容，用文件名作为名称
+    if (content.includes("axios")) {
+      const baseName = path.basename(filePath, path.extname(filePath));
+      return {
+        exists: true,
+        name: baseName,
+        filePath: relPath,
+        methods: this.extractAPIMethods(content),
+        hasErrorHandling,
+        hasAuth,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * 批量构建使用频率索引：一次遍历源文件，用合并正则匹配所有 symbol。
+   * 返回 Map<symbolName, totalMatchCount>。
+   *
+   * 替代旧的 countUsageInProject（每个 symbol 各遍历 300 文件），
+   * 将 O(N×300) 降为 O(300)（N = symbol 数量）。
+   */
+  private async buildUsageIndex(
+    names: string[],
+    files: string[],
+  ): Promise<Map<string, number>> {
+    const index = new Map<string, number>();
+    for (const n of names) index.set(n, 0);
+
     const sourceFiles = files.filter(
       (f) =>
         /\.(ts|tsx|js|jsx|vue|svelte)$/.test(f) &&
-        !/[\\/](dist|build|node_modules|\.cache)[\\/]/.test(f)
+        !/[\\/](dist|build|node_modules|\.cache)[\\/]/.test(f),
     );
-    const sampleSize = Math.min(300, sourceFiles.length);
-    const sampleFiles = sourceFiles.slice(0, sampleSize);
+    const sampleFiles = sourceFiles.slice(0, 300);
 
-    for (const file of sampleFiles) {
-      const content = await FileUtils.readFile(file);
-      const matches = content.match(new RegExp(`\\b${name}\\b`, "g"));
-      if (matches) {
-        count += matches.length;
+    // 预编译合并正则：\b(name1|name2|...)\b
+    const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const combinedRe = new RegExp(`\\b(${escaped.join("|")})\\b`, "g");
+
+    const contents = await Promise.all(
+      sampleFiles.map((f) => FileUtils.readFile(f)),
+    );
+
+    for (const content of contents) {
+      let m: RegExpExecArray | null;
+      combinedRe.lastIndex = 0;
+      while ((m = combinedRe.exec(content)) !== null) {
+        const name = m[1];
+        index.set(name, (index.get(name) ?? 0) + 1);
       }
     }
 
-    return count;
+    return index;
   }
 
   /**

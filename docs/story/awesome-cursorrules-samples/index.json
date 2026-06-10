@@ -1,9 +1,9 @@
 {
   "extractedAt": "2025-11-13T03:46:06.011Z",
-  "totalRules": 137,
+  "totalRules": 146,
   "categoryStats": {
     "mobile": 8,
-    "frontend": 9,
+    "frontend": 18,
     "other": 21,
     "language": 33,
     "backend": 30,
@@ -836,6 +836,60 @@
       "category": "other",
       "path": "rules/web-app-optimization-cursorrules-prompt-file/.cursorrules",
       "size": 7149
+    },
+    {
+      "name": "react-components-creation-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/react-components-creation-cursorrules-prompt-file.cursorrules",
+      "size": 1559
+    },
+    {
+      "name": "nextjs-typescript-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/nextjs-typescript-cursorrules-prompt-file.cursorrules",
+      "size": 2593
+    },
+    {
+      "name": "nextjs-react-typescript-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/nextjs-react-typescript-cursorrules-prompt-file.cursorrules",
+      "size": 3867
+    },
+    {
+      "name": "nextjs-typescript-tailwind-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/nextjs-typescript-tailwind-cursorrules-prompt-file.cursorrules",
+      "size": 2543
+    },
+    {
+      "name": "nextjs-app-router-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/nextjs-app-router-cursorrules-prompt-file.cursorrules",
+      "size": 913
+    },
+    {
+      "name": "nextjs15-react19-vercelai-tailwind-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/nextjs15-react19-vercelai-tailwind-cursorrules-prompt-file.cursorrules",
+      "size": 2733
+    },
+    {
+      "name": "vue3-composition-api-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/vue3-composition-api-cursorrules-prompt-file.cursorrules",
+      "size": 945
+    },
+    {
+      "name": "sveltekit-typescript-guide-cursorrules-prompt-file",
+      "category": "frontend",
+      "path": "frontend/sveltekit-typescript-guide-cursorrules-prompt-file.cursorrules",
+      "size": 648
+    },
+    {
+      "name": "sveltekit-tailwindcss-typescript-cursorrules-promp",
+      "category": "frontend",
+      "path": "frontend/sveltekit-tailwindcss-typescript-cursorrules-promp.cursorrules",
+      "size": 5058
     }
   ]
 }

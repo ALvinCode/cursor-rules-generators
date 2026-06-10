@@ -20,10 +20,10 @@ export interface PrettierConfig {
 }
 
 export interface ESLintConfig {
-  rules?: Record<string, any>;
+  rules?: Record<string, unknown>;
   extends?: string[];
   parser?: string;
-  parserOptions?: Record<string, any>;
+  parserOptions?: Record<string, unknown>;
 }
 
 export interface TSConfig {
@@ -33,7 +33,7 @@ export interface TSConfig {
     module?: string;
     paths?: Record<string, string[]>;
     baseUrl?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -245,8 +245,8 @@ export class ConfigParser {
       const content = await FileUtils.readFile(prettierrcPath);
       try {
         return JSON.parse(content);
-      } catch {
-        // YAML 格式，暂不支持
+      } catch (error) {
+        logger.debug("解析 .prettierrc 失败（可能为 YAML 格式）", { error });
       }
     }
 
@@ -256,7 +256,9 @@ export class ConfigParser {
       const content = await FileUtils.readFile(prettierrcJsonPath);
       try {
         return JSON.parse(content);
-      } catch {}
+      } catch (error) {
+        logger.debug("解析 .prettierrc.json 失败", { error });
+      }
     }
 
     // 尝试从 package.json 读取
@@ -268,7 +270,9 @@ export class ConfigParser {
         if (pkg.prettier) {
           return pkg.prettier;
         }
-      } catch {}
+      } catch (error) {
+        logger.debug("从 package.json 解析 prettier 配置失败", { error });
+      }
     }
 
     return undefined;
@@ -286,7 +290,9 @@ export class ConfigParser {
       const content = await FileUtils.readFile(eslintrcJsonPath);
       try {
         return JSON.parse(content);
-      } catch {}
+      } catch (error) {
+        logger.debug("解析 .eslintrc.json 失败", { error });
+      }
     }
 
     // 尝试读取 .eslintrc
@@ -295,7 +301,9 @@ export class ConfigParser {
       const content = await FileUtils.readFile(eslintrcPath);
       try {
         return JSON.parse(content);
-      } catch {}
+      } catch (error) {
+        logger.debug("解析 .eslintrc 失败", { error });
+      }
     }
 
     // 尝试从 package.json 读取
@@ -307,7 +315,9 @@ export class ConfigParser {
         if (pkg.eslintConfig) {
           return pkg.eslintConfig;
         }
-      } catch {}
+      } catch (error) {
+        logger.debug("从 package.json 解析 eslintConfig 失败", { error });
+      }
     }
 
     return undefined;

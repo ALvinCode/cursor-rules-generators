@@ -7,7 +7,13 @@
 
 import * as path from "path";
 
-import { CursorRule, RuleGenerationContext } from "../../../types.js";
+import {
+  CursorRule,
+  RuleGenerationContext,
+  FileOrganizationInfo,
+  DeepDirectoryAnalysis,
+  DirectoryPurpose,
+} from "../../../types.js";
 import { logger } from "../../../utils/logger.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import { isFrontendProject } from "./rule-helpers.js";
@@ -372,21 +378,20 @@ function generateDetailedStructureContent(
 /**
  * 生成简化的目录树（基于 fileOrganization）
  */
-function generateSimplifiedDirectoryTree(fileOrg: any): string {
+function generateSimplifiedDirectoryTree(fileOrg: FileOrganizationInfo): string {
     const tree: string[] = [];
     const structure = fileOrg.structure || [];
     
     // 按路径深度排序
-    const sorted = [...structure].sort((a: any, b: any) => {
+    const sorted = [...structure].sort((a: DirectoryPurpose, b: DirectoryPurpose) => {
       const aDepth = a.path.split("/").length;
       const bDepth = b.path.split("/").length;
       if (aDepth !== bDepth) return aDepth - bDepth;
       return a.path.localeCompare(b.path);
     });
 
-    // 只显示前 3 层
     const maxDepth = 3;
-    const filtered = sorted.filter((d: any) => {
+    const filtered = sorted.filter((d: DirectoryPurpose) => {
       const depth = d.path.split("/").length;
       return depth <= maxDepth;
     });
@@ -409,7 +414,7 @@ function generateSimplifiedDirectoryTree(fileOrg: any): string {
  * 使用与 test-report 逻辑完全一致，但确保显示完整的目录树
  */
 function generateDirectoryTree(
-  deepAnalysis: any[]
+  deepAnalysis: DeepDirectoryAnalysis[]
 ): string {
     if (deepAnalysis.length === 0) {
       return "```text\n项目目录结构分析中...\n```\n\n";
@@ -432,7 +437,7 @@ function generateDirectoryTree(
     const SHALLOW_DIRS = new Set(['styles', 'style', 'assets', 'images', 'icons', 'fonts', 'public', 'static']);
 
     const buildTree = (
-      dir: any,
+      dir: DeepDirectoryAnalysis,
       prefix: string,
       isLast: boolean,
       currentDepth = 1
@@ -552,7 +557,7 @@ function generateDirectoryTree(
 /**
  * 判断目录是否为业务性文件夹（需要过滤掉）
  */
-function isBusinessFolder(dir: any, deepAnalysis: any[]): boolean {
+function isBusinessFolder(dir: DeepDirectoryAnalysis, deepAnalysis: DeepDirectoryAnalysis[]): boolean {
     const functionalFolderKeywords = FUNCTIONAL_FOLDER_KEYWORDS;
 
     // 优先检查目录名：如果目录名本身是强职能关键词，直接认定为职能文件夹（非业务）
@@ -728,7 +733,7 @@ function isBusinessFolder(dir: any, deepAnalysis: any[]): boolean {
 /**
  * 生成目录职能说明（精简版，只显示职能文件夹层，不显示详细的业务类页面和组件）
  */
-function generateDirectoryPurposes(deepAnalysis: any[]): string {
+function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): string {
     if (deepAnalysis.length === 0) {
       return "目录职能说明分析中...\n\n";
     }
@@ -736,7 +741,7 @@ function generateDirectoryPurposes(deepAnalysis: any[]): string {
     const functionalFolderKeywords = FUNCTIONAL_FOLDER_KEYWORDS;
 
     // 判断目录是否为职能文件夹（而非业务类页面/组件）
-    const isFunctionalFolder = (dir: any): boolean => {
+    const isFunctionalFolder = (dir: DeepDirectoryAnalysis): boolean => {
       const dirName = path.basename(dir.path).toLowerCase();
       const dirPath = dir.path.toLowerCase();
       
@@ -753,11 +758,10 @@ function generateDirectoryPurposes(deepAnalysis: any[]): string {
       // 如果目录有明确的职能说明（非业务相关），也认为是职能文件夹
       // 只判断英文，不判断中文
       const purposeLower = (dir.purpose || '').toLowerCase();
-      const hasFunctionalPurpose = dir.purpose && 
+      const hasFunctionalPurpose = !!dir.purpose && 
         dir.purpose !== '' &&
         purposeLower !== 'other' &&
         purposeLower !== 'unknown' &&
-        // 检查是否包含业务性描述（非纯职能关键词）
         !isBusinessFolder(dir, deepAnalysis);
       
       return hasFunctionalKeyword || pathHasFunctionalKeyword || hasFunctionalPurpose;
@@ -838,8 +842,7 @@ function generateDirectoryPurposes(deepAnalysis: any[]): string {
     // 添加深层目录的简要说明
     const deepDirectories = sorted.filter((d) => d.depth > 3);
     if (deepDirectories.length > 0) {
-      content += `\n---\n\n`;
-      content += `**其他深层职能目录** (${deepDirectories.length} 个): 请参考上方目录树查看完整结构。\n\n`;
+      content += `\n**其他深层职能目录** (${deepDirectories.length} 个): 请参考上方目录树查看完整结构。\n\n`;
     }
 
     return content;
@@ -996,7 +999,7 @@ function generateNewFileGuidelines(
  * 评估深度分析数据的质量
  */
 function assessDeepAnalysisQuality(
-  deepAnalysis: any[] | undefined
+  deepAnalysis: DeepDirectoryAnalysis[] | undefined
 ): {
   isIncomplete: boolean;
   reason: string;

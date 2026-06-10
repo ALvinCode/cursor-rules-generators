@@ -10,6 +10,11 @@ import { resolvePackageResource } from "../../utils/package-paths.js";
 import { jaccardSimilarity } from "../../utils/similarity.js";
 import { FileUtils } from "../../utils/file-utils.js";
 
+interface RuleIndexEntry {
+  name: string;
+  category?: string;
+}
+
 export interface TechStackMatch {
   category: string; // 'frontend' | 'backend' | 'mobile' | 'styling' | 'state' | 'database' | 'testing' | 'hosting' | 'build' | 'language' | 'other'
   ruleName: string;
@@ -31,8 +36,11 @@ export interface MultiCategoryMatch {
 const TECH_KEYWORDS_MAP: Record<string, string[]> = {
   // Frontend Frameworks and Libraries
   frontend: [
-    'react', 'vue', 'angular', 'svelte', 'nextjs', 'next.js', 'nuxt', 
-    'remix', 'gatsby', 'astro', 'solid', 'qwik', 'preact', 'lit'
+    'react', 'vue', 'angular', 'svelte', 'nextjs', 'next.js', 'nuxt',
+    'remix', 'gatsby', 'astro', 'solid', 'solid-js', 'solidjs', 'solidstart',
+    'qwik', 'qwik-city', 'preact', 'lit', 'alpine', 'alpine.js',
+    'tanstack', 'tanstack-start', 'tanstack-router',
+    'sveltekit', 'vitepress', 'gridsome'
   ],
   // Backend and Full-Stack
   backend: [
@@ -42,8 +50,11 @@ const TECH_KEYWORDS_MAP: Record<string, string[]> = {
   ],
   // Mobile Development
   mobile: [
-    'react-native', 'expo', 'flutter', 'ionic', 'capacitor', 'cordova',
-    'swift', 'kotlin', 'android', 'ios', 'xamarin', 'titanium'
+    'react-native', 'expo', 'flutter', 'dart', 'riverpod', 'bloc', 'provider',
+    'ionic', 'capacitor', 'cordova', 'nativescript',
+    'swift', 'swiftui', 'uikit', 'xcode', 'cocoapods', 'spm',
+    'kotlin', 'jetpack', 'compose', 'android', 'ios', 'hilt', 'room',
+    'kmp', 'kotlin-multiplatform', 'xamarin', 'maui'
   ],
   // CSS and Styling
   styling: [
@@ -78,13 +89,15 @@ const TECH_KEYWORDS_MAP: Record<string, string[]> = {
   ],
   // Language-Specific
   language: [
-    'typescript', 'javascript', 'python', 'java', 'go', 'rust', 'c++',
-    'csharp', 'php', 'ruby', 'swift', 'kotlin', 'dart', 'scala', 'clojure'
+    'typescript', 'javascript', 'python', 'java', 'go', 'rust', 'c++', 'c#',
+    'csharp', 'php', 'ruby', 'swift', 'kotlin', 'dart', 'scala', 'clojure',
+    'elixir', 'haskell', 'lua', 'r', 'objective-c', 'zig', 'nim'
   ],
   // Other
   other: [
     'blockchain', 'solidity', 'web3', 'ai', 'ml', 'tensorflow', 'pytorch',
-    'unity', 'unreal', 'game', 'cli', 'electron', 'tauri', 'pwa'
+    'unity', 'unreal', 'game', 'cli', 'electron', 'tauri', 'pwa',
+    'wechat', 'miniprogram', 'uni-app', 'taro', 'weapp'
   ]
 };
 
@@ -140,7 +153,7 @@ function normalizeTechName(name: string): string {
 /**
  * 加载规则索引
  */
-async function loadRuleIndex(): Promise<any[]> {
+async function loadRuleIndex(): Promise<RuleIndexEntry[]> {
   // 规则索引文件随 npm 包分发，必须从包根解析。
   const indexPath = resolvePackageResource(
     'docs',

@@ -5,7 +5,14 @@
  * 这是一组自包含函数：两个入口（前端/后端路由规则）+ 内部内容生成 helper。
  */
 
-import { CursorRule, RuleGenerationContext } from "../../../types.js";
+import {
+  CursorRule,
+  RuleGenerationContext,
+  RouterInfo,
+  RoutingPattern,
+  RouteExample,
+  DynamicRoutingAnalysis,
+} from "../../../types.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import {
   getRouteGlobs,
@@ -42,7 +49,7 @@ export function generateFrontendRoutingRule(
         router.info.version ? ` (${router.info.version})` : ""
       }  
 **路由类型**: ${getRouterTypeDescription(router.info.type)}  
-**路由位置**: ${router.info.location.map((l) => `\`@${l}\``).join(", ")}
+**路由位置**: ${[...new Set(router.info.location)].map((l) => `\`@${l}\``).join(", ")}
 
 ${generateFrontendRouterContent(router, context)}
 
@@ -89,7 +96,7 @@ export function generateBackendRoutingRule(
 
 **路由系统**: ${router.info.framework}  
 **路由类型**: ${getRouterTypeDescription(router.info.type)}  
-**路由位置**: ${router.info.location.map((l) => `\`@${l}\``).join(", ")}
+**路由位置**: ${[...new Set(router.info.location)].map((l) => `\`@${l}\``).join(", ")}
 
 ${generateBackendRouterContent(router, context)}
 
@@ -110,14 +117,13 @@ ${generateBackendRouterContent(router, context)}
 }
 
 function generateFrontendRouterContent(
-  router: { info: any; pattern: any; examples: any[] },
+  router: { info: RouterInfo; pattern: RoutingPattern; examples: RouteExample[]; dynamicAnalysis?: DynamicRoutingAnalysis },
   context: RuleGenerationContext
 ): string {
     const { info, pattern, examples } = router;
     let content = "";
 
-    // 路由生成方式（带确定性标注）
-    const dynamicAnalysis = (router as any).dynamicAnalysis;
+    const dynamicAnalysis = router.dynamicAnalysis;
     if (dynamicAnalysis && dynamicAnalysis.isDynamic) {
       content += generateDynamicRoutingSection(dynamicAnalysis);
     }
@@ -187,7 +193,7 @@ function generateFrontendRouterContent(
 }
 
 function generateBackendRouterContent(
-  router: { info: any; pattern: any; examples: any[] },
+  router: { info: RouterInfo; pattern: RoutingPattern; examples: RouteExample[] },
   context: RuleGenerationContext
 ): string {
     const { info, pattern, examples } = router;
@@ -254,7 +260,7 @@ function generateBackendRouterContent(
  * 根据路由框架类型生成「注册新路由」的代码片段。
  * 基于框架语义生成模板，不依赖读取特定项目文件，具备通用性。
  */
-function generateRouteRegistrationSnippet(info: any, pattern: any): string {
+function generateRouteRegistrationSnippet(info: RouterInfo, pattern: RoutingPattern): string {
     const framework: string = info.framework ?? '';
     const routerType: string = info.type ?? 'config-based';
     const usesLazy: boolean = !!pattern.usesLazyLoading;
@@ -309,9 +315,9 @@ pages/
 }
 
 function generateNewRouteGuidelines(
-  info: any,
-  pattern: any,
-  examples: any[]
+  info: RouterInfo,
+  pattern: RoutingPattern,
+  examples: RouteExample[]
 ): string {
     let guidelines = "";
 
@@ -334,25 +340,36 @@ function generateNewRouteGuidelines(
         }
       }
     } else if (info.framework === "React Router") {
-      guidelines += `### 步骤\n\n`;
-      guidelines += `1. 在路由配置文件添加路由定义\n`;
+      const configFile = info.location[0] || "src/router/";
+      guidelines += `### 新增路由\n\n`;
+      guidelines += `1. 在路由配置目录 \`${configFile}\` 中添加路由定义\n`;
       guidelines += `2. 创建对应的页面组件\n`;
       if (pattern.usesLazyLoading) {
         guidelines += `3. 大型页面使用懒加载\n`;
       }
       guidelines += `\n`;
-      guidelines += `### 路由注册格式\n\n`;
-      guidelines += generateRouteRegistrationSnippet(info, pattern);
-      guidelines += `\n\n`;
+      if (examples.length > 0) {
+        guidelines += `### 现有路由示例\n\n`;
+        guidelines += `参考已有路由配置文件: \`@${examples[0].filePath}\`\n\n`;
+        guidelines += `现有路由路径:\n`;
+        for (const ex of examples.slice(0, 5)) {
+          guidelines += `- \`${ex.url}\`${ex.type === "dynamic" ? " (动态)" : ""}\n`;
+        }
+        guidelines += `\n`;
+      } else {
+        guidelines += `### 路由注册格式\n\n`;
+        guidelines += generateRouteRegistrationSnippet(info, pattern);
+        guidelines += `\n\n`;
+      }
     }
 
     return guidelines;
 }
 
 function generateNewAPIRouteGuidelines(
-  info: any,
-  pattern: any,
-  examples: any[]
+  info: RouterInfo,
+  pattern: RoutingPattern,
+  examples: RouteExample[]
 ): string {
     let guidelines = "";
 
@@ -379,7 +396,7 @@ function generateNewAPIRouteGuidelines(
 /**
  * 生成动态路由章节（带确定性标注）
  */
-function generateDynamicRoutingSection(analysis: any): string {
+function generateDynamicRoutingSection(analysis: DynamicRoutingAnalysis): string {
     let section = `## 路由生成方式\n\n`;
 
     const certaintyLabels: Record<string, string> = {
@@ -396,7 +413,7 @@ function generateDynamicRoutingSection(analysis: any): string {
       // 基于文档
       section += `**文档来源**: @${analysis.documentation.file}\n\n`;
       section += `项目文档说明：\n`;
-      section += `> ${analysis.documentation.section.slice(0, 200)}...\n\n`;
+      section += `> ${(analysis.documentation.section ?? "").slice(0, 200)}...\n\n`;
       section += `**生成方法**: \`${analysis.recommendation.method}\`\n\n`;
 
       if (analysis.documentation.file) {
@@ -451,8 +468,8 @@ function generateDynamicRoutingSection(analysis: any): string {
 /**
  * 按文件分组示例
  */
-function groupExamplesByFile(examples: any[]): Record<string, any[]> {
-    const grouped: Record<string, any[]> = {};
+function groupExamplesByFile(examples: RouteExample[]): Record<string, RouteExample[]> {
+    const grouped: Record<string, RouteExample[]> = {};
     for (const example of examples) {
       if (!grouped[example.filePath]) {
         grouped[example.filePath] = [];

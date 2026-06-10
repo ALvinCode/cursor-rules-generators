@@ -8,6 +8,8 @@
 import * as path from "path";
 
 import { RuleGenerationContext } from "../../../types.js";
+import type { ExtractedBestPractice } from "../best-practice-extractor.js";
+import { aggregatePlatformRuleSections } from "../../platforms/registry.js";
 
 /**
  * 判断某项特征是否在项目中存在（先看代码特征，再看依赖）。
@@ -22,7 +24,7 @@ export function featureExists(
 
   const featureDeps: Record<string, string[]> = {
     testing: ["jest", "vitest", "mocha", "@testing-library"],
-    "state-management": ["redux", "zustand", "mobx", "pinia", "vuex"],
+    "state-management": ["redux", "zustand", "mobx", "pinia", "vuex", "nanostores"],
     styling: ["styled-components", "@emotion", "tailwindcss", "@mui"],
   };
 
@@ -61,6 +63,16 @@ export function hasErrorHandling(context: RuleGenerationContext): boolean {
  */
 export function hasStateManagement(context: RuleGenerationContext): boolean {
   return featureExists(context, "state-management");
+}
+
+/**
+ * 项目主语言是否包含 JavaScript 或 TypeScript。
+ * 用于门控 JS/TS 专属的约束和示例（如 `NEVER use any`、TS Do/Don't 代码块），
+ * 避免非 JS/TS 项目拿到无关内容。
+ */
+export function isJsTsProject(context: RuleGenerationContext): boolean {
+  const langs = context.techStack.languages;
+  return langs.includes("TypeScript") || langs.includes("JavaScript");
 }
 
 /**
@@ -105,6 +117,8 @@ export function getLanguageGlobs(context: RuleGenerationContext): string {
   if (langs.includes("java")) exts.push("java");
   if (langs.includes("ruby")) exts.push("rb");
   if (langs.includes("php")) exts.push("php");
+  // 单文件组件类框架的专属扩展名（基于检测到的框架补充）
+  if (context.techStack.frameworks.includes("Astro")) exts.push("astro");
   if (exts.length === 0) exts.push("ts", "tsx", "js", "jsx");
   return `**/*.{${exts.join(",")}}`;
 }
@@ -113,14 +127,14 @@ export function getLanguageGlobs(context: RuleGenerationContext): string {
  * 根据路由信息推导路由相关 globs；无法识别时回退到约定路径。
  */
 export function getRouteGlobs(
-  router: any,
+  router: { info?: { location?: string[] } } | undefined,
   type: "frontend" | "backend"
 ): string {
-  const locations: string[] = (router?.info?.location || []).filter(
-    (loc: string) => !path.isAbsolute(loc)
-  );
+  const locations = [...new Set(
+    (router?.info?.location ?? []).filter((loc) => !path.isAbsolute(loc))
+  )];
   if (locations.length > 0) {
-    return locations.map((loc: string) => `${loc}**`).join(", ");
+    return locations.map((loc) => `${loc}**`).join(", ");
   }
   return type === "frontend"
     ? "**/routes/**, **/pages/**, **/app/**"
@@ -130,6 +144,18 @@ export function getRouteGlobs(
 /**
  * 生成带版本号的技术栈描述块。仅输出有值的字段。
  */
+/**
+ * 从依赖列表中查找与技术名称精确匹配的版本号（不区分大小写）。
+ * 只做精确匹配，避免子串匹配导致 @sentry/react 或 vue-router 误命中。
+ */
+function findDepVersion(
+  tech: string,
+  deps: Array<{ name: string; version: string }>
+): string | undefined {
+  const techLower = tech.toLowerCase();
+  return deps.find((d) => d.name.toLowerCase() === techLower)?.version;
+}
+
 export function generateVersionedTechStack(
   context: RuleGenerationContext
 ): string {
@@ -137,12 +163,8 @@ export function generateVersionedTechStack(
   const deps = context.techStack.dependencies || [];
 
   const primaryWithVersions = context.techStack.primary.map((tech) => {
-    const dep = deps.find(
-      (d) =>
-        d.name.toLowerCase() === tech.toLowerCase() ||
-        d.name.toLowerCase().includes(tech.toLowerCase())
-    );
-    return dep ? `${tech} ${dep.version}` : tech;
+    const ver = findDepVersion(tech, deps);
+    return ver ? `${tech} ${ver}` : tech;
   });
 
   if (primaryWithVersions.length > 0) {
@@ -158,14 +180,52 @@ export function generateVersionedTechStack(
   }
   if (context.techStack.frameworks.length > 0) {
     const fwWithVersions = context.techStack.frameworks.map((fw) => {
-      const dep = deps.find(
-        (d) =>
-          d.name.toLowerCase() === fw.toLowerCase() ||
-          d.name.toLowerCase().includes(fw.toLowerCase())
-      );
-      return dep ? `${fw} ${dep.version}` : fw;
+      const ver = findDepVersion(fw, deps);
+      return ver ? `${fw} ${ver}` : fw;
     });
     lines.push(`**Frameworks**: ${fwWithVersions.join(", ")}`);
+  }
+
+  // Key Libraries：从依赖中提取 UI 库、状态管理等非 primary/framework 的关键依赖
+  // build-tool 仅保留主构建工具本体（vite/webpack/rollup），排除 devDep 的插件
+  const runtimeCategories = ["ui-library", "state-management", "css-framework"];
+  const buildToolBodies = new Set(["vite", "webpack", "rollup", "esbuild", "parcel", "turbopack"]);
+  const primaryLower = new Set(context.techStack.primary.map((p) => p.toLowerCase()));
+  const fwLower = new Set(context.techStack.frameworks.map((f) => f.toLowerCase()));
+  const keyLibs = deps
+    .filter((d) => {
+      const cat = d.category ?? "";
+      const nameLower = d.name.toLowerCase();
+      if (primaryLower.has(nameLower) || fwLower.has(nameLower)) return false;
+      if (runtimeCategories.includes(cat)) return true;
+      if (cat === "build-tool" && buildToolBodies.has(nameLower) && d.type === "devDependency") return true;
+      return false;
+    })
+    .map((d) => d.version ? `${d.name} ${d.version}` : d.name);
+  // 补充 UI 库（可能通过 uiLibraries 管线检测到），跳过已在列表中的（含别名）
+  const uiAliases: Record<string, string[]> = {
+    "ant design": ["antd", "@ant-design"],
+    "element plus": ["element-plus"],
+    "element ui": ["element-ui"],
+    "material ui": ["@mui"],
+    "chakra ui": ["@chakra-ui"],
+  };
+  if (context.uiLibraries?.active) {
+    for (const lib of context.uiLibraries.active) {
+      const libLower = lib.name.toLowerCase();
+      const aliases = uiAliases[libLower] ?? [];
+      const already = keyLibs.some((k) => {
+        const kLower = k.toLowerCase();
+        return kLower.startsWith(libLower) || aliases.some((a) => kLower.startsWith(a));
+      });
+      if (!already) {
+        const ver = findDepVersion(lib.name, deps);
+        keyLibs.push(ver ? `${lib.name} ${ver}` : lib.name);
+      }
+    }
+  }
+  if (keyLibs.length > 0) {
+    lines.push(`**Key Libraries**: ${keyLibs.join(", ")}`);
   }
 
   return lines.join("  \n");
@@ -363,24 +423,25 @@ export function detectTestFramework(
  * 将「项目已使用但规则中缺失的最佳实践」格式化为规则内容片段。
  * 被 code-style / architecture / error-handling 规则共享。
  */
-export function formatMissingPractices(practices: any[]): string {
+export function formatMissingPractices(practices: ExtractedBestPractice[]): string {
   if (!practices || practices.length === 0) {
     return "";
   }
 
-  let content = "";
+  const sections: string[] = [];
   for (const practice of practices) {
-    content += `### ${practice.title}\n\n`;
-    content += `${practice.content}\n\n`;
+    let section = `### ${practice.title}\n\n`;
+    const cleanedContent = practice.content.replace(/\n---\s*$/, "").trimEnd();
+    section += `${cleanedContent}\n\n`;
 
     if (practice.techStack && practice.techStack.length > 0) {
-      content += `**相关技术栈**: ${practice.techStack.join(", ")}\n\n`;
+      section += `**相关技术栈**: ${practice.techStack.join(", ")}\n`;
     }
 
-    content += "---\n\n";
+    sections.push(section.trimEnd());
   }
 
-  return content.trim();
+  return sections.join("\n\n---\n\n");
 }
 
 /**
@@ -399,4 +460,19 @@ export function getCategoryDisplayName(category: string): string {
     other: "其他目录",
   };
   return names[category] || category;
+}
+
+/**
+ * 获取平台 adapter 为指定 ruleType 贡献的内容片段。
+ * 无平台或无贡献时返回空字符串，调用方可直接拼接。
+ */
+export function getPlatformSections(
+  context: RuleGenerationContext,
+  ruleType: string
+): string {
+  const platforms = context.techStack.platforms;
+  if (!platforms || platforms.length === 0) return "";
+
+  const sections = aggregatePlatformRuleSections(platforms);
+  return sections.get(ruleType) ?? "";
 }

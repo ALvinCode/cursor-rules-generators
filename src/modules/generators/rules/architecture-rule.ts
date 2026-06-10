@@ -7,7 +7,8 @@
 
 import * as path from "path";
 
-import { CursorRule, RuleGenerationContext } from "../../../types.js";
+import { ArchitecturePattern, CursorRule, RuleGenerationContext } from "../../../types.js";
+import type { ExtractedBestPractice } from "../best-practice-extractor.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import {
   getLanguageGlobs,
@@ -15,11 +16,12 @@ import {
   getArchitecturePatternName,
   getModuleTypeName,
   getCategoryDisplayName,
+  getPlatformSections,
 } from "./rule-helpers.js";
 
 export function generateArchitectureRule(
   context: RuleGenerationContext,
-  missingPractices?: any[]
+  missingPractices?: ExtractedBestPractice[]
 ): CursorRule {
     const srcGlobs = getLanguageGlobs(context);
     const metadata = buildRuleMetadata(
@@ -41,6 +43,7 @@ export function generateArchitectureRule(
     );
 
     const codeFeaturesSection = generateCodeFeaturesSection(context);
+    const platformArch = getPlatformSections(context, "architecture");
 
     const content =
       metadata +
@@ -69,7 +72,7 @@ ${codeFeaturesSection}
 
 ${generateArchitecturePrinciples(context)}
 
-${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices}\n` : ""}
+${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
 `;
 
     return {
@@ -99,7 +102,7 @@ function generateCodeFeaturesSection(context: RuleGenerationContext): string {
     return `\n## Core Code Patterns\n\n${coreFeatures.join("\n")}\n`;
 }
 
-function generateArchitecturePatternSection(pattern: any): string {
+function generateArchitecturePatternSection(pattern: ArchitecturePattern | undefined): string {
     if (!pattern || pattern.type === "unknown") {
       return "项目架构模式：标准架构（基于目录结构推断）\n\n";
     }

@@ -7,6 +7,7 @@
  */
 
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
+import type { ExtractedBestPractice } from "../best-practice-extractor.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import { getLanguageGlobs, formatMissingPractices } from "./rule-helpers.js";
 
@@ -107,7 +108,7 @@ export function generatePracticeBasedErrorHandling(
  */
 export function generateErrorHandlingRule(
   context: RuleGenerationContext,
-  missingPractices?: any[]
+  missingPractices?: ExtractedBestPractice[]
 ): CursorRule {
   const langGlobsForErr = getLanguageGlobs(context);
   const metadata = buildRuleMetadata(
@@ -136,9 +137,7 @@ export function generateErrorHandlingRule(
 ${generatePracticeBasedErrorHandling(context)}
 
 ${additionalPractices ? `\n## 补充的最佳实践\n\n${additionalPractices}\n` : ""}
-
----
-
+${additionalPractices ? "" : "---\n"}
 *遵循项目现有的错误处理模式，保持一致性。*
 `;
 

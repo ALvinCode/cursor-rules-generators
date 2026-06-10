@@ -10,6 +10,8 @@ import { FileUtils } from "../../../utils/file-utils.js";
 import { logger } from "../../../utils/logger.js";
 import * as path from "path";
 import { buildRuleMetadata } from "./rule-metadata.js";
+import type { ModuleStructureAnalysis } from "../../analyzers/module-structure-analyzer.js";
+import type { ModuleBusinessAnalysis } from "../../analyzers/module-business-analyzer.js";
 import { getModuleTypeName, sanitizeFileName } from "./rule-helpers.js";
 import { ModuleStructureAnalyzer } from "../../analyzers/module-structure-analyzer.js";
 import { ModuleBusinessAnalyzer } from "../../analyzers/module-business-analyzer.js";
@@ -107,7 +109,7 @@ export async function generateModuleOverviewRule(
  */
 function generateModuleResponsibilities(
   module: Module,
-  businessAnalysis?: any
+  businessAnalysis?: ModuleBusinessAnalysis | null
 ): string {
     let description = "";
 
@@ -169,8 +171,8 @@ async function getModulePackageInfo(modulePath: string): Promise<{
 function generateModuleCodeGenerationGuide(
   module: Module,
   context: RuleGenerationContext,
-  structureAnalysis: any,
-  businessAnalysis: any,
+  structureAnalysis: ModuleStructureAnalysis | null,
+  businessAnalysis: ModuleBusinessAnalysis | null,
   packageName: string
 ): string {
     let guide = "";
@@ -195,7 +197,7 @@ function generateModuleCodeGenerationGuide(
     
     if (structureAnalysis && structureAnalysis.mainDirectories.length > 0) {
       const dirs = structureAnalysis.mainDirectories
-        .filter((d: any) => {
+        .filter((d) => {
           if (d.fileCount === 0 || !d.purpose || d.purpose === "") return false;
           // 只判断英文，不判断中文
           const purposeLower = d.purpose.toLowerCase();

@@ -1,6 +1,8 @@
 import * as path from "path";
 import { FileUtils } from "../../utils/file-utils.js";
 import { TechStack, Dependency } from '../../types.js';
+import { detectPlatforms } from "../platforms/detector.js";
+import { aggregatePlatformCapabilities } from "../platforms/registry.js";
 
 /**
  * 技术栈检测器
@@ -64,15 +66,32 @@ export class TechStackDetector {
       }
     }
 
-    // 通过文件扩展名检测其他语言
+    // 通过文件扩展名检测语言和框架（框架需依赖验证）
+    const depNameSet = new Set(dependencies.map((d) => d.name.toLowerCase()));
+    const hasExtension = { vue: false, svelte: false, astro: false };
     for (const file of files) {
       const ext = path.extname(file);
       if (ext === ".ts" || ext === ".tsx") languages.add("TypeScript");
-      if (ext === ".vue") frameworks.add("Vue");
-      if (ext === ".svelte") frameworks.add("Svelte");
+      if (ext === ".vue") hasExtension.vue = true;
+      if (ext === ".svelte") hasExtension.svelte = true;
+      if (ext === ".astro") hasExtension.astro = true;
     }
+    if (hasExtension.vue && depNameSet.has("vue")) frameworks.add("Vue");
+    if (hasExtension.svelte && depNameSet.has("svelte")) frameworks.add("Svelte");
+    if (hasExtension.astro && depNameSet.has("astro")) frameworks.add("Astro");
 
-    // 确定主要技术栈
+    // 平台/生态检测
+    const platforms = detectPlatforms({
+      projectPath,
+      files,
+      dependencyNames: dependencies.map((d) => d.name.toLowerCase()),
+    });
+    // 通电：叠加平台引入的语言（Flutter→Dart、iOS→Swift、Android→Kotlin），
+    // 使无 package.json 的原生/跨平台项目也能被识别，不被「空技术栈」拦截。
+    const platformCaps = aggregatePlatformCapabilities(platforms);
+    platformCaps.languages.forEach((l) => languages.add(l));
+
+    // 确定主要技术栈（在平台语言合并之后）
     const primary = this.determinePrimaryStack(
       Array.from(languages),
       Array.from(frameworks),
@@ -85,6 +104,7 @@ export class TechStackDetector {
       packageManagers,
       frameworks: Array.from(frameworks),
       languages: Array.from(languages),
+      platforms,
     };
   }
 
@@ -185,7 +205,11 @@ export class TechStackDetector {
    * 对依赖进行分类
    */
   private categorizeDependency(name: string): string {
-    const frameworks = ["react", "vue", "angular", "svelte", "next", "nuxt", "express", "fastify", "nestjs"];
+    const frameworks = [
+      "react", "vue", "angular", "svelte", "next", "nuxt", "express", "fastify", "nestjs",
+      "solid-js", "preact", "@builder.io/qwik", "astro", "gatsby",
+      "@remix-run", "@solidjs/start", "@tanstack/react-start",
+    ];
     const uiLibs = ["@mui", "antd", "element", "chakra", "tailwind"];
     const stateManagement = ["redux", "mobx", "zustand", "pinia", "vuex"];
     const testing = ["jest", "vitest", "mocha", "chai", "cypress", "playwright"];
@@ -204,8 +228,26 @@ export class TechStackDetector {
    * 检查是否是框架
    */
   private isFramework(name: string): boolean {
-    const frameworks = ["react", "vue", "angular", "svelte", "next", "nuxt", "express", "fastify", "nestjs", "django", "flask", "fastapi"];
-    return frameworks.some((f) => name === f || name.startsWith(`@${f}/`));
+    const frameworks = [
+      "react", "vue", "angular", "svelte", "next", "nuxt", "express", "fastify", "nestjs", "django", "flask", "fastapi",
+      // 新增前端 UI 框架与元框架本体（非 scoped）
+      "solid-js", "preact", "lit", "alpinejs", "astro", "gatsby",
+    ];
+    if (frameworks.some((f) => name === f || name.startsWith(`@${f}/`))) {
+      return true;
+    }
+    // scoped 现代框架本体（精确匹配，避免误伤路由/工具子包）
+    const scopedFrameworks = [
+      "@builder.io/qwik",
+      "@builder.io/qwik-city",
+      "@solidjs/start",
+      "@tanstack/react-start",
+      "@tanstack/start",
+    ];
+    if (scopedFrameworks.includes(name)) return true;
+    // Remix 的多个包（@remix-run/react、@remix-run/node 等）均视为 Remix 框架
+    if (name.startsWith("@remix-run/")) return true;
+    return false;
   }
 
   /**
@@ -221,6 +263,19 @@ export class TechStackDetector {
     if (name === "@nestjs/core") return "NestJS";
     if (name === "angular" || name.startsWith("@angular")) return "Angular";
     if (name === "svelte") return "Svelte";
+    // 新增前端框架
+    if (name === "solid-js") return "SolidJS";
+    if (name === "@solidjs/start") return "SolidStart";
+    if (name === "preact") return "Preact";
+    if (name === "@builder.io/qwik") return "Qwik";
+    if (name === "@builder.io/qwik-city") return "Qwik City";
+    if (name === "lit") return "Lit";
+    if (name === "alpinejs") return "Alpine.js";
+    if (name === "astro") return "Astro";
+    if (name === "gatsby") return "Gatsby";
+    if (name.startsWith("@remix-run/")) return "Remix";
+    if (name === "@tanstack/react-start" || name === "@tanstack/start")
+      return "TanStack Start";
     return name;
   }
 
@@ -254,6 +309,17 @@ export class TechStackDetector {
 
     if (languages.includes("Rust")) {
       primary.push("Rust");
+    }
+
+    // 移动端 / 跨平台语言（由平台 adapter 能力叠加而来）
+    if (languages.includes("Dart")) {
+      primary.push("Dart");
+    }
+    if (languages.includes("Swift")) {
+      primary.push("Swift");
+    }
+    if (languages.includes("Kotlin")) {
+      primary.push("Kotlin");
     }
 
     // 如果没有识别到框架，检查重要依赖

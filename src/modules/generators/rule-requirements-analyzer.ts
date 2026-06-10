@@ -1,5 +1,6 @@
 import { Dependency, RuleGenerationContext } from '../../types.js';
 import { logger } from '../../utils/logger.js';
+import { aggregatePlatformRequirements } from '../platforms/registry.js';
 
 /**
  * 规则需求分析结果
@@ -84,7 +85,50 @@ export class RuleRequirementsAnalyzer {
     // 11. 错误处理规则（基于代码分析）
     this.analyzeErrorHandlingRequirements(requirements, context);
 
+    // 12. 平台 adapter 贡献的规则需求（移动端 / 跨平台等）
+    this.mergePlatformRequirements(requirements, context);
+
     return requirements.sort((a, b) => b.priority - a.priority);
+  }
+
+  /**
+   * 合并平台 adapter 贡献的规则需求。
+   * 同一 ruleType 若 web 链路已产生，则取二者中优先级更高的一条。
+   */
+  private mergePlatformRequirements(
+    requirements: RuleRequirement[],
+    context: RuleGenerationContext
+  ): void {
+    const platforms = context.techStack.platforms;
+    if (!platforms || platforms.length === 0) return;
+
+    const detectCtx = {
+      projectPath: context.projectPath,
+      files: context.files ?? [],
+      dependencyNames: context.techStack.dependencies.map((d) => d.name.toLowerCase()),
+    };
+    const platformReqs = aggregatePlatformRequirements(platforms, detectCtx);
+
+    const existingTypes = new Map(
+      requirements.map((r, i) => [r.ruleType, i])
+    );
+
+    for (const pReq of platformReqs) {
+      const idx = existingTypes.get(pReq.ruleType);
+      if (idx !== undefined) {
+        if (pReq.priority > requirements[idx].priority) {
+          requirements[idx] = {
+            ...pReq,
+            detectedFrom: "code-analysis",
+          };
+        }
+      } else {
+        requirements.push({
+          ...pReq,
+          detectedFrom: "code-analysis",
+        });
+      }
+    }
   }
 
   /**
@@ -99,11 +143,20 @@ export class RuleRequirementsAnalyzer {
     );
     const hasRouterFiles = context.frontendRouter || context.backendRouter;
 
-    // 前端路由
+    // 前端路由（含新增框架的显式路由库；注意 "react-router" 已覆盖 @tanstack/react-router）
     const frontendRouterDeps = routingDeps.filter((d) =>
-      ["react-router", "next", "nuxt", "vue-router", "remix", "sveltekit"].some(
-        (name) => d.name.toLowerCase().includes(name)
-      )
+      [
+        "react-router",
+        "next",
+        "nuxt",
+        "vue-router",
+        "remix",
+        "sveltekit",
+        "@solidjs/router",
+        "solid-router",
+        "@tanstack/router",
+        "qwik-city",
+      ].some((name) => d.name.toLowerCase().includes(name))
     );
 
     if (frontendRouterDeps.length > 0 || context.frontendRouter) {
@@ -381,6 +434,7 @@ export class RuleRequirementsAnalyzer {
       "nuxt",
       "remix",
       "sveltekit",
+      "qwik-city",
       "express",
       "fastify",
       "koa",
@@ -415,6 +469,7 @@ export class RuleRequirementsAnalyzer {
       "recoil",
       "jotai",
       "valtio",
+      "nanostores",
     ];
 
     return dependencies.filter((dep) =>

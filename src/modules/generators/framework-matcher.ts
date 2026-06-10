@@ -16,7 +16,7 @@ export interface FrameworkMatch {
 
 /**
  * awesome-cursorrules 中的框架规则映射
- * 基于提取的 30 个规则文件分析
+ * 作为 index.json 多类别匹配的 fallback；文件名对应 samples 磁盘实际文件。
  */
 interface FrameworkRuleEntry {
   files: string[];

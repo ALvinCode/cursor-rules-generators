@@ -6,8 +6,9 @@
  */
 
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
+import type { ExtractedBestPractice } from "../best-practice-extractor.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
-import { getLanguageGlobs, formatMissingPractices } from "./rule-helpers.js";
+import { getLanguageGlobs, formatMissingPractices, isJsTsProject, getPlatformSections } from "./rule-helpers.js";
 
 /**
  * v1.3: 生成代码风格规则（约 200 行）
@@ -15,7 +16,7 @@ import { getLanguageGlobs, formatMissingPractices } from "./rule-helpers.js";
  */
 export function generateCodeStyleRule(
   context: RuleGenerationContext,
-  missingPractices?: any[]
+  missingPractices?: ExtractedBestPractice[]
 ): CursorRule {
     const langGlobs = getLanguageGlobs(context);
     const metadata = buildRuleMetadata(
@@ -34,6 +35,7 @@ export function generateCodeStyleRule(
       missingPractices?.filter((p) => p.category === "code-style") || [];
     const additionalPractices = formatMissingPractices(codeStylePractices);
 
+    const platformStyle = getPlatformSections(context, "code-style");
     const content =
       metadata +
       `
@@ -45,7 +47,7 @@ ${
     : generateCodeStyleGuidelines(context)
 }
 
-## Do / Don't
+${isJsTsProject(context) ? `## Do / Don't
 
 \`\`\`typescript
 // DON'T: use any — 失去类型保护
@@ -65,9 +67,9 @@ var count = 0;
 const count: number = 0;
 \`\`\`
 
-> 错误处理规范请参考 **@error-handling.mdc**
+` : ""}> 错误处理规范请参考 **@error-handling.mdc**
 
-${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}
+${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
 `;
 
     return {
@@ -327,7 +329,6 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       const isTS = context.techStack.languages.includes("TypeScript");
       const styleLines: string[] = [];
 
-      // TypeScript/modern JS 项目不可能以 var 为主，若检测为 var 优先纠正为 const/let
       if (style.variableDeclaration === "const-let") {
         styleLines.push(`- **变量声明**: 使用 const/let`);
       } else if (style.variableDeclaration === "var") {
@@ -350,9 +351,19 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
         styleLines.push(`- **字符串引号**: 模板字符串`);
       }
 
-      if (style.semicolon === "always") {
+      // 分号：优先从 ESLint 'semi' 规则获取，其次用启发式分析结果
+      const eslintSemiRule = context.projectConfig?.eslint?.rules?.["semi"];
+      let semiFromConfig: string | undefined;
+      if (Array.isArray(eslintSemiRule) && eslintSemiRule.length >= 2) {
+        semiFromConfig = eslintSemiRule[1] === "never" ? "never" : "always";
+      } else if (eslintSemiRule === "error" || eslintSemiRule === "warn" || eslintSemiRule === 2 || eslintSemiRule === 1) {
+        semiFromConfig = "always";
+      }
+
+      const effectiveSemi = semiFromConfig ?? style.semicolon;
+      if (effectiveSemi === "always") {
         styleLines.push(`- **分号**: 使用`);
-      } else if (style.semicolon === "never") {
+      } else if (effectiveSemi === "never") {
         styleLines.push(`- **分号**: 不使用`);
       }
 

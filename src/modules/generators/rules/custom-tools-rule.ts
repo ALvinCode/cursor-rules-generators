@@ -7,8 +7,8 @@
 
 import * as path from "path";
 
-import { CursorRule, RuleGenerationContext } from "../../../types.js";
-import { FileUtils } from "../../../utils/file-utils.js";
+import { CursorRule, CustomUtil, RuleGenerationContext } from "../../../types.js";
+
 import { buildRuleMetadata } from "./rule-metadata.js";
 
 /**
@@ -73,24 +73,32 @@ function getHookGlobs(context: RuleGenerationContext): string | null {
 }
 
 function generateCustomToolsRules(context: RuleGenerationContext): string {
-    if (
-      !context.customPatterns ||
-      ((!context.customPatterns.customHooks || context.customPatterns.customHooks.length === 0) &&
-        (!context.customPatterns.customUtils || context.customPatterns.customUtils.length === 0))
-    ) {
+    const hasHooks = (context.customPatterns?.customHooks ?? []).length > 0;
+    const hasUtils = (context.customPatterns?.customUtils ?? []).length > 0;
+    const hasApi = context.customPatterns?.apiClient?.exists && context.customPatterns.apiClient.filePath;
+    if (!context.customPatterns || (!hasHooks && !hasUtils && !hasApi)) {
       return "";
     }
 
-    let rules = `## 项目自定义工具（优先使用）\n\n`;
+    let rules = "";
+
+    if (hasHooks || hasUtils) {
+      rules += `## 项目自定义工具（优先使用）\n\n`;
+    }
 
     // 自定义 Hooks：按频率分层输出
     if (context.customPatterns.customHooks && context.customPatterns.customHooks.length > 0) {
       rules += `### 自定义 Hooks\n\n`;
       rules += `项目定义了以下自定义 hooks，**生成代码时必须优先使用**：\n\n`;
 
-      const activeHooks = context.customPatterns.customHooks
-        .filter((h) => h.frequency > 0)
-        .slice(0, 10);
+      const allActiveHooks = context.customPatterns.customHooks
+        .filter((h) => h.frequency > 0);
+      // 高频（>10 使用）全部展示，中频（4-10）最多展示 10 个
+      const highFreq = allActiveHooks.filter((h) => h.frequency > 10);
+      const midFreq = allActiveHooks
+        .filter((h) => h.frequency >= 4 && h.frequency <= 10)
+        .slice(0, Math.max(0, 10 - highFreq.length));
+      const activeHooks = [...highFreq, ...midFreq];
 
       if (activeHooks.length === 0) {
         rules += `> 项目中的自定义 hooks 尚未检测到使用记录，请参考 @project-structure.mdc 确认 hooks 目录位置。\n\n`;
@@ -171,21 +179,23 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
     if (api?.exists && api.filePath) {
       rules += `### API 客户端\n\n`;
       rules += `项目使用自定义的 API 客户端：**\`${api.name}\`**\n`;
-      rules += `- 位置: \`${FileUtils.getRelativePath(
-        context.projectPath,
-        api.filePath
-      )}\`\n`;
+      rules += `- 位置: \`${api.filePath}\`\n`;
       if (api.hasErrorHandling) {
         rules += `- ✅ 已内置错误处理\n`;
       }
       if (api.hasAuth) {
         rules += `- ✅ 已内置认证处理\n`;
       }
+      const clientName = api.exportName || api.name;
+      const importAlias = api.filePath!.replace(/^src\//, '@/').replace(/\.(ts|js)$/, '');
+      const importStmt = api.importStyle === "default"
+        ? `import ${clientName} from '${importAlias}';`
+        : `import { ${clientName} } from '${importAlias}';`;
       rules += `\n**使用要求**:\n`;
       rules += `\`\`\`typescript\n`;
       rules += `// ✅ 正确 - 使用项目的 API 客户端\n`;
-      rules += `import { ${api.name} } from '@/services/${api.name}';\n`;
-      rules += `const data = await ${api.name}.get('/endpoint');\n\n`;
+      rules += `${importStmt}\n`;
+      rules += `const data = await ${clientName}.get('/endpoint');\n\n`;
       rules += `// ❌ 错误 - 不要直接使用 fetch 或 axios\n`;
       rules += `const response = await fetch('/api/endpoint');\n`;
       rules += `\`\`\`\n\n`;
@@ -202,8 +212,8 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
 /**
  * 按类别分组工具函数
  */
-function groupUtilsByCategory(utils: any[]): Record<string, any[]> {
-    const grouped: Record<string, any[]> = {};
+function groupUtilsByCategory(utils: CustomUtil[]): Record<string, CustomUtil[]> {
+    const grouped: Record<string, CustomUtil[]> = {};
     for (const util of utils) {
       if (!grouped[util.category]) {
         grouped[util.category] = [];

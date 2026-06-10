@@ -284,7 +284,7 @@ export class ModuleDetector {
    */
   private inferModuleType(
     name: string,
-    packageData: any
+    packageData: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
   ): "frontend" | "backend" | "shared" | "service" | "package" | "other" {
     const nameLower = name.toLowerCase();
 

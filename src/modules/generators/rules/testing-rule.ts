@@ -114,19 +114,21 @@ export function generateTestingRule(context: RuleGenerationContext): CursorRule 
 
   const testFramework = detectTestFramework(context);
   const testCmd = context.projectConfig?.commands?.test;
-  const frameworkSection = testFramework
-    ? `**Framework**: ${testFramework.name}${testFramework.version ? ` ${testFramework.version}` : ""}\n`
-    : "";
-  const cmdSection = testCmd ? `**Run tests**: \`${testCmd}\`\n` : "";
+  const infoLines: string[] = [];
+  if (testFramework) {
+    infoLines.push(`**Framework**: ${testFramework.name}${testFramework.version ? ` ${testFramework.version}` : ""}`);
+  }
+  if (testCmd) {
+    infoLines.push(`**Run tests**: \`${testCmd}\``);
+  }
+  const infoBlock = infoLines.length > 0 ? `${infoLines.join("\n")}\n` : "";
 
   const content =
     metadata +
     `
 # Testing
 
-${frameworkSection}${cmdSection}
-
-${generateConditionalTestingRules(context)}
+${infoBlock}${generateConditionalTestingRules(context)}
 `;
 
   return {

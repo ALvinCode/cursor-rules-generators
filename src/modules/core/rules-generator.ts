@@ -6,7 +6,7 @@ import {
 import { logger } from '../../utils/logger.js';
 import { ValidationError } from '../../utils/errors.js';
 import { BestPracticeComparator } from '../generators/best-practice-comparator.js';
-import { BestPracticeExtractor } from '../generators/best-practice-extractor.js';
+import { BestPracticeExtractor, ExtractedBestPractice } from '../generators/best-practice-extractor.js';
 import { BestPracticeWebSearcher } from '../integrations/best-practice-web-searcher.js';
 import {
     findBestFrameworkMatch, FrameworkMatch
@@ -153,8 +153,8 @@ export class RulesGenerator {
     }
 
     // v1.5: 提取和对比最佳实践
-    let missingPractices: any[] = [];
-    let ambiguousPractices: any[] = [];
+    let missingPractices: ExtractedBestPractice[] = [];
+    let ambiguousPractices: ExtractedBestPractice[] = [];
 
     // 优先使用多类别匹配（如果可用）
     if (this.multiCategoryMatch && this.multiCategoryMatch.matches.length > 0) {
@@ -188,7 +188,7 @@ export class RulesGenerator {
 
         // 对于缺失的技术栈，尝试网络搜索最佳实践
         if (missingTechStacks.length > 0) {
-          let webPractices: any[] = [];
+          let webPractices: ExtractedBestPractice[] = [];
 
           // 如果有网络搜索结果，解析它们
           if (webSearchResults && Object.keys(webSearchResults).length > 0) {
@@ -695,11 +695,10 @@ export class RulesGenerator {
   /**
    * 获取备用最佳实践（无网络情况下的备用方案）（v1.5）
    */
-  private getFallbackPractices(techStacks: string[]): any[] {
-    const practices: any[] = [];
+  private getFallbackPractices(techStacks: string[]): ExtractedBestPractice[] {
+    const practices: ExtractedBestPractice[] = [];
 
-    // 内置的通用最佳实践（作为备用方案）
-    const fallbackPractices: Record<string, any[]> = {
+    const fallbackPractices: Record<string, ExtractedBestPractice[]> = {
       TypeScript: [
         {
           category: "code-style",

@@ -26,7 +26,26 @@ import { RouterDetector } from './modules/analyzers/router-detector.js';
 import { RuleValidator } from './modules/validators/rule-validator.js';
 import { RulesGenerator } from './modules/core/rules-generator.js';
 import { TechStackDetector } from './modules/analyzers/tech-stack-detector.js';
-import { CursorRule, Dependency, GenerationSummary } from './types.js';
+import {
+  ArchitecturePattern,
+  BestPractice,
+  CodeFeature,
+  ConsistencyReport,
+  CursorRule,
+  CustomPatterns,
+  DeepDirectoryAnalysis,
+  Dependency,
+  DynamicRoutingAnalysis,
+  FileOrganizationInfo,
+  GenerationSummary,
+  Module,
+  ProjectConfiguration,
+  ProjectPractice,
+  RouteExample,
+  RouterInfo,
+  RoutingPattern,
+  TechStack,
+} from './types.js';
 import { createErrorResponse } from './utils/errors.js';
 import { logger } from './utils/logger.js';
 import { AnalysisPipeline } from './modules/core/analysis-pipeline.js';
@@ -249,7 +268,8 @@ class CursorRulesGeneratorsServer {
 
     // 注册工具调用处理器
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
+      const { name, arguments: rawArgs } = request.params;
+      const args: Record<string, unknown> = rawArgs ?? {};
 
       try {
         switch (name) {
@@ -281,7 +301,7 @@ class CursorRulesGeneratorsServer {
    * 宽松的参数解析：支持参数名称的变体
    * 例如：如果定义了 projectPath，也接受 path 参数
    */
-  private parseProjectPath(args: any): string {
+  private parseProjectPath(args: Record<string, unknown>): string {
     // 优先使用 projectPath
     if (args.projectPath) {
       return args.projectPath as string;
@@ -297,7 +317,7 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理预览规则生成的请求
    */
-  private async handlePreviewGeneration(args: any) {
+  private async handlePreviewGeneration(args: Record<string, unknown>) {
     const projectPath = this.parseProjectPath(args);
 
     let output = `📋 Cursor Rules 生成预览\n\n`;
@@ -308,7 +328,7 @@ class CursorRulesGeneratorsServer {
     const uncertainties: Array<{
       taskNumber?: number;
       topic: string;
-      analysis?: any;
+      analysis?: DynamicRoutingAnalysis;
     }> = [];
 
     output += `## 📊 分析任务清单\n\n`;
@@ -367,11 +387,13 @@ class CursorRulesGeneratorsServer {
     output += `🔄 [7/11] 检测路由系统...\n`;
     const frontendRouterInfo = await this.routerDetector.detectFrontendRouter(
       projectPath,
-      files
+      files,
+      techStack.dependencies
     );
     const backendRouterInfo = await this.routerDetector.detectBackendRouter(
       projectPath,
-      files
+      files,
+      techStack.dependencies
     );
     const routerSummary =
       [
@@ -426,27 +448,29 @@ class CursorRulesGeneratorsServer {
 
       for (let i = 0; i < uncertainties.length; i++) {
         const item = uncertainties[i];
+        const analysis = item.analysis;
+        if (!analysis) continue;
         output += `### 决策点 ${i + 1}: ${item.topic}\n\n`;
-        output += `**当前方案**: ${item.analysis.recommendation.method}\n`;
+        output += `**当前方案**: ${analysis.recommendation.method}\n`;
         output += `**确定性**: ${
-          item.analysis.recommendation.certainty === "certain"
+          analysis.recommendation.certainty === "certain"
             ? "✅ 确定"
-            : item.analysis.recommendation.certainty === "likely"
+            : analysis.recommendation.certainty === "likely"
             ? "⚠️ 可能"
             : "ℹ️ 不确定"
         }\n`;
-        output += `**理由**: ${item.analysis.recommendation.explanation}\n\n`;
+        output += `**理由**: ${analysis.recommendation.explanation}\n\n`;
 
         if (
-          item.analysis.scripts.commands.length > 0 ||
-          item.analysis.scripts.files.length > 0
+          analysis.scripts.commands.length > 0 ||
+          analysis.scripts.files.length > 0
         ) {
           output += `**检测到的所有选项**:\n`;
 
-          if (item.analysis.scripts.commands.length > 0) {
+          if (analysis.scripts.commands.length > 0) {
             output += `\n命令选项:\n`;
-            item.analysis.scripts.commands.forEach(
-              (cmd: string, idx: number) => {
+            analysis.scripts.commands.forEach(
+              (cmd, idx) => {
                 const mark = idx === 0 ? "💡 推荐" : "";
                 output += `  ${String.fromCharCode(
                   65 + idx
@@ -455,10 +479,10 @@ class CursorRulesGeneratorsServer {
             );
           }
 
-          if (item.analysis.scripts.files.length > 0) {
+          if (analysis.scripts.files.length > 0) {
             output += `\n脚本文件:\n`;
-            const offset = item.analysis.scripts.commands.length;
-            item.analysis.scripts.files.forEach((file: string, idx: number) => {
+            const offset = analysis.scripts.commands.length;
+            analysis.scripts.files.forEach((file, idx) => {
               output += `  ${String.fromCharCode(
                 65 + offset + idx
               )}. @${file}\n`;
@@ -468,8 +492,8 @@ class CursorRulesGeneratorsServer {
           output += `\n其他:\n`;
           const lastOption = String.fromCharCode(
             65 +
-              item.analysis.scripts.commands.length +
-              item.analysis.scripts.files.length
+              analysis.scripts.commands.length +
+              analysis.scripts.files.length
           );
           output += `  ${lastOption}. 不使用脚本，手动创建\n`;
         }
@@ -480,7 +504,7 @@ class CursorRulesGeneratorsServer {
         output += `- 如果有其他方式 → 请具体说明\n\n`;
 
         output += `💡 **影响**: ${
-          item.analysis.confirmationQuestions[0]?.impact ||
+          analysis.confirmationQuestions[0]?.impact ||
           "这将决定规则中的相关指南"
         }\n\n`;
         output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -607,7 +631,7 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理生成 Cursor Rules 的请求（增强版，显示进度）
    */
-  private async handleGenerateRules(args: any) {
+  private async handleGenerateRules(args: Record<string, unknown>) {
     const projectPath = this.parseProjectPath(args);
     const updateDescription = (args.updateDescription as boolean) ?? false;
     const includeModuleRules = (args.includeModuleRules as boolean) ?? true;
@@ -683,20 +707,31 @@ class CursorRulesGeneratorsServer {
     // 任务产出变量
     let files: string[] = [];
     let fileTypeStats: Record<string, number> = {};
-    let techStack: any;
-    let modules: any[] = [];
-    let codeFeatures: Record<string, any> = {};
-    let projectConfig: any;
-    let projectPractice: any;
-    let customPatterns: any;
-    let fileOrganization: any;
-    let deepAnalysis: any[] = [];
-    let architecturePattern: any;
-    let frontendRouter: any;
-    let backendRouter: any;
-    const uncertainties: any[] = [];
-    let bestPractices: any[] = [];
-    let consistencyReport: any;
+    let techStack: TechStack | undefined;
+    let modules: Module[] = [];
+    let codeFeatures: Record<string, CodeFeature> = {};
+    let projectConfig: ProjectConfiguration | undefined;
+    let projectPractice: ProjectPractice | undefined;
+    let customPatterns: CustomPatterns | undefined;
+    let fileOrganization: FileOrganizationInfo | undefined;
+    let deepAnalysis: DeepDirectoryAnalysis[] = [];
+    let architecturePattern: ArchitecturePattern | undefined;
+    let frontendRouter: { info: RouterInfo; pattern: RoutingPattern; examples: RouteExample[]; dynamicAnalysis?: DynamicRoutingAnalysis } | undefined;
+    let backendRouter: { info: RouterInfo; pattern: RoutingPattern; examples: RouteExample[] } | undefined;
+    const uncertainties: Array<{
+      taskNumber?: number;
+      topic: string;
+      analysis?: DynamicRoutingAnalysis;
+      questions?: unknown[];
+      certainty?: string;
+      method?: string;
+      explanation?: string;
+      source?: string;
+      alternatives?: string[];
+      scripts?: DynamicRoutingAnalysis["scripts"];
+    }> = [];
+    let bestPractices: BestPractice[] = [];
+    let consistencyReport: ConsistencyReport | undefined;
     let descriptionUpdated = false;
     let rules: CursorRule[] = [];
     let writtenFiles: string[] = [];
@@ -767,6 +802,7 @@ class CursorRulesGeneratorsServer {
     consistencyReport = pipelineConsistencyReport ?? {
       hasInconsistencies: false,
       inconsistencies: [],
+      checkedFiles: [],
     };
 
     // ── 补充各任务的详情信息 ─────────────────────────────────────────────────
@@ -853,20 +889,20 @@ class CursorRulesGeneratorsServer {
       } 个工具函数。`
     );
     if (customPatterns?.apiClient?.exists) {
-      addDetail(5, `检测到 API 客户端：${(customPatterns.apiClient as any).name || "未命名"}。`);
+      addDetail(5, `检测到 API 客户端：${customPatterns.apiClient.name ?? "未命名"}。`);
     }
     completeTask(5);
 
     // 任务 6：文件组织
-    addDetail(6, `识别 ${(fileOrganization as any)?.structure?.length ?? 0} 个目录节点。`);
-    if (((fileOrganization as any)?.componentLocation?.length ?? 0) > 0) {
-      addDetail(6, `组件目录定位为 ${(fileOrganization as any).componentLocation[0]}。`);
+    addDetail(6, `识别 ${fileOrganization?.structure?.length ?? 0} 个目录节点。`);
+    if ((fileOrganization?.componentLocation?.length ?? 0) > 0) {
+      addDetail(6, `组件目录定位为 ${fileOrganization!.componentLocation[0]}。`);
     }
-    if (((fileOrganization as any)?.utilsLocation?.length ?? 0) > 0) {
-      addDetail(6, `工具函数目录定位为 ${(fileOrganization as any).utilsLocation[0]}。`);
+    if ((fileOrganization?.utilsLocation?.length ?? 0) > 0) {
+      addDetail(6, `工具函数目录定位为 ${fileOrganization!.utilsLocation[0]}。`);
     }
-    if ((fileOrganization as any)?.namingConvention) {
-      addDetail(6, `命名规范：${JSON.stringify((fileOrganization as any).namingConvention)}。`);
+    if (fileOrganization?.namingConvention) {
+      addDetail(6, `命名规范：${JSON.stringify(fileOrganization.namingConvention)}。`);
     }
     completeTask(6);
 
@@ -897,7 +933,7 @@ class CursorRulesGeneratorsServer {
     // 任务 8：动态路由分析（pipeline 已在路由阶段分析，从 context 读取结果）
     if (frontendRouter) {
       startTask(8, "cursor-rules-generators 正在评估动态路由生成方式。");
-      const dynamicAnalysis = frontendRouter.dynamicAnalysis as any;
+      const dynamicAnalysis = frontendRouter.dynamicAnalysis;
       if (dynamicAnalysis?.isDynamic) {
         addDetail(
           8,
@@ -923,7 +959,7 @@ class CursorRulesGeneratorsServer {
     // 任务 9：生成规则与一致性检查（bestPractices / consistencyReport 已由 AnalysisPipeline 提供）
     startTask(9, "cursor-rules-generators 正在汇总最佳实践并检查文档一致性。");
     addDetail(9, `获取到 ${bestPractices.length} 条相关最佳实践。`);
-    if (consistencyReport.hasInconsistencies) {
+    if (consistencyReport && consistencyReport.hasInconsistencies) {
       addDetail(
         9,
         `检测到 ${consistencyReport.inconsistencies.length} 处描述与实现不一致。`
@@ -1024,10 +1060,9 @@ class CursorRulesGeneratorsServer {
       );
     } else {
       // 评估数据质量
-      const rootDirs = deepAnalysis.filter((d: any) => d.depth === 1);
+      const rootDirs = deepAnalysis.filter((d) => d.depth === 1);
       const otherCount = deepAnalysis.filter(
-        (d: any) => {
-          // 只判断英文，不判断中文
+        (d) => {
           const purposeLower = (d.purpose || '').toLowerCase();
           return purposeLower === 'other' || purposeLower === 'unknown' || d.category === "other";
         }
@@ -1128,13 +1163,15 @@ class CursorRulesGeneratorsServer {
     analysisLines.push(
       `- cursor-rules-generators 检测模块数量：${modules.length} 个`
     );
-    analysisLines.push(
-      `- cursor-rules-generators 记录自定义工具：Hooks ${
-        customPatterns.customHooks.length
-      } 个，工具函数 ${customPatterns.customUtils.length} 个${
-        customPatterns.apiClient?.exists ? "，API 客户端 1 个" : ""
-      }`
-    );
+    if (customPatterns) {
+      analysisLines.push(
+        `- cursor-rules-generators 记录自定义工具：Hooks ${
+          customPatterns.customHooks.length
+        } 个，工具函数 ${customPatterns.customUtils.length} 个${
+          customPatterns.apiClient?.exists ? "，API 客户端 1 个" : ""
+        }`
+      );
+    }
 
     // 添加框架匹配信息（向后兼容）
     const frameworkMatch = this.rulesGenerator.getFrameworkMatch();
@@ -1232,12 +1269,12 @@ class CursorRulesGeneratorsServer {
           `cursor-rules-generators 将工具函数目录定位为 \`${fileOrganization.utilsLocation[0]}\``
         );
       }
-      if (fileOrganization.hooksLocation?.length > 0) {
+      if (fileOrganization.hooksLocation && fileOrganization.hooksLocation.length > 0) {
         structureNotes.push(
           `cursor-rules-generators 将 Hooks 目录定位为 \`${fileOrganization.hooksLocation[0]}\``
         );
       }
-      if (fileOrganization.apiLocation?.length > 0) {
+      if (fileOrganization.apiLocation && fileOrganization.apiLocation.length > 0) {
         structureNotes.push(
           `cursor-rules-generators 将 API 服务目录定位为 \`${fileOrganization.apiLocation[0]}\``
         );
@@ -1277,7 +1314,7 @@ class CursorRulesGeneratorsServer {
     const notes: string[] = [];
     if (consistencyReport.hasInconsistencies) {
       const issueLines = consistencyReport.inconsistencies.map(
-        (inc: any, index: number) => {
+        (inc, index) => {
           const severity =
             inc.severity === "high"
               ? "高"
@@ -1528,7 +1565,7 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理分析项目的请求
    */
-  private async handleAnalyzeProject(args: any) {
+  private async handleAnalyzeProject(args: Record<string, unknown>) {
     const projectPath = this.parseProjectPath(args);
 
     const files = await this.projectAnalyzer.collectFiles(projectPath);
@@ -1569,7 +1606,7 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理一致性检查请求
    */
-  private async handleCheckConsistency(args: any) {
+  private async handleCheckConsistency(args: Record<string, unknown>) {
     const projectPath = this.parseProjectPath(args);
 
     const files = await this.projectAnalyzer.collectFiles(projectPath);
@@ -1599,7 +1636,7 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理更新描述文件的请求
    */
-  private async handleUpdateDescription(args: any) {
+  private async handleUpdateDescription(args: Record<string, unknown>) {
     const projectPath = this.parseProjectPath(args);
     const descriptionFile = (args.descriptionFile as string) ?? "README.md";
 
@@ -1649,7 +1686,7 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理验证规则的请求
    */
-  private async handleValidateRules(args: any) {
+  private async handleValidateRules(args: Record<string, unknown>) {
     const projectPath = this.parseProjectPath(args);
     const validateModules = (args.validateModules as boolean) ?? true;
     const path = await import("path");
@@ -1698,9 +1735,9 @@ class CursorRulesGeneratorsServer {
   /**
    * 处理 info 命令请求
    */
-  private async handleInfo(args: any) {
+  private async handleInfo(args: Record<string, unknown>) {
     const issues: string[] = [];
-    const info: Record<string, any> = {
+    const info: Record<string, unknown> = {
       version: this.version,
       logLevel: logger.getLogLevel(),
       logFile: this.getLogFilePath(),
@@ -1852,8 +1889,8 @@ class CursorRulesGeneratorsServer {
 
     // 获取顶级目录
     const topDirs = fileOrg.structure
-      .filter((d: any) => !d.path.includes("/"))
-      .sort((a: any, b: any) => b.fileCount - a.fileCount)
+      .filter((d) => !d.path.includes("/"))
+      .sort((a, b) => b.fileCount - a.fileCount)
       .slice(0, 12);
 
     for (let i = 0; i < topDirs.length; i++) {
@@ -1873,7 +1910,7 @@ class CursorRulesGeneratorsServer {
       if (!isLast && i < 8) {
         const children = fileOrg.structure
           .filter(
-            (d: any) =>
+            (d) =>
               d.path.startsWith(dir.path + "/") &&
               d.path.split("/").length === 2
           )

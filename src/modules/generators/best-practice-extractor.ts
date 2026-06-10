@@ -65,14 +65,10 @@ export class BestPracticeExtractor {
     });
 
     for (const fileName of frameworkFiles) {
-      const filePath = path.join(this.samplesDir, fileName);
-      try {
-        const content = await FileUtils.readFile(filePath);
-        const extracted = this.parseBestPractices(content, projectTechStack);
-        practices.push(...extracted);
-      } catch (error) {
-        logger.debug(`无法读取规则文件: ${fileName}`, { error });
-      }
+      const content = await this.readSampleFile(fileName);
+      if (!content) continue;
+      const extracted = this.parseBestPractices(content, projectTechStack);
+      practices.push(...extracted);
     }
 
     // 去重（基于 title 和 category）
@@ -83,6 +79,34 @@ export class BestPracticeExtractor {
     });
 
     return uniquePractices;
+  }
+
+  /**
+   * 读取样本文件，依次尝试 category 子目录 → root 目录 fallback。
+   * 找不到时返回 null 并记录 debug 日志。
+   */
+  private async readSampleFile(fileName: string, category?: string): Promise<string | null> {
+    const candidates: string[] = [];
+    if (category && category !== "other") {
+      candidates.push(path.join(this.samplesDir, category, fileName));
+    }
+    candidates.push(path.join(this.samplesDir, fileName));
+    // framework-matcher 的文件通常在 frontend/ 子目录
+    if (!category || category === "other") {
+      candidates.push(path.join(this.samplesDir, "frontend", fileName));
+    }
+
+    for (const filePath of candidates) {
+      try {
+        if (await FileUtils.fileExists(filePath)) {
+          return await FileUtils.readFile(filePath);
+        }
+      } catch {
+        // 继续尝试下一个候选路径
+      }
+    }
+    logger.debug(`样本文件未找到: ${fileName}`);
+    return null;
   }
 
   /**
@@ -206,11 +230,6 @@ export class BestPracticeExtractor {
    * 对章节进行分类
    */
   private categorizeSection(title: string, defaultCategory?: string): string {
-    // 如果提供了默认类别，优先使用
-    if (defaultCategory) {
-      return defaultCategory;
-    }
-    
     const titleLower = title.toLowerCase();
     
     if (titleLower.includes('style') || titleLower.includes('format') || titleLower.includes('convention')) {
@@ -241,7 +260,7 @@ export class BestPracticeExtractor {
       return 'state-management';
     }
 
-    return 'general';
+    return defaultCategory ?? 'general';
   }
 
   /**
@@ -252,11 +271,11 @@ export class BestPracticeExtractor {
     projectTechStack: TechStack
   ): string[] {
     const techStack: string[] = [];
-    const allTech = [
+    const allTech = [...new Set([
       ...projectTechStack.primary,
       ...projectTechStack.frameworks,
-      ...projectTechStack.languages
-    ];
+      ...projectTechStack.languages,
+    ])];
 
     for (const tech of allTech) {
       if (content.toLowerCase().includes(tech.toLowerCase())) {
@@ -392,49 +411,24 @@ export class BestPracticeExtractor {
       primaryMatch: multiMatch.primaryMatch?.ruleName
     });
 
-    // 按类别处理匹配
     for (const match of multiMatch.matches) {
-      // 跳过相似度太低的匹配
-      if (match.similarity < 0.2) {
-        continue;
-      }
+      if (match.similarity < 0.2) continue;
 
-      // 构建文件路径（支持按类别组织的目录结构）
-      let filePath: string;
-      if (match.category && match.category !== 'other') {
-        // 尝试从类别目录读取
-        filePath = path.join(this.samplesDir, match.category, match.sampleFile || '');
-      } else {
-        // 从根目录读取（向后兼容）
-        filePath = path.join(this.samplesDir, match.sampleFile || '');
-      }
+      const sampleFile = match.sampleFile || "";
+      if (processedFiles.has(sampleFile)) continue;
 
-      // 如果文件不存在，尝试从根目录读取
-      if (!await FileUtils.fileExists(filePath)) {
-        filePath = path.join(this.samplesDir, match.sampleFile || '');
-      }
+      const content = await this.readSampleFile(sampleFile, match.category);
+      if (!content) continue;
 
-      // 避免重复处理同一文件
-      if (processedFiles.has(filePath)) {
-        continue;
-      }
+      const extracted = this.parseBestPractices(content, projectTechStack, match.category);
+      practices.push(...extracted);
+      processedFiles.add(sampleFile);
 
-      try {
-        if (await FileUtils.fileExists(filePath)) {
-          const content = await FileUtils.readFile(filePath);
-          const extracted = this.parseBestPractices(content, projectTechStack, match.category);
-          practices.push(...extracted);
-          processedFiles.add(filePath);
-          
-          logger.debug(`从规则文件提取最佳实践`, {
-            file: match.sampleFile,
-            category: match.category,
-            practices: extracted.length
-          });
-        }
-      } catch (error) {
-        logger.debug(`无法读取规则文件: ${filePath}`, { error });
-      }
+      logger.debug(`从规则文件提取最佳实践`, {
+        file: sampleFile,
+        category: match.category,
+        practices: extracted.length,
+      });
     }
 
     // 去重（基于 title 和 category）

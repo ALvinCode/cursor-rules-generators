@@ -3,6 +3,18 @@ import { FileUtils } from "../../utils/file-utils.js";
 import { logger } from "../../utils/logger.js";
 import { FileTypeCategory } from '../../types.js';
 
+interface FileContentAnalysisResult {
+  isPage: boolean;
+  isComponent: boolean;
+  isAPI: boolean;
+  isUtility: boolean;
+  isModel: boolean;
+  isHook: boolean;
+  isPureFunction: boolean;
+  uiLibrary?: string;
+  businessKeywords: string[];
+}
+
 /**
  * 文件内容深度分析器
  * 通过分析文件内容（语法、函数、变量等）来推断目录职能
@@ -175,17 +187,7 @@ export class FileContentAnalyzer {
   /**
    * 分析单个文件内容
    */
-  private analyzeFileContent(content: string): {
-    isPage: boolean;
-    isComponent: boolean;
-    isAPI: boolean;
-    isUtility: boolean;
-    isModel: boolean;
-    isHook: boolean;
-    isPureFunction: boolean;
-    uiLibrary?: string;
-    businessKeywords: string[];
-  } {
+  private analyzeFileContent(content: string): FileContentAnalysisResult {
     const result = {
       isPage: false,
       isComponent: false,
@@ -388,7 +390,7 @@ export class FileContentAnalyzer {
    */
   private inferComponentPurpose(
     dirPath: string,
-    analysis: any
+    analysis: FileContentAnalysisResult
   ): string {
     const dirName = path.basename(dirPath);
     const parts: string[] = [];
@@ -501,7 +503,7 @@ export class FileContentAnalyzer {
   private inferBusinessPurpose(
     dirPath: string,
     businessKeywords: string[],
-    analysis: any
+    analysis: FileContentAnalysisResult
   ): string {
     const dirName = path.basename(dirPath);
     const keyword = this.translateKeyword(businessKeywords[0]);

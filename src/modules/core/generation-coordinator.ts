@@ -9,7 +9,7 @@ import {
 } from '../../types.js';
 import { FileUtils } from '../../utils/file-utils.js';
 import { logger } from '../../utils/logger.js';
-import { CodeGenerationRequirementsChecker } from './code-generation-requirements.js';
+import { CodeGenerationRequirementsChecker, CodeGenerationRequirementsCheck } from './code-generation-requirements.js';
 
 // 重新导出，保持既有从本模块导入这两类型的代码不变。
 export type { GenerationSummary, GenerationExplanation };
@@ -340,7 +340,7 @@ export class GenerationCoordinator {
   /**
    * 格式化代码生成需求检查结果
    */
-  formatCodeGenerationRequirements(check: any): string {
+  formatCodeGenerationRequirements(check: CodeGenerationRequirementsCheck): string {
     return this.requirementsChecker.formatRequirementsCheck(check);
   }
 }

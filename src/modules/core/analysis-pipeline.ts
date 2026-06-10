@@ -20,15 +20,45 @@ import { CustomPatternDetector } from '../analyzers/custom-pattern-detector.js';
 import { FileStructureLearner } from '../analyzers/file-structure-learner.js';
 import { DeepDirectoryAnalyzer } from '../analyzers/deep-directory-analyzer.js';
 import { RouterDetector } from '../analyzers/router-detector.js';
-import { UILibraryDetector } from '../analyzers/ui-library-detector.js';
+import {
+  rankDependencyUsage,
+  type LibraryCatalogEntry,
+  type UsageFallback,
+} from '../analyzers/dependency-usage-ranker.js';
 import { Context7Integration } from '../integrations/context7-integration.js';
 import { ConsistencyChecker } from '../validators/consistency-checker.js';
+import { FileUtils } from '../../utils/file-utils.js';
 import { logger } from '../../utils/logger.js';
 import {
   RuleGenerationContext,
   ConsistencyReport,
   Dependency,
 } from '../../types.js';
+
+// ─── UI 库检测配置（供 rankDependencyUsage 使用） ────────────
+
+const UI_LIBRARY_CATALOG: LibraryCatalogEntry[] = [
+  { name: "Ant Design", patterns: ["antd", "@ant-design/", "antd-mobile"] },
+  { name: "Material UI", patterns: ["@mui/", "@material-ui/"] },
+  { name: "shadcn/ui (Radix)", patterns: ["@radix-ui/", "shadcn-ui"] },
+  { name: "Chakra UI", patterns: ["@chakra-ui/"] },
+  { name: "Mantine", patterns: ["@mantine/"] },
+  { name: "Arco Design", patterns: ["@arco-design/"] },
+  { name: "Element Plus", patterns: ["element-plus"] },
+  { name: "Element UI", patterns: ["element-ui"] },
+  { name: "Vuetify", patterns: ["vuetify"] },
+  { name: "Naive UI", patterns: ["naive-ui"] },
+  { name: "PrimeReact", patterns: ["primereact"] },
+  { name: "PrimeVue", patterns: ["primevue"] },
+  { name: "styled-components", patterns: ["styled-components"] },
+  { name: "Emotion", patterns: ["@emotion/"] },
+  { name: "Tailwind CSS", patterns: ["tailwindcss"] },
+];
+
+const UI_SOURCE_EXT = /\.(ts|tsx|js|jsx|vue|svelte|css|less|scss|sass|styl)$/;
+const UI_FALLBACKS: UsageFallback[] = [
+  { libraryName: "Tailwind CSS", filePattern: /tailwind\.config\.(js|ts|cjs|mjs)$/ },
+];
 
 /**
  * 分析阶段的标识。供调用方在 onProgress 中识别当前进度。
@@ -128,7 +158,6 @@ export class AnalysisPipeline {
   private fileStructureLearner = new FileStructureLearner();
   private deepDirectoryAnalyzer = new DeepDirectoryAnalyzer();
   private routerDetector = new RouterDetector();
-  private uiLibraryDetector = new UILibraryDetector();
   private context7Integration = new Context7Integration();
   private consistencyChecker = new ConsistencyChecker();
 
@@ -157,6 +186,9 @@ export class AnalysisPipeline {
 
     logger.info(`分析管道开始：${projectPath}`, { stages: enabledStages });
 
+    // 启用 FileUtils 读缓存：同一次 run() 中多个 analyzer 读同一文件时只走一次磁盘
+    FileUtils.enableCache();
+    try {
     // 1) 收集文件
     const files = await this.projectAnalyzer.collectFiles(projectPath);
     emit('collect-files', '收集项目文件', [`已收集 ${files.length} 个文件`]);
@@ -233,10 +265,15 @@ export class AnalysisPipeline {
     ]);
 
     // 7.5) UI 库真实使用分析（安装 + 代码扫描 + 使用程度裁定）
-    const uiLibraries = await this.uiLibraryDetector.detect(
+    const uiLibraries = await rankDependencyUsage(
+      UI_LIBRARY_CATALOG,
       projectPath,
       files,
-      techStack.dependencies
+      techStack.dependencies.map((d) => d.name),
+      {
+        sourceExtensions: UI_SOURCE_EXT,
+        fallbacks: UI_FALLBACKS,
+      },
     );
     emit('ui-libraries', '分析 UI 库使用', [
       uiLibraries.active.length
@@ -411,6 +448,9 @@ export class AnalysisPipeline {
     };
 
     return { context, consistencyReport };
+    } finally {
+      FileUtils.clearCache();
+    }
   }
 
   /**

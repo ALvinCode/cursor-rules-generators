@@ -229,7 +229,7 @@ class Logger {
   /**
    * Debug 日志
    */
-  debug(message: string, ...args: any[]): void {
+  debug(message: string, ...args: unknown[]): void {
     if (this.logLevel <= LogLevel.DEBUG) {
       if (args.length > 0) {
         this.pinoLogger.debug({ args }, message);
@@ -242,7 +242,7 @@ class Logger {
   /**
    * Info 日志
    */
-  info(message: string, ...args: any[]): void {
+  info(message: string, ...args: unknown[]): void {
     if (this.logLevel <= LogLevel.INFO) {
       if (args.length > 0) {
         this.pinoLogger.info({ args }, message);
@@ -255,7 +255,7 @@ class Logger {
   /**
    * Warn 日志
    */
-  warn(message: string, ...args: any[]): void {
+  warn(message: string, ...args: unknown[]): void {
     if (this.logLevel <= LogLevel.WARN) {
       if (args.length > 0) {
         this.pinoLogger.warn({ args }, message);
@@ -268,7 +268,7 @@ class Logger {
   /**
    * Error 日志
    */
-  error(message: string, error?: Error | unknown, ...args: any[]): void {
+  error(message: string, error?: Error | unknown, ...args: unknown[]): void {
     if (this.logLevel <= LogLevel.ERROR) {
       if (error instanceof Error) {
         this.pinoLogger.error({ err: error, args }, message);
@@ -312,7 +312,7 @@ class Logger {
  */
 export const logger = new Proxy({} as Logger, {
   get(_target, prop) {
-    return (Logger.getInstance() as any)[prop];
+    return (Logger.getInstance() as unknown as Record<string | symbol, unknown>)[prop];
   }
 });
 
