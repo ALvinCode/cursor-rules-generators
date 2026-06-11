@@ -605,7 +605,7 @@ export class RouterDetector {
     return {
       organization: "centralized",
       urlNaming: "kebab-case",
-      fileNaming: "配置式",
+      fileNaming: "config-based",
       dynamicRoutePattern: dynamicPattern,
       dynamicRouteExamples: [],
       hasRouteGroups: false,
@@ -641,7 +641,7 @@ export class RouterDetector {
     return {
       organization: "centralized",
       urlNaming: "kebab-case",
-      fileNaming: "配置式",
+      fileNaming: "config-based",
       dynamicRoutePattern: content.includes(":id") ? ":id" : "none",
       dynamicRouteExamples: [],
       hasRouteGroups: false,
@@ -698,7 +698,7 @@ export class RouterDetector {
     return {
       organization: routeFiles.length > 5 ? "distributed" : "centralized",
       urlNaming: "kebab-case",
-      fileNaming: "模块文件",
+      fileNaming: "module files",
       dynamicRoutePattern: ":id",
       dynamicRouteExamples: dynamicExamples.slice(0, 3),
       hasRouteGroups: false,
@@ -1359,7 +1359,7 @@ export class RouterDetector {
     return {
       organization: "distributed",
       urlNaming: "kebab-case",
-      fileNaming: "未知",
+      fileNaming: "unknown",
       dynamicRoutePattern: "none",
       dynamicRouteExamples: [],
       hasRouteGroups: false,

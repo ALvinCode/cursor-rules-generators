@@ -86,18 +86,18 @@ export class ModuleBusinessAnalyzer {
 
     // 常见业务领域关键词
     const domainKeywords: Record<string, string> = {
-      auth: "认证授权",
-      user: "用户管理",
-      payment: "支付",
-      order: "订单",
-      product: "产品",
-      cart: "购物车",
-      kyc: "身份验证",
-      form: "表单",
-      common: "公共功能",
-      shared: "共享功能",
-      utils: "工具函数",
-      components: "组件库",
+      auth: "Authentication",
+      user: "User Management",
+      payment: "Payment",
+      order: "Orders",
+      product: "Products",
+      cart: "Shopping Cart",
+      kyc: "Identity Verification",
+      form: "Forms",
+      common: "Common",
+      shared: "Shared",
+      utils: "Utilities",
+      components: "Component Library",
     };
 
     for (const [keyword, domain] of Object.entries(domainKeywords)) {
@@ -106,7 +106,7 @@ export class ModuleBusinessAnalyzer {
       }
     }
 
-    return "通用功能";
+    return "General";
   }
 
   /**

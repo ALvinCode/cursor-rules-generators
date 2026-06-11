@@ -15,7 +15,7 @@ import { detectMobXPattern } from "./state-management-rule.js";
  */
 export async function generateFeatureRecipeRule(context: RuleGenerationContext): Promise<CursorRule> {
     const metadata = buildRuleMetadata(
-      "端到端功能创建指南",
+      "End-to-End Feature Creation Guide",
       "Step-by-step recipe for adding a complete feature: types → API → store → component → route",
       88,
       context.techStack.primary,
@@ -41,16 +41,10 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
     // 基于版本 + 实际代码检测 MobX 模式，与 state-management.mdc 保持一致
     const mobxPattern = hasMobX ? await detectMobXPattern(context) : 'makeAutoObservable';
 
-    const apiClient = context.customPatterns?.apiClient;
-    const apiClientName = apiClient?.name || "apiClient";
-    const hasAxios = context.techStack.dependencies.some((d) => d.name === "axios");
-
     const typeDir = org?.typesLocation?.[0] || `src/types`;
     const apiDir = org?.apiLocation?.[0] || `src/api`;
     const storeDir = `src/store`;
     const compDir = org?.componentLocation?.[0] || `src/components`;
-    // 路由注册的页面组件（步骤6被 router 挂载）应放在页面目录，而非可复用组件目录
-    // 优先从 deepAnalysis 检测 views/pages/screens 目录（与 generateNewFileGuidelines 逻辑一致）
     const PAGE_DIR_KEYWORDS = new Set(['views', 'pages', 'screens']);
     const pageDir = (context.deepAnalysis ?? [])
       .filter(d => PAGE_DIR_KEYWORDS.has(d.path.split('/').pop()?.toLowerCase() ?? ''))
@@ -58,9 +52,21 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
     const routeDir = (context.frontendRouter?.info?.location?.[0] || `src/routes`).replace(/\/$/, '');
     const hookDir = org?.hooksLocation?.[0] || `src/hooks`;
 
-    // 将检测到的 typeDir 转为 import 别名（src/xxx → @/xxx）
     const typeAlias = typeDir.replace(/^src\//, '@/');
     const apiAlias = apiDir.replace(/^src\//, '@/');
+
+    const apiClient = context.customPatterns?.apiClient;
+    const clientDetected = apiClient?.exists === true;
+    const apiClientName = apiClient?.exportName || apiClient?.name || "apiClient";
+    const clientPath = apiClient?.filePath
+      ? apiClient.filePath.replace(/^src\//, '@/').replace(/\.(ts|js)$/, '')
+      : apiAlias;
+    const clientImportStmt = clientDetected
+      ? (apiClient?.importStyle === "default"
+        ? `import ${apiClientName} from "${clientPath}";`
+        : `import { ${apiClientName} } from "${clientPath}";`)
+      : "";
+    const hasHttpClient = clientDetected || context.techStack.dependencies.some((d) => d.name === "axios");
 
     let storeStep = "";
     if (hasMobX) {
@@ -172,20 +178,20 @@ export const useFeatureStore = create<FeatureStore>((set) => ({
     }
 
     const content = metadata + `
-# 端到端功能创建指南
+# End-to-End Feature Creation Guide
 
-> 新增一个完整功能时，按此顺序创建文件，避免缺漏。
+> When adding a complete feature, create files in this order to avoid gaps.
 
-## 标准步骤
+## Standard Steps
 
-### 1. 类型定义
+### 1. Type Definitions
 
 \`\`\`${ext}
 // ${typeDir}/feature.${ext}
 export interface FeatureItem {
   id: string;
   name: string;
-  // ...项目实际字段
+  // ...actual project fields
 }
 
 export interface FeatureListParams {
@@ -194,67 +200,61 @@ export interface FeatureListParams {
 }
 \`\`\`
 
-### 2. API 函数
+### 2. API Functions
 
 \`\`\`${ext}
 // ${apiDir}/feature.${ext}
 import type { FeatureItem, FeatureListParams } from "${typeAlias}/feature";
-${hasAxios ? `import { ${apiClientName} } from "${apiAlias}";` : ""}
+${clientImportStmt}
 
-export async function fetchFeatureList(params: FeatureListParams): Promise<FeatureItem[]> {
-  const { data } = await ${hasAxios ? apiClientName : "fetch"}${hasAxios ? `.get("/api/features", { params })` : '(`/api/features?page=${params.page}`)'};
-  return data;
-}
-
-export async function fetchFeatureById(id: string): Promise<FeatureItem> {
-  const { data } = await ${hasAxios ? `${apiClientName}.get(\`/api/features/\${id}\`)` : `fetch(\`/api/features/\${id}\`)`};
-  return data;
-}
+export ${isTS ? "const" : "async function"} fetchFeatureList${isTS ? " = " : ""}(params${isTS ? ": FeatureListParams" : ""})${isTS ? " =>" : ""} {
+  return ${hasHttpClient ? `${apiClientName}.get${isTS ? "<FeatureItem[]>" : ""}("/features", { params })` : 'fetch(`/api/features?page=${params.page}`)'};
+}${isTS ? ";" : ""}
 \`\`\`
 ${storeStep}
-### ${stateLib ? "4" : "3"}. 可复用 Hook（可选）
+### ${stateLib ? "4" : "3"}. Reusable Hook (Optional)
 
 \`\`\`${ext}
 // ${hookDir}/useFeature.${ext}
 export function useFeature(id: string) {
-  // 封装数据获取、loading 状态、错误处理
-  // 组件直接调用，不重复写 fetch 逻辑
+  // Encapsulate data fetching, loading state, and error handling
+  // Components call this directly; don't duplicate fetch logic
 }
 \`\`\`
 
-### ${stateLib ? "5" : "4"}. 页面组件
+### ${stateLib ? "5" : "4"}. Page Component
 
 \`\`\`${extx}
 // ${pageDir}/FeatureList/FeatureList.${extx}
-// 只负责渲染，业务逻辑在 Hook / Store 中
+// Rendering only; business logic lives in Hook / Store
 export function FeatureList() {
-  // 1. 从 store/hook 获取数据
-  // 2. 处理 loading / error 状态
-  // 3. 渲染列表
+  // 1. Get data from store/hook
+  // 2. Handle loading / error states
+  // 3. Render the list
 }
 \`\`\`
 
-### ${stateLib ? "6" : "5"}. 路由注册
+### ${stateLib ? "6" : "5"}. Route Registration
 
 \`\`\`${extx}
-// ${routeDir}/index.${extx} 或路由配置文件
+// ${routeDir}/index.${extx} or route config file
 { path: "/features", element: <FeatureList /> }
 { path: "/features/:id", element: <FeatureDetail /> }
 \`\`\`
 
-## 文件检查清单
+## File Checklist
 
-新建功能后确认以下文件已创建/更新：
+After adding a feature, confirm the following files were created/updated:
 
-- [ ] \`${typeDir}/feature.${ext}\` — 类型定义
-- [ ] \`${apiDir}/feature.${ext}\` — API 函数
-${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/useFeature.${ext}\` — 数据 Hook（可选）
-- [ ] \`${pageDir}/FeatureList/\` — 页面组件
-- [ ] 路由配置已更新
+- [ ] \`${typeDir}/feature.${ext}\` — Type definitions
+- [ ] \`${apiDir}/feature.${ext}\` — API functions
+${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/useFeature.${ext}\` — Data hook (optional)
+- [ ] \`${pageDir}/FeatureList/\` — Page component
+- [ ] Route config updated
 
 ---
 
-*遵循此模式保持项目一致性。参考 @project-structure.mdc 确认各类文件的实际目录位置。*
+*Follow this pattern for project consistency. See @project-structure.mdc for actual directory locations.*
 `;
 
     return {

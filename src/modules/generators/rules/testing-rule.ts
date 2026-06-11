@@ -27,28 +27,28 @@ const mockEverything = ${mockFn}(() => ${mockFn}(() => ${mockFn}()));
  * 生成测试指南（精简版）。
  */
 function generateTestingGuidelines(context: RuleGenerationContext): string {
-  return `## 测试规范
+  return `## Testing Conventions
 
-> 💡 **详细规范**: 完整的测试指南请参考 **@testing.mdc**
+> 💡 **Full guidelines**: See **@testing.mdc** for the complete testing guide
 
-### 测试原则
-- **独立性**：每个测试应该独立运行，不依赖其他测试
-- **可重复性**：测试结果应该是确定的，不受运行顺序影响
-- **快速执行**：单元测试应该快速完成
-- **清晰性**：测试应该清楚地表达意图
+### Testing Principles
+- **Independence**: Each test should run independently without relying on other tests
+- **Repeatability**: Results should be deterministic regardless of run order
+- **Fast execution**: Unit tests should complete quickly
+- **Clarity**: Tests should clearly express intent
 
-### 快速参考
-- **测试文件**: \`ComponentName.test.ts\` 或 \`ComponentName.spec.ts\`
-- **AAA 模式**: Arrange（准备）→ Act（执行）→ Assert（验证）
-- **覆盖率目标**: 核心业务逻辑达到 80%+ 覆盖率
-- **优先级**:
-  1. 关键业务逻辑
-  2. 边界情况和错误处理
-  3. 复杂的算法和数据转换
-- **不需要测试**：
-  - 简单的 getter/setter
-  - 第三方库的功能
-  - 纯 UI 布局（可以用 E2E 测试）
+### Quick Reference
+- **Test files**: \`ComponentName.test.ts\` or \`ComponentName.spec.ts\`
+- **AAA pattern**: Arrange → Act → Assert
+- **Coverage target**: 80%+ coverage for core business logic
+- **Priority**:
+  1. Critical business logic
+  2. Edge cases and error handling
+  3. Complex algorithms and data transformations
+- **Skip testing**:
+  - Simple getters/setters
+  - Third-party library behavior
+  - Pure UI layout (use E2E tests instead)
 
 ### Mock and Stub
 - Use mocks to isolate external dependencies
@@ -57,17 +57,17 @@ function generateTestingGuidelines(context: RuleGenerationContext): string {
 
 ${generateMockExample(context)}
 
-### 测试类型
-- **单元测试**：测试单个函数或类的行为
-- **集成测试**：测试多个模块的协作
-- **E2E 测试**：测试完整的用户流程
+### Test Types
+- **Unit tests**: Test individual functions or classes
+- **Integration tests**: Test collaboration across modules
+- **E2E tests**: Test complete user flows
 
-### 最佳实践
-- 一个测试只验证一个行为
-- 使用有意义的断言消息
-- 测试失败时应该清楚地指出问题所在
-- 定期运行测试，不要让测试过时
-- 失败的测试应该立即修复
+### Best Practices
+- One test should verify one behavior
+- Use meaningful assertion messages
+- Failures should clearly indicate what went wrong
+- Run tests regularly; don't let them go stale
+- Fix failing tests immediately
 
 `;
 }
@@ -82,11 +82,11 @@ export function generateConditionalTestingRules(
 
   if (!hasTests) {
     // 项目没有测试 - 简短提示
-    return `## 测试\n\n### 当前状态\n⚠️ 项目当前未配置测试框架\n\n如需添加测试，请参考相关技术栈的测试最佳实践。\n\n`;
+    return `## Testing\n\n### Current Status\n⚠️ The project has no test framework configured\n\nTo add tests, see testing best practices for your stack.\n\n`;
   }
 
   // v1.9: 添加引用说明，避免重复基础规范
-  let rules = `> 💡 **基础规范**: 测试文件命名和组织规范请参考 **@code-style.mdc**\n\n`;
+  let rules = `> 💡 **Base conventions**: See **@code-style.mdc** for test file naming and organization\n\n`;
 
   // 项目有测试 - 生成详细规则
   rules += generateTestingGuidelines(context);
@@ -102,7 +102,7 @@ export function generateTestingRule(context: RuleGenerationContext): CursorRule 
 
   const testGlobs = "**/*.{test,spec}.{ts,tsx,js,jsx}";
   const metadata = buildRuleMetadata(
-    "测试规范",
+    "Testing Conventions",
     hasTests ? "Testing patterns, organization, and best practices" : "Testing recommendations for the project",
     70,
     context.techStack.primary,

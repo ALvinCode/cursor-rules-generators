@@ -31,7 +31,7 @@ export async function generateStateManagementRule(
 
     const storeGlobs = getStoreGlobs(context);
     const metadata = buildRuleMetadata(
-      "状态管理规范",
+      "State Management Guidelines",
       `Consult when implementing state management, data flow, or ${stateLib?.name || "store"}-related code`,
       85,
       context.techStack.primary,
@@ -44,15 +44,15 @@ export async function generateStateManagementRule(
     const content =
       metadata +
       `
-# 状态管理规范
+# State Management Guidelines
 
-参考: @global-rules.mdc
+See also: @global-rules.mdc
 
 ${generateStateManagementContent(context, stateLib?.name, mobxPattern, mobxAccess)}
 
 ---
 
-*状态管理是项目的核心，遵循既定模式。*
+*State management is core to the project — follow established patterns.*
 `;
 
     return {
@@ -231,7 +231,7 @@ function generateStateManagementContent(
   mobxAccess?: MobXAccessInfo
 ): string {
     if (!libName) {
-      return "项目使用状态管理，请遵循一致的状态更新模式。";
+      return "The project uses state management — follow consistent state update patterns.";
     }
 
     const lowerLib = libName.toLowerCase();
@@ -331,69 +331,69 @@ class UserStore {
 }`;
 
       const bestPractices = mobxPattern === 'makeAutoObservable'
-        ? `- 使用 makeAutoObservable 自动推断所有属性为 observable、action
-- 不需要手动声明 @observable/@action（减少样板代码）
-- 组件用 observer() 包装
-- 避免直接修改 observable（应在 action 中修改）`
-        : `- 使用 @observable 定义响应式状态
-- 使用 @action 定义状态修改方法
-- 组件用 observer() 包装
-- 避免直接修改 observable`;
+        ? `- Use makeAutoObservable to automatically infer all properties as observable/action
+- No need to manually declare @observable/@action (reduces boilerplate)
+- Wrap components with observer()
+- Avoid mutating observables directly (mutate inside actions)`
+        : `- Use @observable for reactive state
+- Use @action for state mutation methods
+- Wrap components with observer()
+- Avoid mutating observables directly`;
 
-      return `## MobX 状态管理
+      return `## MobX State Management
 
-### 项目当前使用
-- 状态管理库: MobX
-- Store 位置: \`${storeDir}/\`
-- 使用模式: ${mobxPattern === 'makeAutoObservable' ? 'makeAutoObservable（自动推断）' : 'makeObservable + Decorators（显式声明）'}
+### Current Project Usage
+- State management library: MobX
+- Store location: \`${storeDir}/\`
+- Usage pattern: ${mobxPattern === 'makeAutoObservable' ? 'makeAutoObservable (auto-inferred)' : 'makeObservable + Decorators (explicit declarations)'}
 
-### 使用规范
+### Usage Guidelines
 
-**定义 Store**:
+**Define Store**:
 \`\`\`typescript
 ${storeExample}
 \`\`\`
 
-**在组件中使用**:
+**Use in Components**:
 \`\`\`typescript
 import { observer } from '${mobxAccess?.observerPackage || "mobx-react-lite"}'
 ${mobxAccess?.accessPattern === "direct-import" && mobxAccess.importExample ? mobxAccess.importExample : `import { SomeStore } from '@/${storeDir}'`}
 
 export const UserProfile = observer(() => {
-  ${mobxAccess?.accessPattern === "direct-import" ? "// 直接导入 Store 实例使用" : mobxAccess?.accessPattern === "useStores" ? "const { someStore } = useStores()" : "// 按项目约定获取 Store"}
+  ${mobxAccess?.accessPattern === "direct-import" ? "// Import store instance directly" : mobxAccess?.accessPattern === "useStores" ? "const { someStore } = useStores()" : "// Obtain store per project conventions"}
   return <div>{/* ... */}</div>
 })
 \`\`\`
 
-### 最佳实践
+### Best Practices
 
 ${bestPractices}
 
-参考: 查找项目中的 Store 文件作为示例`;
+See also: Look for Store files in the project as examples`;
     }
 
     if (lowerLib.includes("redux")) {
-      return `## Redux 状态管理
+      return `## Redux State Management
 
-### 使用规范
+### Usage Guidelines
 
-- 使用 Redux Toolkit
-- Slice 按功能模块组织
-- 使用 createSlice 定义 reducer
-- 异步逻辑使用 createAsyncThunk
+- Use Redux Toolkit
+- Organize slices by feature module
+- Use createSlice to define reducers
+- Use createAsyncThunk for async logic
 
-参考项目中现有的 slice 文件`;
+See existing slice files in the project for examples`;
     }
 
     if (lowerLib.includes("zustand")) {
-      return `## Zustand 状态管理
+      return `## Zustand State Management
 
-### 使用规范
+### Usage Guidelines
 
-- 使用 create 创建 store
-- 保持 store 扁平化
-- 使用 immer 中间件处理复杂状态`;
+- Use create to create stores
+- Keep stores flat
+- Use immer middleware for complex state`;
     }
 
-    return `## ${libName} 状态管理\n\n请遵循 ${libName} 的官方最佳实践。`;
+    return `## ${libName} State Management\n\nFollow ${libName}'s official best practices.`;
 }

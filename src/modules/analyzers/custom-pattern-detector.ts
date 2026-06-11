@@ -406,17 +406,17 @@ export class CustomPatternDetector {
     const dirname = path.dirname(filePath);
 
     if (basename.includes("date") || basename.includes("time"))
-      return "日期时间";
-    if (basename.includes("format")) return "格式化";
-    if (basename.includes("valid")) return "验证";
+      return "Date/Time";
+    if (basename.includes("format")) return "Formatting";
+    if (basename.includes("valid")) return "Validation";
     if (basename.includes("api") || basename.includes("http"))
-      return "API 调用";
-    if (basename.includes("storage")) return "存储";
-    if (basename.includes("auth")) return "认证";
-    if (dirname.includes("validation")) return "验证";
-    if (dirname.includes("formatting")) return "格式化";
+      return "API";
+    if (basename.includes("storage")) return "Storage";
+    if (basename.includes("auth")) return "Auth";
+    if (dirname.includes("validation")) return "Validation";
+    if (dirname.includes("formatting")) return "Formatting";
 
-    return "通用工具";
+    return "General";
   }
 
   /**

@@ -17,7 +17,7 @@ import { buildRuleMetadata } from "./rule-metadata.js";
 export function generateCustomToolsRule(context: RuleGenerationContext): CursorRule {
     const hookGlobs = getHookGlobs(context);
     const metadata = buildRuleMetadata(
-      "项目自定义工具",
+      "Project Custom Tools",
       "Consult before implementing features — lists project-specific hooks, utilities, and API clients that MUST be reused",
       95,
       context.techStack.primary,
@@ -30,15 +30,15 @@ export function generateCustomToolsRule(context: RuleGenerationContext): CursorR
     const content =
       metadata +
       `
-# 项目自定义工具
+# Project Custom Tools
 
-参考: @global-rules.mdc
+See also: @global-rules.mdc
 
 ${generateCustomToolsRules(context)}
 
 ---
 
-*使用项目工具保持代码一致性，避免重复实现。*
+*Use project tools to keep code consistent and avoid duplicate implementations.*
 `;
 
     return {
@@ -83,13 +83,13 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
     let rules = "";
 
     if (hasHooks || hasUtils) {
-      rules += `## 项目自定义工具（优先使用）\n\n`;
+      rules += `## Project Custom Tools (Prefer These)\n\n`;
     }
 
     // 自定义 Hooks：按频率分层输出
     if (context.customPatterns.customHooks && context.customPatterns.customHooks.length > 0) {
-      rules += `### 自定义 Hooks\n\n`;
-      rules += `项目定义了以下自定义 hooks，**生成代码时必须优先使用**：\n\n`;
+      rules += `### Custom Hooks\n\n`;
+      rules += `The project defines the following custom hooks — **always prefer them when generating code**:\n\n`;
 
       const allActiveHooks = context.customPatterns.customHooks
         .filter((h) => h.frequency > 0);
@@ -101,21 +101,21 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
       const activeHooks = [...highFreq, ...midFreq];
 
       if (activeHooks.length === 0) {
-        rules += `> 项目中的自定义 hooks 尚未检测到使用记录，请参考 @project-structure.mdc 确认 hooks 目录位置。\n\n`;
+        rules += `> No usage of custom hooks detected yet. See @project-structure.mdc to confirm the hooks directory location.\n\n`;
       }
 
       for (const hook of activeHooks) {
         // 按频率分层：高(>10) = 强制优先；中(4-10) = 优先使用；低(1-3) = 可选参考
-        const freqLabel = hook.frequency > 10 ? "高" : hook.frequency > 3 ? "中" : "低";
+        const freqLabel = hook.frequency > 10 ? "High" : hook.frequency > 3 ? "Medium" : "Low";
         const freqNote = hook.frequency <= 3
-          ? ` ⚠️ 低频（仅 ${hook.frequency} 处使用，仅在明确匹配使用场景时优先）`
-          : ` (${hook.frequency} 处)`;
+          ? ` ⚠️ Low frequency (only ${hook.frequency} usage(s) — prefer only when the use case clearly matches)`
+          : ` (${hook.frequency} usage(s))`;
 
         rules += `**${hook.name}** ${hook.description ? `- ${hook.description}` : ""}\n`;
-        rules += `- 位置: \`${hook.relativePath}\`\n`;
-        rules += `- 使用频率: ${freqLabel}${freqNote}\n`;
+        rules += `- Location: \`${hook.relativePath}\`\n`;
+        rules += `- Usage frequency: ${freqLabel}${freqNote}\n`;
         if (hook.usage) {
-          rules += `- 使用方式:\n`;
+          rules += `- Usage:\n`;
           rules += `  \`\`\`typescript\n`;
           rules += `  ${hook.usage}\n`;
           rules += `  \`\`\`\n`;
@@ -126,8 +126,8 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
 
     // 自定义工具函数：同名函数标注上下文容器，由 Agent 在调用点按就近原则决策
     if (context.customPatterns.customUtils && context.customPatterns.customUtils.length > 0) {
-      rules += `### 自定义工具函数\n\n`;
-      rules += `项目定义了以下工具函数，**生成代码时必须优先使用**：\n\n`;
+      rules += `### Custom Utility Functions\n\n`;
+      rules += `The project defines the following utility functions — **always prefer them when generating code**:\n\n`;
 
       // 收集项目依赖名称，用于识别路径中是否包含已知子库段
       const depNames = new Set(
@@ -155,7 +155,7 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
           if (group.length > 1) {
             // 同名函数：不排序，如实标注每个定义所属的上下文容器
             // 由 Agent 在生成代码时按调用点就近原则选择正确版本
-            rules += `- \`${util.name}\` — **多处定义，按调用位置就近选择**：\n`;
+            rules += `- \`${util.name}\` — **Multiple definitions — choose by call-site proximity**:\n`;
             for (const g of group) {
               const label = inferContextLabel(g.relativePath, depNames);
               rules += `  - \`${g.relativePath}\` — ${label}\n`;
@@ -177,34 +177,34 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
     // API 客户端
     const api = context.customPatterns.apiClient;
     if (api?.exists && api.filePath) {
-      rules += `### API 客户端\n\n`;
-      rules += `项目使用自定义的 API 客户端：**\`${api.name}\`**\n`;
-      rules += `- 位置: \`${api.filePath}\`\n`;
+      rules += `### API Client\n\n`;
+      rules += `The project uses a custom API client: **\`${api.name}\`**\n`;
+      rules += `- Location: \`${api.filePath}\`\n`;
       if (api.hasErrorHandling) {
-        rules += `- ✅ 已内置错误处理\n`;
+        rules += `- ✅ Built-in error handling\n`;
       }
       if (api.hasAuth) {
-        rules += `- ✅ 已内置认证处理\n`;
+        rules += `- ✅ Built-in authentication handling\n`;
       }
       const clientName = api.exportName || api.name;
       const importAlias = api.filePath!.replace(/^src\//, '@/').replace(/\.(ts|js)$/, '');
       const importStmt = api.importStyle === "default"
         ? `import ${clientName} from '${importAlias}';`
         : `import { ${clientName} } from '${importAlias}';`;
-      rules += `\n**使用要求**:\n`;
+      rules += `\n**Usage requirements**:\n`;
       rules += `\`\`\`typescript\n`;
-      rules += `// ✅ 正确 - 使用项目的 API 客户端\n`;
+      rules += `// ✅ Correct — use the project's API client\n`;
       rules += `${importStmt}\n`;
       rules += `const data = await ${clientName}.get('/endpoint');\n\n`;
-      rules += `// ❌ 错误 - 不要直接使用 fetch 或 axios\n`;
+      rules += `// ❌ Incorrect — do not use fetch or axios directly\n`;
       rules += `const response = await fetch('/api/endpoint');\n`;
       rules += `\`\`\`\n\n`;
     }
 
-    rules += `### ⚠️ 重要规则\n\n`;
-    rules += `1. **优先使用项目自定义工具**，不要重新实现或引入第三方替代\n`;
-    rules += `2. **保持一致性**，使用相同的工具确保代码可维护性\n`;
-    rules += `3. **新增工具时**，遵循现有工具的命名和组织方式\n\n`;
+    rules += `### ⚠️ Important Rules\n\n`;
+    rules += `1. **Prefer project custom tools** — do not reimplement or introduce third-party alternatives\n`;
+    rules += `2. **Stay consistent** — use the same tools to keep code maintainable\n`;
+    rules += `3. **When adding new tools**, follow existing naming and organization conventions\n\n`;
 
     return rules;
 }
@@ -241,7 +241,7 @@ function inferContextLabel(relativePath: string, depNames: Set<string>): string 
     // 1. 路径中某段命中已知依赖名 → 子库
     for (const seg of segments) {
       if (depNames.has(seg)) {
-        return `${seg} 子库`;
+        return `${seg} sub-package`;
       }
     }
 
@@ -249,7 +249,7 @@ function inferContextLabel(relativePath: string, depNames: Set<string>): string 
     const VENDOR_SEGMENTS = new Set(['vendor', 'third-party', 'thirdparty', 'external']);
     for (const seg of segments) {
       if (VENDOR_SEGMENTS.has(seg)) {
-        return `外部库（${seg}/）`;
+        return `External library (${seg}/)`;
       }
     }
 
@@ -257,10 +257,10 @@ function inferContextLabel(relativePath: string, depNames: Set<string>): string 
     const FEATURE_SEGMENTS = new Set(['features', 'modules', 'pages', 'views', 'domains']);
     for (let i = 0; i < segments.length - 1; i++) {
       if (FEATURE_SEGMENTS.has(segments[i])) {
-        return `${segments[i + 1]} 模块`;
+        return `${segments[i + 1]} module`;
       }
     }
 
     // 4. 默认：主项目
-    return '主项目';
+    return 'Main project';
 }

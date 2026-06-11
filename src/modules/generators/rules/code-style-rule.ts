@@ -20,7 +20,7 @@ export function generateCodeStyleRule(
 ): CursorRule {
     const langGlobs = getLanguageGlobs(context);
     const metadata = buildRuleMetadata(
-      "代码风格规范",
+      "Code Style Guidelines",
       "Code style, formatting, and naming conventions derived from project config",
       90,
       context.techStack.primary,
@@ -50,24 +50,24 @@ ${
 ${isJsTsProject(context) ? `## Do / Don't
 
 \`\`\`typescript
-// DON'T: use any — 失去类型保护
+// DON'T: use any — loses type safety
 function process(data: any) { return data.value; }
 
-// DO: 使用精确类型
+// DO: use precise types
 function process(data: ProcessInput): ProcessOutput {
   return data.value;
 }
 \`\`\`
 
 \`\`\`typescript
-// DON'T: 隐式类型 + 可变默认
+// DON'T: implicit typing + mutable default
 var count = 0;
 
-// DO: 显式类型 + 不可变优先
+// DO: explicit types + prefer immutability
 const count: number = 0;
 \`\`\`
 
-` : ""}> 错误处理规范请参考 **@error-handling.mdc**
+` : ""}> See **@error-handling.mdc** for error handling conventions
 
 ${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
 `;
@@ -87,12 +87,12 @@ ${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\
  * 生成通用代码风格指南（语言无关 + 语言特定）。
  */
 function generateCodeStyleGuidelines(context: RuleGenerationContext): string {
-    let style = `## 通用规范
+    let style = `## General Guidelines
 
-- 使用有意义的变量和函数名
-- 保持函数简短，单一职责
-- 添加必要的注释，解释"为什么"而非"是什么"
-- 保持代码格式一致
+- Use meaningful variable and function names
+- Keep functions short with a single responsibility
+- Add comments that explain "why", not "what"
+- Keep formatting consistent
 
 `;
 
@@ -121,39 +121,39 @@ function generateCodeStyleGuidelines(context: RuleGenerationContext): string {
 function generateJavaScriptStyleGuide(context: RuleGenerationContext): string {
     const isTypeScript = context.techStack.languages.includes("TypeScript");
 
-    return `## JavaScript/TypeScript 代码风格
+    return `## JavaScript/TypeScript Code Style
 
-### 基本规范
-- 使用 \`const\` 和 \`let\`，避免 \`var\`
-- 优先使用箭头函数
-- 使用模板字符串而非字符串拼接
-- 使用解构赋值简化代码
-- 使用 async/await 处理异步操作
+### Basics
+- Use \`const\` and \`let\`; avoid \`var\`
+- Prefer arrow functions
+- Use template strings instead of string concatenation
+- Use destructuring to simplify code
+- Use async/await for asynchronous operations
 
-### 格式化规则
-- **字符串**：优先使用单引号 \`'string'\`，除非需要插值则使用反引号 \`\\\`template\\\`\`
-- **分号**：保持一致（推荐使用分号）
-- **行长度**：限制每行最多 100 个字符
-- **缩进**：使用 2 个空格（或根据项目配置）
-- **尾随逗号**：多行对象/数组最后一项添加逗号
+### Formatting Rules
+- **Strings**: Prefer single quotes \`'string'\`; use backticks \`\\\`template\\\`\` when interpolation is needed
+- **Semicolons**: Be consistent (semicolons recommended)
+- **Line length**: Limit lines to 100 characters
+- **Indentation**: Use 2 spaces (or follow project config)
+- **Trailing commas**: Add a trailing comma on the last item in multiline objects/arrays
 
-### 代码组织
-- **导入顺序**：
-  1. 外部库导入
-  2. 内部模块导入
-  3. 相对路径导入
-  ${isTypeScript ? "4. 类型导入（使用 `import type`）" : ""}
-- **导出**：优先使用命名导出，避免默认导出（提高可维护性）
+### Code Organization
+- **Import order**:
+  1. External library imports
+  2. Internal module imports
+  3. Relative path imports
+  ${isTypeScript ? "4. Type imports (use `import type`)" : ""}
+- **Exports**: Prefer named exports over default exports (better maintainability)
 
 ${
   isTypeScript
-    ? `### TypeScript 特定规范
-- 优先使用 \`interface\` 定义对象类型
-- 使用 \`type\` 定义联合类型和工具类型
-- 避免使用 \`any\`，使用 \`unknown\` 代替
-- 为函数参数和返回值显式添加类型
-- 使用严格模式（\`strict: true\`）
-- 使用类型守卫而非类型断言
+    ? `### TypeScript-Specific Guidelines
+- Prefer \`interface\` for object types
+- Use \`type\` for unions and utility types
+- Avoid \`any\`; use \`unknown\` instead
+- Add explicit types for function parameters and return values
+- Use strict mode (\`strict: true\`)
+- Prefer type guards over type assertions
 `
     : ""
 }
@@ -164,36 +164,36 @@ ${
  * 生成 Python 风格指南
  */
 function generatePythonStyleGuide(): string {
-    return `## Python 代码风格
+    return `## Python Code Style
 
-### PEP 8 规范
-- **缩进**：使用 4 个空格
-- **行长度**：限制每行最多 79 个字符（文档字符串/注释 72 个字符）
-- **空行**：
-  - 顶级函数和类定义之间空 2 行
-  - 类内方法之间空 1 行
-- **字符串引号**：保持一致（推荐单引号）
+### PEP 8
+- **Indentation**: Use 4 spaces
+- **Line length**: Limit lines to 79 characters (72 for docstrings/comments)
+- **Blank lines**:
+  - 2 blank lines between top-level function and class definitions
+  - 1 blank line between methods inside a class
+- **String quotes**: Be consistent (single quotes recommended)
 
-### 命名规范
-- **函数/变量**：snake_case (例如：\`get_user_data\`)
-- **类名**：PascalCase (例如：\`UserProfile\`)
-- **常量**：UPPER_CASE (例如：\`MAX_RETRY_COUNT\`)
-- **私有属性**：单下划线前缀 (例如：\`_internal_method\`)
-- **特殊方法**：双下划线前后 (例如：\`__init__\`)
+### Naming Conventions
+- **Functions/variables**: snake_case (e.g., \`get_user_data\`)
+- **Classes**: PascalCase (e.g., \`UserProfile\`)
+- **Constants**: UPPER_CASE (e.g., \`MAX_RETRY_COUNT\`)
+- **Private attributes**: single leading underscore (e.g., \`_internal_method\`)
+- **Special methods**: double underscores on both sides (e.g., \`__init__\`)
 
-### 导入规范
-- **导入顺序**：
-  1. 标准库导入
-  2. 第三方库导入
-  3. 本地应用/库导入
-- 每组之间空一行
-- 避免通配符导入 (\`from module import *\`)
+### Import Conventions
+- **Import order**:
+  1. Standard library imports
+  2. Third-party library imports
+  3. Local application/library imports
+- One blank line between each group
+- Avoid wildcard imports (\`from module import *\`)
 
-### 类型注解
-- 为函数参数添加类型注解
-- 为函数返回值添加类型注解
-- 使用 \`typing\` 模块的类型（List, Dict, Optional 等）
-- 使用 \`mypy\` 进行静态类型检查
+### Type Annotations
+- Add type annotations for function parameters
+- Add type annotations for return values
+- Use types from the \`typing\` module (List, Dict, Optional, etc.)
+- Use \`mypy\` for static type checking
 
 `;
 }
@@ -202,24 +202,24 @@ function generatePythonStyleGuide(): string {
  * 生成格式化规则
  */
 function generateFormattingRules(context: RuleGenerationContext): string {
-    return `## 代码格式化
+    return `## Code Formatting
 
-### 空格和缩进
-- 运算符两侧添加空格：\`a + b\` 而非 \`a+b\`
-- 逗号后添加空格：\`[1, 2, 3]\` 而非 \`[1,2,3]\`
-- 关键字后添加空格：\`if (condition)\` 而非 \`if(condition)\`
-- 不要在括号内侧添加空格：\`func(a, b)\` 而非 \`func( a, b )\`
+### Spacing and Indentation
+- Add spaces around operators: \`a + b\` not \`a+b\`
+- Add a space after commas: \`[1, 2, 3]\` not \`[1,2,3]\`
+- Add a space after keywords: \`if (condition)\` not \`if(condition)\`
+- Do not add spaces inside parentheses: \`func(a, b)\` not \`func( a, b )\`
 
-### 代码块
-- 始终使用花括号，即使只有一行代码
-- \`else\` 语句与关闭花括号在同一行（JavaScript/TypeScript）
-- 花括号的左括号不换行（K&R 风格）
+### Code Blocks
+- Always use braces, even for single-line code
+- Put \`else\` on the same line as the closing brace (JavaScript/TypeScript)
+- Do not break before the opening brace (K&R style)
 
-### 注释规范
-- 单行注释使用 \`//\`（JavaScript/TypeScript）或 \`#\`（Python）
-- 多行注释使用 \`/* */\`（JavaScript/TypeScript）或 \`"""\`（Python）
-- 注释应该解释"为什么"而不是"是什么"
-- 保持注释与代码同步更新
+### Comments
+- Use \`//\` for single-line comments (JavaScript/TypeScript) or \`#\` (Python)
+- Use \`/* */\` for multiline comments (JavaScript/TypeScript) or \`"""\` (Python)
+- Comments should explain "why", not "what"
+- Keep comments in sync with the code
 
 `;
 }
@@ -228,34 +228,34 @@ function generateFormattingRules(context: RuleGenerationContext): string {
  * 生成命名约定
  */
 function generateNamingConventions(context: RuleGenerationContext): string {
-    return `## 命名约定
+    return `## Naming Conventions
 
-### 通用规则
-- **组件/类/接口**：PascalCase
-  - 示例：\`UserProfile\`, \`DataService\`, \`IUserRepository\`
-- **变量/函数/方法**：camelCase
-  - 示例：\`userName\`, \`getUserData()\`, \`handleClick()\`
-- **常量**：UPPER_CASE
-  - 示例：\`MAX_RETRY_COUNT\`, \`API_BASE_URL\`, \`DEFAULT_TIMEOUT\`
-- **私有属性**：前缀 \`_\`（约定）或使用 \`#\`（JavaScript 私有字段）
-  - 示例：\`_privateMethod\`, \`#privateField\`
+### General Rules
+- **Components/classes/interfaces**: PascalCase
+  - Examples: \`UserProfile\`, \`DataService\`, \`IUserRepository\`
+- **Variables/functions/methods**: camelCase
+  - Examples: \`userName\`, \`getUserData()\`, \`handleClick()\`
+- **Constants**: UPPER_CASE
+  - Examples: \`MAX_RETRY_COUNT\`, \`API_BASE_URL\`, \`DEFAULT_TIMEOUT\`
+- **Private properties**: prefix with \`_\` (convention) or use \`#\` (JavaScript private fields)
+  - Examples: \`_privateMethod\`, \`#privateField\`
 
-### 文件命名
+### File Naming
 ${generateFileNamingRules(context)}
 
-### 特定场景
-- **布尔变量**：使用 \`is\`、\`has\`、\`should\` 前缀
-  - 示例：\`isActive\`, \`hasPermission\`, \`shouldUpdate\`
-- **事件处理器**：使用 \`handle\` 或 \`on\` 前缀
-  - 示例：\`handleClick\`, \`onSubmit\`, \`handleUserLogin\`
-- **获取器/设置器**：使用 \`get\`/\`set\` 前缀
-  - 示例：\`getUser\`, \`setUser\`, \`getUserName\`
+### Specific Cases
+- **Boolean variables**: use \`is\`, \`has\`, or \`should\` prefixes
+  - Examples: \`isActive\`, \`hasPermission\`, \`shouldUpdate\`
+- **Event handlers**: use \`handle\` or \`on\` prefixes
+  - Examples: \`handleClick\`, \`onSubmit\`, \`handleUserLogin\`
+- **Getters/setters**: use \`get\`/\`set\` prefixes
+  - Examples: \`getUser\`, \`setUser\`, \`getUserName\`
 
-### 避免的命名
-- ❌ 单字母变量（除了循环计数器 \`i\`, \`j\`, \`k\`）
-- ❌ 缩写和简写（除非是广为人知的，如 \`URL\`, \`HTTP\`）
-- ❌ 匈牙利命名法（如 \`strName\`, \`intCount\`）
-- ❌ 无意义的名称（如 \`data\`, \`temp\`, \`foo\`, \`bar\`）
+### Names to Avoid
+- ❌ Single-letter variables (except loop counters \`i\`, \`j\`, \`k\`)
+- ❌ Abbreviations and shorthand (unless widely known, e.g., \`URL\`, \`HTTP\`)
+- ❌ Hungarian notation (e.g., \`strName\`, \`intCount\`)
+- ❌ Meaningless names (e.g., \`data\`, \`temp\`, \`foo\`, \`bar\`)
 
 `;
 }
@@ -270,22 +270,22 @@ function generateFileNamingRules(context: RuleGenerationContext): string {
     let rules = "";
 
     if (hasReact) {
-      rules += `- **React 组件**：PascalCase.tsx/jsx
-  - 示例：\`UserProfile.tsx\`, \`Button.tsx\`
+      rules += `- **React components**: PascalCase.tsx/jsx
+  - Examples: \`UserProfile.tsx\`, \`Button.tsx\`
 `;
     }
 
     if (hasVue) {
-      rules += `- **Vue 组件**：PascalCase.vue 或 kebab-case.vue
-  - 示例：\`UserProfile.vue\` 或 \`user-profile.vue\`
+      rules += `- **Vue components**: PascalCase.vue or kebab-case.vue
+  - Examples: \`UserProfile.vue\` or \`user-profile.vue\`
 `;
     }
 
-    rules += `- **工具/辅助文件**：camelCase 或 kebab-case
-  - 示例：\`formatDate.ts\`, \`api-client.ts\`
-- **类型定义文件**：types.ts 或 interfaces.ts
-- **测试文件**：与源文件同名 + \`.test\` 或 \`.spec\`
-  - 示例：\`UserProfile.test.tsx\`, \`utils.spec.ts\`
+    rules += `- **Utility/helper files**: camelCase or kebab-case
+  - Examples: \`formatDate.ts\`, \`api-client.ts\`
+- **Type definition files**: types.ts or interfaces.ts
+- **Test files**: same name as source file + \`.test\` or \`.spec\`
+  - Examples: \`UserProfile.test.tsx\`, \`utils.spec.ts\`
 `;
 
     return rules;
@@ -299,29 +299,29 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       return generateCodeStyleGuidelines(context);
     }
 
-    let rules = `## 代码风格（基于项目配置）\n\n`;
+    let rules = `## Code Style (Project Config)\n\n`;
 
     // 使用项目实际配置
     if (context.projectConfig.prettier) {
       const p = context.projectConfig.prettier;
-      rules += `### 项目配置 (Prettier)\n\n`;
-      rules += `项目使用 Prettier 进行代码格式化，配置如下：\n\n`;
-      rules += `- **缩进**: ${
-        p.useTabs ? "Tab" : `${p.tabWidth || 2} 个空格`
+      rules += `### Project Config (Prettier)\n\n`;
+      rules += `This project uses Prettier for code formatting with the following settings:\n\n`;
+      rules += `- **Indentation**: ${
+        p.useTabs ? "Tab" : `${p.tabWidth || 2} spaces`
       }\n`;
-      rules += `- **引号**: ${p.singleQuote ? "单引号" : "双引号"}\n`;
-      rules += `- **分号**: ${p.semi ? "使用分号" : "不使用分号"}\n`;
-      rules += `- **行长度**: ${p.printWidth || 80} 字符\n`;
-      rules += `- **尾随逗号**: ${p.trailingComma || "none"}\n\n`;
-      rules += `**配置文件**: @.prettierrc\n\n`;
+      rules += `- **Quotes**: ${p.singleQuote ? "single quotes" : "double quotes"}\n`;
+      rules += `- **Semicolons**: ${p.semi ? "use semicolons" : "omit semicolons"}\n`;
+      rules += `- **Line length**: ${p.printWidth || 80} characters\n`;
+      rules += `- **Trailing commas**: ${p.trailingComma || "none"}\n\n`;
+      rules += `**Config file**: @.prettierrc\n\n`;
 
-      rules += `### 代码格式化要求\n\n`;
-      rules += `生成代码时遵循上述 Prettier 配置：\n`;
-      rules += `- 使用${p.singleQuote ? "单引号" : "双引号"}包裹字符串\n`;
-      rules += `- 使用 ${
-        p.useTabs ? "Tab" : `${p.tabWidth || 2} 个空格`
-      }缩进\n`;
-      rules += `- ${p.semi ? "添加" : "不添加"}分号\n\n`;
+      rules += `### Formatting Requirements\n\n`;
+      rules += `Follow the Prettier settings above when generating code:\n`;
+      rules += `- Wrap strings in ${p.singleQuote ? "single quotes" : "double quotes"}\n`;
+      rules += `- Indent with ${
+        p.useTabs ? "tabs" : `${p.tabWidth || 2} spaces`
+      }\n`;
+      rules += `- ${p.semi ? "Include" : "Omit"} semicolons\n\n`;
     } else if (context.projectPractice?.codeStyle) {
       // 使用分析出的代码风格：仅输出能明确判定的项，"mixed"/不确定的项一律省略，
       // 避免产出对 AI 无指导价值的「混合」占位内容（置信度闸门）
@@ -330,25 +330,25 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       const styleLines: string[] = [];
 
       if (style.variableDeclaration === "const-let") {
-        styleLines.push(`- **变量声明**: 使用 const/let`);
+        styleLines.push(`- **Variable declarations**: use const/let`);
       } else if (style.variableDeclaration === "var") {
         styleLines.push(
-          isTS ? `- **变量声明**: 使用 const/let` : `- **变量声明**: 使用 var`
+          isTS ? `- **Variable declarations**: use const/let` : `- **Variable declarations**: use var`
         );
       }
 
       if (style.functionStyle === "arrow") {
-        styleLines.push(`- **函数风格**: 箭头函数`);
+        styleLines.push(`- **Function style**: arrow functions`);
       } else if (style.functionStyle === "function") {
-        styleLines.push(`- **函数风格**: function 声明`);
+        styleLines.push(`- **Function style**: function declarations`);
       }
 
       if (style.stringQuote === "single") {
-        styleLines.push(`- **字符串引号**: 单引号`);
+        styleLines.push(`- **String quotes**: single quotes`);
       } else if (style.stringQuote === "double") {
-        styleLines.push(`- **字符串引号**: 双引号`);
+        styleLines.push(`- **String quotes**: double quotes`);
       } else if (style.stringQuote === "backtick") {
-        styleLines.push(`- **字符串引号**: 模板字符串`);
+        styleLines.push(`- **String quotes**: template strings`);
       }
 
       // 分号：优先从 ESLint 'semi' 规则获取，其次用启发式分析结果
@@ -362,24 +362,24 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
 
       const effectiveSemi = semiFromConfig ?? style.semicolon;
       if (effectiveSemi === "always") {
-        styleLines.push(`- **分号**: 使用`);
+        styleLines.push(`- **Semicolons**: use`);
       } else if (effectiveSemi === "never") {
-        styleLines.push(`- **分号**: 不使用`);
+        styleLines.push(`- **Semicolons**: omit`);
       }
 
       if (styleLines.length > 0) {
-        rules += `### 项目当前实践（分析得出）\n\n`;
-        rules += `生成代码时保持与现有代码一致的风格：\n\n`;
+        rules += `### Current Project Practices (from analysis)\n\n`;
+        rules += `Match the style of existing code when generating new code:\n\n`;
         rules += styleLines.join("\n") + "\n\n";
       }
     }
 
     // ESLint 配置说明（只描述工具存在，不重复输出命令）
     if (context.projectConfig.eslint || context.projectConfig.commands?.lint) {
-      rules += `### ESLint 代码检查\n\n`;
+      rules += `### ESLint\n\n`;
       if (context.projectConfig.eslint) {
-        rules += `项目使用 ESLint 进行代码质量检查。\n\n`;
-        rules += `**配置文件**: @.eslintrc\n\n`;
+        rules += `This project uses ESLint for code quality checks.\n\n`;
+        rules += `**Config file**: @.eslintrc\n\n`;
       }
       // 命令由下方「代码生成后标准流程」统一输出，此处不重复
     }
@@ -389,19 +389,19 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
     if (context.projectConfig.commands) {
       const steps: string[] = [];
       if (context.projectConfig.commands.format) {
-        steps.push(`# 格式化代码\n${context.projectConfig.commands.format}`);
+        steps.push(`# Format code\n${context.projectConfig.commands.format}`);
       }
       if (context.projectConfig.commands.lintFix) {
-        steps.push(`# 修复 lint 问题\n${context.projectConfig.commands.lintFix}`);
+        steps.push(`# Fix lint issues\n${context.projectConfig.commands.lintFix}`);
       } else if (context.projectConfig.commands.lint) {
-        steps.push(`# 检查 lint\n${context.projectConfig.commands.lint}`);
+        steps.push(`# Run lint\n${context.projectConfig.commands.lint}`);
       }
       if (context.projectConfig.commands.typeCheck) {
-        steps.push(`# 类型检查\n${context.projectConfig.commands.typeCheck}`);
+        steps.push(`# Type check\n${context.projectConfig.commands.typeCheck}`);
       }
 
       if (steps.length > 0) {
-        rules += `### 代码生成后必须运行\n\n`;
+        rules += `### Run After Code Generation\n\n`;
         rules += `\`\`\`bash\n`;
         rules += steps.join("\n\n");
         rules += `\n\`\`\`\n\n`;
@@ -413,19 +413,19 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       context.projectConfig?.pathAliases &&
       Object.keys(context.projectConfig.pathAliases).length > 0
     ) {
-      rules += `### 路径别名（必须使用）\n\n`;
-      rules += `项目配置了以下路径别名，生成代码时必须使用：\n\n`;
+      rules += `### Path Aliases (required)\n\n`;
+      rules += `This project defines the following path aliases; use them when generating code:\n\n`;
       for (const [alias, target] of Object.entries(
         context.projectConfig.pathAliases
       )) {
         rules += `- \`${alias}\` → \`${target}\`\n`;
       }
-      rules += `\n示例：\n`;
+      rules += `\nExamples:\n`;
       rules += `\`\`\`typescript\n`;
       const firstAlias = Object.keys(context.projectConfig.pathAliases)[0];
-      rules += `// ✅ 正确 - 使用路径别名\n`;
+      rules += `// ✅ Correct — use path aliases\n`;
       rules += `import { Component } from '${firstAlias}/Component';\n\n`;
-      rules += `// ❌ 错误 - 不要使用相对路径\n`;
+      rules += `// ❌ Wrong — do not use relative paths\n`;
       rules += `import { Component } from '../../../Component';\n`;
       rules += `\`\`\`\n\n`;
     }

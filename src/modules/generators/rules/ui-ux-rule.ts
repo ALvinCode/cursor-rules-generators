@@ -29,11 +29,11 @@ export function generateUIUXGuidelines(context: RuleGenerationContext): string {
   // 确定样式方案描述
   let styleApproach = "";
   if (hasAntd && hasStyledComponents) {
-    styleApproach = "antd 组件 + styled-components 自定义样式";
+    styleApproach = "antd components + styled-components custom styling";
   } else if (hasAntd && hasLess) {
-    styleApproach = "antd 组件 + Less 变量覆盖";
+    styleApproach = "antd components + Less variable overrides";
   } else if (hasAntd) {
-    styleApproach = "antd 组件库";
+    styleApproach = "antd component library";
   } else if (hasMui) {
     styleApproach = "Material UI";
   } else if (hasShadcn) {
@@ -41,21 +41,21 @@ export function generateUIUXGuidelines(context: RuleGenerationContext): string {
   } else if (hasTailwind) {
     styleApproach = "Tailwind CSS";
   } else {
-    styleApproach = "自定义 CSS/CSS Modules";
+    styleApproach = "Custom CSS/CSS Modules";
   }
 
-  let content = `## 项目 UI 方案\n\n`;
-  content += `**当前使用**: ${styleApproach}\n\n`;
+  let content = `## Project UI Stack\n\n`;
+  content += `**Currently using**: ${styleApproach}\n\n`;
 
   if (hasAntd) {
-    content += `### Antd 使用约定\n\n`;
+    content += `### Ant Design Conventions\n\n`;
     content += `**Do ✅**\n`;
     content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
-    content += `// 优先使用 antd 原生 API，不要重复封装已有能力\n`;
+    content += `// Prefer antd native APIs — do not re-wrap existing capabilities\n`;
     content += `import { Table, Form, Modal, Button, Space } from "antd";\n\n`;
-    content += `// Form 使用 Form.useForm()，不要直接 ref\n`;
+    content += `// Use Form.useForm() — do not use a raw ref\n`;
     content += `const [form] = Form.useForm();\n\n`;
-    content += `// Table 分页统一走 onChange 回调\n`;
+    content += `// Table pagination via onChange callback\n`;
     content += `<Table\n`;
     content += `  dataSource={data}\n`;
     content += `  columns={columns}\n`;
@@ -65,42 +65,42 @@ export function generateUIUXGuidelines(context: RuleGenerationContext): string {
 
     content += `**Don't ❌**\n`;
     content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
-    content += `// 不要用原生 <button> 替代 antd Button\n`;
-    content += `<button onClick={…}>提交</button>\n\n`;
-    content += `// 不要重新实现 antd 已有的 Modal.confirm / message.error\n`;
+    content += `// Do not use native <button> instead of antd Button\n`;
+    content += `<button onClick={…}>Submit</button>\n\n`;
+    content += `// Do not reimplement antd Modal.confirm / message.error\n`;
     content += `const MyAlert = () => <div className="alert">{msg}</div>;\n`;
     content += `\`\`\`\n\n`;
 
-    content += `### 常用场景\n\n`;
-    content += `| 场景 | 使用组件 |\n`;
-    content += `|------|---------|\n`;
-    content += `| 数据列表 | \`Table\` + \`useTable\` hook |\n`;
-    content += `| 表单提交 | \`Form\` + \`Form.useForm()\` |\n`;
-    content += `| 确认弹窗 | \`Modal.confirm()\` |\n`;
-    content += `| 操作反馈 | \`message.success/error()\` |\n`;
-    content += `| 加载状态 | \`Spin\` 或 Table \`loading\` prop |\n\n`;
+    content += `### Common Scenarios\n\n`;
+    content += `| Scenario | Components |\n`;
+    content += `|----------|------------|\n`;
+    content += `| Data lists | \`Table\` + \`useTable\` hook |\n`;
+    content += `| Form submission | \`Form\` + \`Form.useForm()\` |\n`;
+    content += `| Confirmation dialogs | \`Modal.confirm()\` |\n`;
+    content += `| Action feedback | \`message.success/error()\` |\n`;
+    content += `| Loading states | \`Spin\` or Table \`loading\` prop |\n\n`;
   }
 
   if (hasStyledComponents) {
-    content += `### Styled-components 约定\n\n`;
+    content += `### Styled-components Conventions\n\n`;
     content += `\`\`\`${isTS ? "tsx" : "jsx"}\n`;
-    content += `// 命名：S + PascalCase（避免与组件名冲突）\n`;
+    content += `// Naming: S + PascalCase (avoids clashing with component names)\n`;
     content += `const SWrapper = styled.div\`\n`;
     content += `  padding: 16px;\n`;
     content += `  background: \${({ theme }) => theme.colors.background};\n`;
     content += `\`;\n\n`;
-    content += `// 不要内联大块 CSS，抽出命名 styled 组件\n`;
+    content += `// Do not inline large CSS blocks — extract named styled components\n`;
     content += `\`\`\`\n\n`;
   } else if (hasTailwind) {
-    content += `### Tailwind 约定\n\n`;
-    content += `- 复杂样式组合提取为 \`@apply\` 或 styled 组件，不要行内堆砌超过 8 个 class\n`;
-    content += `- 响应式前缀顺序：\`sm:\` → \`md:\` → \`lg:\`\n\n`;
+    content += `### Tailwind Conventions\n\n`;
+    content += `- Extract complex class combinations into \`@apply\` or styled components — avoid stacking more than 8 inline classes\n`;
+    content += `- Responsive prefix order: \`sm:\` → \`md:\` → \`lg:\`\n\n`;
   }
 
-  content += `### 无障碍（A11y）最低要求\n\n`;
-  content += `- 交互元素必须有 \`aria-label\` 或可见文本\n`;
-  content += `- 图标按钮加 \`title\` 属性\n`;
-  content += `- 表单字段关联 \`label\`（htmlFor）\n\n`;
+  content += `### Accessibility (A11y) Minimum Requirements\n\n`;
+  content += `- Interactive elements must have \`aria-label\` or visible text\n`;
+  content += `- Icon buttons must include a \`title\` attribute\n`;
+  content += `- Form fields must be associated with a \`label\` (htmlFor)\n\n`;
 
   return content;
 }
@@ -131,7 +131,7 @@ export function generateUIUXRule(context: RuleGenerationContext): CursorRule {
   const extGlob = uiExts.length === 1 ? `*.${uiExts[0]}` : `*.{${uiExts.join(",")}}`;
   const uiGlobs = `${compDir}/**/${extGlob}, ${viewDir}/**/${extGlob}`;
   const metadata = buildRuleMetadata(
-    "UI/UX 设计规范",
+    "UI/UX Guidelines",
     "UI component patterns and conventions for this project's UI library",
     75,
     context.techStack.primary,
@@ -144,15 +144,15 @@ export function generateUIUXRule(context: RuleGenerationContext): CursorRule {
   const content =
     metadata +
     `
-# UI/UX 设计规范
+# UI/UX Guidelines
 
-参考: @global-rules.mdc, @code-style.mdc
+See also: @global-rules.mdc, @code-style.mdc
 
 ${generateUIUXGuidelines(context)}
 
 ---
 
-*UI/UX 规范确保良好的用户体验和无障碍访问。*
+*UI/UX guidelines ensure good user experience and accessibility.*
 `;
 
   return {

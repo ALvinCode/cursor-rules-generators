@@ -84,7 +84,7 @@ export class CodeAnalyzer {
 
     return {
       type: "custom-components",
-      description: "项目使用自定义组件结构",
+      description: "Uses custom component structure",
       examples,
       frequency: componentFiles.length,
     };
@@ -150,7 +150,7 @@ export class CodeAnalyzer {
 
     return {
       type: "state-management",
-      description: `使用 ${stateLibs.map((l) => l.name).join(", ")} 进行状态管理`,
+      description: `Uses ${stateLibs.map((l) => l.name).join(", ")} for state management`,
       examples: stateFiles.slice(0, 3).map((f) => path.basename(f)),
       frequency: stateFiles.length,
     };
@@ -226,7 +226,7 @@ export class CodeAnalyzer {
 
     return {
       type: "styling",
-      description: `使用 ${styleLibs.map((l) => l.name).join(", ")} 进行样式处理`,
+      description: `Uses ${styleLibs.map((l) => l.name).join(", ")} for styling`,
       examples: styleLibs.map((l) => l.name),
       frequency: styleLibs.length,
     };
@@ -301,7 +301,7 @@ export class CodeAnalyzer {
 
     return {
       type: "database",
-      description: `使用 ${dbLibs.map((l) => l.name).join(", ")} 进行数据库操作`,
+      description: `Uses ${dbLibs.map((l) => l.name).join(", ")} for database operations`,
       examples: dbFiles.slice(0, 3).map((f) => path.basename(f)),
       frequency: dbFiles.length,
     };

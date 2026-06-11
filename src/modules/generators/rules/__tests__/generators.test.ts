@@ -192,7 +192,7 @@ describe("UI/UX 规则生成", () => {
         },
       });
       const result = generateUIUXGuidelines(ctx);
-      expect(result).toContain("Antd 使用约定");
+      expect(result).toContain("Ant Design Conventions");
       expect(result).toContain("Form.useForm()");
     });
 
@@ -208,7 +208,7 @@ describe("UI/UX 规则生成", () => {
         },
       });
       const result = generateUIUXGuidelines(ctx);
-      expect(result).toContain("Tailwind 约定");
+      expect(result).toContain("Tailwind Conventions");
       expect(result).not.toContain("Antd");
     });
 
@@ -232,7 +232,7 @@ describe("UI/UX 规则生成", () => {
         },
       });
       const result = generateUIUXGuidelines(ctx);
-      expect(result).toContain("Styled-components 约定");
+      expect(result).toContain("Styled-components Conventions");
     });
 
     it("active 为空时输出自定义 CSS 方案", () => {
@@ -240,7 +240,7 @@ describe("UI/UX 规则生成", () => {
         uiLibraries: { installed: [], active: [] },
       });
       const result = generateUIUXGuidelines(ctx);
-      expect(result).toContain("自定义 CSS");
+      expect(result).toContain("Custom CSS");
       expect(result).not.toContain("Antd");
       expect(result).not.toContain("Tailwind");
     });
@@ -267,8 +267,8 @@ describe("UI/UX 规则生成", () => {
         },
       });
       const result = generateUIUXGuidelines(ctx);
-      expect(result).toContain("antd 组件 + styled-components");
-      expect(result).toContain("Styled-components 约定");
+      expect(result).toContain("antd components + styled-components");
+      expect(result).toContain("Styled-components Conventions");
     });
   });
 
@@ -310,11 +310,10 @@ describe("code-style mixed 省略", () => {
 
     const rule = generateCodeStyleRule(ctx);
 
-    expect(rule.content).toContain("变量声明");
-    expect(rule.content).toContain("箭头函数");
-    expect(rule.content).toContain("单引号");
-    expect(rule.content).not.toMatch(/分号.*混合/);
-    expect(rule.content).not.toMatch(/\*\*分号\*\*.*mixed/i);
+    expect(rule.content).toContain("Variable declarations");
+    expect(rule.content).toContain("arrow functions");
+    expect(rule.content).toContain("single quotes");
+    expect(rule.content).not.toMatch(/Semicolons.*mixed/i);
   });
 
   it("所有风格都明确时全部输出", () => {
@@ -336,10 +335,10 @@ describe("code-style mixed 省略", () => {
 
     const rule = generateCodeStyleRule(ctx);
 
-    expect(rule.content).toContain("变量声明");
-    expect(rule.content).toContain("箭头函数");
-    expect(rule.content).toContain("单引号");
-    expect(rule.content).toContain("分号");
+    expect(rule.content).toContain("Variable declarations");
+    expect(rule.content).toContain("arrow functions");
+    expect(rule.content).toContain("single quotes");
+    expect(rule.content).toContain("Semicolons");
   });
 
   it("functionStyle=mixed 时不输出函数风格行", () => {
@@ -361,9 +360,9 @@ describe("code-style mixed 省略", () => {
 
     const rule = generateCodeStyleRule(ctx);
 
-    expect(rule.content).toContain("变量声明");
-    expect(rule.content).not.toMatch(/\*\*函数风格\*\*/);
-    expect(rule.content).toContain("单引号");
+    expect(rule.content).toContain("Variable declarations");
+    expect(rule.content).not.toMatch(/\*\*Function style\*\*/);
+    expect(rule.content).toContain("single quotes");
   });
 });
 
@@ -422,10 +421,10 @@ describe("global-rule Rule Index", () => {
     );
     expect(ruleIndex).toContain("@code-style.mdc");
     expect(ruleIndex).toContain("@project-structure.mdc");
-    expect(ruleIndex).toContain("@architecture.mdc");
-    // 动态行不应出现（@custom-tools.mdc 在 Hard Constraints 的固定文本中会出现，
-    // 但 Rule Index 表格中的行格式为 "| @xxx.mdc |"，这里只检查表格区域）
+    // architecture, custom-tools, error-handling, etc. are all dynamic now
+    expect(ruleIndex).not.toMatch(/\| @architecture\.mdc \|/);
     expect(ruleIndex).not.toMatch(/\| @custom-tools\.mdc \|/);
+    expect(ruleIndex).not.toMatch(/\| @error-handling\.mdc \|/);
     expect(ruleIndex).not.toMatch(/\| @state-management\.mdc \|/);
     expect(ruleIndex).not.toMatch(/\| @testing\.mdc \|/);
   });

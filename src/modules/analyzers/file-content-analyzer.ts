@@ -445,14 +445,14 @@ export class FileContentAnalyzer {
     
     if (businessKeywords.length > 0) {
       const keyword = this.translateKeyword(businessKeywords[0]);
-      return `${keyword} 工具`;
+      return `${keyword} utilities`;
     }
 
     if (dirName !== "utils" && dirName !== "utilities" && dirName !== "helpers") {
-      return `${dirName} 工具函数`;
+      return `${dirName} utilities`;
     }
 
-    return "工具函数";
+    return "utilities";
   }
 
   /**
@@ -466,14 +466,14 @@ export class FileContentAnalyzer {
     
     if (businessKeywords.length > 0) {
       const keyword = this.translateKeyword(businessKeywords[0]);
-      return `${keyword} 数据模型`;
+      return `${keyword} data models`;
     }
 
     if (dirName !== "models" && dirName !== "model" && dirName !== "entities") {
-      return `${dirName} 数据模型`;
+      return `${dirName} data models`;
     }
 
-    return "数据模型";
+    return "data models";
   }
 
   /**
@@ -509,63 +509,24 @@ export class FileContentAnalyzer {
     const keyword = this.translateKeyword(businessKeywords[0]);
 
     if (analysis.isComponent) {
-      return `${keyword} 组件`;
+      return `${keyword} components`;
     } else if (analysis.isAPI) {
-      return `${keyword} 接口`;
+      return `${keyword} API`;
     } else if (analysis.isUtility) {
-      return `${keyword} 工具`;
+      return `${keyword} utilities`;
     } else if (analysis.isModel) {
-      return `${keyword} 数据模型`;
+      return `${keyword} data models`;
     } else {
       return keyword;
     }
   }
 
   /**
-   * 翻译关键词（英文 -> 中文）
+   * Return keyword as-is (already English); capitalize first letter for display.
    */
   private translateKeyword(keyword: string): string {
-    const translations: Record<string, string> = {
-      user: "用户",
-      auth: "认证",
-      login: "登录",
-      register: "注册",
-      profile: "个人资料",
-      payment: "支付",
-      pay: "支付",
-      wallet: "钱包",
-      balance: "余额",
-      transaction: "交易",
-      order: "订单",
-      cart: "购物车",
-      product: "产品",
-      inventory: "库存",
-      insurance: "保险",
-      claim: "理赔",
-      policy: "保单",
-      premium: "保费",
-      loan: "贷款",
-      credit: "信用",
-      repayment: "还款",
-      installment: "分期",
-      report: "报表",
-      dashboard: "仪表盘",
-      analytics: "分析",
-      statistics: "统计",
-      notification: "通知",
-      message: "消息",
-      email: "邮件",
-      sms: "短信",
-      document: "文档",
-      file: "文件",
-      upload: "上传",
-      download: "下载",
-      setting: "设置",
-      config: "配置",
-      preference: "偏好",
-    };
-
-    return translations[keyword.toLowerCase()] || keyword;
+    if (!keyword) return keyword;
+    return keyword.charAt(0).toUpperCase() + keyword.slice(1);
   }
 }
 

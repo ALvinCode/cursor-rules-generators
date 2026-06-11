@@ -116,7 +116,7 @@ export async function generateProjectStructureRule(
     
     const indexGlobs = "**/index.{ts,tsx,js,jsx}";
     const metadata = buildRuleMetadata(
-      "项目结构",
+      "Project Structure",
       "Consult when creating new files or directories to determine correct location and naming conventions",
       85,
       context.techStack.primary,
@@ -129,14 +129,14 @@ export async function generateProjectStructureRule(
     const content =
       metadata +
       `
-# 项目结构
+# Project Structure
 
-参考: @global-rules.mdc
+See also: @global-rules.mdc
 
 ${generateDetailedStructureContent(context)}
 
 ---
-*新建文件前，请参考此文件确定正确的目录位置和命名规范。*
+*Before creating new files, see this file for correct directory locations and naming conventions.*
 `;
 
     return {
@@ -158,7 +158,7 @@ export function generateFallbackProjectStructureRule(
   context: RuleGenerationContext
 ): CursorRule {
     const metadata = buildRuleMetadata(
-      "项目结构",
+      "Project Structure",
       "Consult when creating new files or directories to determine correct location and naming conventions",
       85,
       context.techStack.primary,
@@ -168,41 +168,41 @@ export function generateFallbackProjectStructureRule(
     );
 
     let content = metadata + `
-# 项目结构
+# Project Structure
 
-参考: @global-rules.mdc
+See also: @global-rules.mdc
 
-> ⚠️ **注意**: 由于分析过程中遇到问题，以下为简化版项目结构说明。建议重新运行 \`generate_cursor_rules\` 以获取完整的目录树和职能说明。
+> ⚠️ **Note**: Analysis encountered issues; the following is a simplified project structure overview. Re-run \`generate_cursor_rules\` for the full directory tree and purpose descriptions.
 
-## 📁 目录结构树
+## 📁 Directory Tree
 
-项目目录结构分析暂时不可用。请参考项目的实际目录结构。
+Project directory structure analysis is temporarily unavailable. Refer to the project's actual directory layout.
 
 `;
 
     // 尝试使用 fileOrganization 生成简化结构
     if (context.fileOrganization && context.fileOrganization.structure.length > 0) {
-      content += `## 🎯 文件组织规范（快速参考）\n\n`;
-      content += `以下是常见文件类型的存放位置：\n\n`;
+      content += `## 🎯 File Organization (Quick Reference)\n\n`;
+      content += `Common file type locations:\n\n`;
       content += generateFileOrganizationRules(context);
       content += `\n`;
     } else {
       // 如果连 fileOrganization 都没有，生成最基础的指南
-      content += `## 🎯 文件组织规范\n\n`;
-      content += `项目文件组织规范待补充。建议：\n\n`;
-      content += `- 组件文件放在 \`src/components/\` 或类似目录\n`;
-      content += `- 工具函数放在 \`src/utils/\` 或类似目录\n`;
-      content += `- 类型定义放在 \`src/types/\` 或类似目录\n`;
-      content += `- API 相关文件放在 \`src/api/\` 或类似目录\n\n`;
+      content += `## 🎯 File Organization\n\n`;
+      content += `File organization guidelines pending. Suggested layout:\n\n`;
+      content += `- Place components in \`src/components/\` or similar\n`;
+      content += `- Place utilities in \`src/utils/\` or similar\n`;
+      content += `- Place type definitions in \`src/types/\` or similar\n`;
+      content += `- Place API files in \`src/api/\` or similar\n\n`;
     }
 
     // 添加新建文件指南
-    content += `## ✨ 新建文件指南\n\n`;
+    content += `## ✨ New File Guidelines\n\n`;
     content += generateNewFileGuidelines(context);
     content += `\n`;
 
     content += `---
-*新建文件前，请参考此文件确定正确的目录位置和命名规范。*
+*Before creating new files, see this file for correct directory locations and naming conventions.*
 `;
 
     return {
@@ -324,51 +324,51 @@ function generateDetailedStructureContent(
     // 1. 目录结构树（完整树形结构，优先显示）
     // 使用与 test-report 相同的生成逻辑，确保完整性和一致性
     if (hasDeepAnalysis) {
-      content += `## 📁 目录结构树\n\n`;
+      content += `## 📁 Directory Tree\n\n`;
       
       // 如果数据质量不佳，添加警告提示
       if (deepAnalysisQuality.isIncomplete) {
-        content += `> ⚠️ **注意**: 目录结构分析可能不完整（${deepAnalysisQuality.reason}），建议重新生成以获取完整结构。\n\n`;
+        content += `> ⚠️ **Note**: Directory structure analysis may be incomplete (${deepAnalysisQuality.reason}). Re-generate for the full structure.\n\n`;
       }
       
-      content += `项目主要目录结构：\n\n`;
+      content += `Main project directory structure:\n\n`;
       content += generateDirectoryTree(deepAnalysis);
       content += `\n`;
     } else {
       // 如果没有深度分析结果，使用 fileOrganization 生成简化结构
-        content += `## 📁 目录结构树\n\n`;
-      content += `> ⚠️ **警告**: 未能获取完整的目录深度分析数据，以下为简化版结构。建议重新运行 \`generate_cursor_rules\` 以获取完整的目录树和职能说明。\n\n`;
+        content += `## 📁 Directory Tree\n\n`;
+      content += `> ⚠️ **Warning**: Full directory depth analysis was unavailable; the following is simplified. Re-run \`generate_cursor_rules\` for the full directory tree and purpose descriptions.\n\n`;
       
       if (context.fileOrganization && context.fileOrganization.structure.length > 0) {
-        content += `项目主要目录结构（简化版）：\n\n`;
+        content += `Main project directory structure (simplified):\n\n`;
         content += generateSimplifiedDirectoryTree(context.fileOrganization);
         content += `\n`;
       } else {
-        content += `> ❌ **错误**: 无法生成目录结构，请检查项目路径和文件权限。\n\n`;
+        content += `> ❌ **Error**: Unable to generate directory structure; check project path and file permissions.\n\n`;
       }
     }
 
     // 3. 主要目录职能说明（详细说明，重要目录）
     if (hasDeepAnalysis) {
-      content += `## 📋 主要目录职能说明\n\n`;
-      content += `以下是重要目录的详细职能说明，包含文件类型、命名规范等信息：\n\n`;
+      content += `## 📋 Directory Purpose Reference\n\n`;
+      content += `Detailed purpose for important directories, including file types and naming conventions:\n\n`;
       content += generateDirectoryPurposes(deepAnalysis);
       content += `\n`;
     } else {
       // 如果没有深度分析，跳过职能说明章节
-      content += `> ℹ️ **提示**: 由于缺少深度分析数据，无法生成详细的目录职能说明。\n\n`;
+      content += `> ℹ️ **Tip**: Detailed directory purpose descriptions are unavailable due to missing depth analysis data.\n\n`;
     }
 
     // 4. 文件组织规范（快速参考）
     if (context.fileOrganization) {
-      content += `## 🎯 文件组织规范（快速参考）\n\n`;
-      content += `以下是常见文件类型的存放位置，用于快速查找：\n\n`;
+      content += `## 🎯 File Organization (Quick Reference)\n\n`;
+      content += `Common file type locations for quick lookup:\n\n`;
       content += generateFileOrganizationRules(context);
       content += `\n`;
     }
 
     // 5. 新建文件指南
-    content += `## ✨ 新建文件指南\n\n`;
+    content += `## ✨ New File Guidelines\n\n`;
     content += generateNewFileGuidelines(context);
     content += `\n`;
 
@@ -400,9 +400,9 @@ function generateSimplifiedDirectoryTree(fileOrg: FileOrganizationInfo): string 
       const depth = dir.path.split("/").length;
       const indent = "  ".repeat(depth - 1);
       const prefix = depth > 1 ? "├── " : "";
-      const fileCount = dir.fileCount > 0 ? ` (${dir.fileCount} 个文件)` : "";
+      const fileCount = dir.fileCount > 0 ? ` (${dir.fileCount} files)` : "";
       tree.push(
-        `${indent}${prefix}${dir.path}/  # ${dir.purpose || "目录"}${fileCount}`
+        `${indent}${prefix}${dir.path}/  # ${dir.purpose || "directory"}${fileCount}`
       );
     }
 
@@ -417,7 +417,7 @@ function generateDirectoryTree(
   deepAnalysis: DeepDirectoryAnalysis[]
 ): string {
     if (deepAnalysis.length === 0) {
-      return "```text\n项目目录结构分析中...\n```\n\n";
+      return "```text\nAnalyzing project directory structure...\n```\n\n";
     }
 
     // 按层级组织目录（与 test-report 完全一致的逻辑）
@@ -479,7 +479,7 @@ function generateDirectoryTree(
                                 purposeLower !== 'other' && 
                                 purposeLower !== 'unknown';
         const purpose = hasValidPurpose ? ` # ${dir.purpose}` : "";
-        tree.push(`${prefix}${connector}${dirName}/ ... (${businessChildren.length}个业务文件夹)${purpose}`);
+        tree.push(`${prefix}${connector}${dirName}/ ... (${businessChildren.length} business folders)${purpose}`);
         return; // 不展开业务文件夹
       }
       
@@ -510,7 +510,7 @@ function generateDirectoryTree(
         // 如果有业务子目录，在最后显示折叠提示
         if (businessChildren.length > 0) {
           const businessPrefix = prefix + (isLast ? "    " : "│   ");
-          tree.push(`${businessPrefix}└── ... (${businessChildren.length}个业务文件夹)`);
+          tree.push(`${businessPrefix}└── ... (${businessChildren.length} business folders)`);
         }
       } else {
         // 没有子目录，正常显示
@@ -536,7 +536,7 @@ function generateDirectoryTree(
     );
     
     if (orphanDirs.length > 0) {
-      tree.push("\n# 其他目录（未分类）");
+      tree.push("\n# Other directories (uncategorized)");
       orphanDirs.forEach((dir) => {
         const dirName = path.basename(dir.path);
         // 只判断英文，不判断中文
@@ -735,7 +735,7 @@ function isBusinessFolder(dir: DeepDirectoryAnalysis, deepAnalysis: DeepDirector
  */
 function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): string {
     if (deepAnalysis.length === 0) {
-      return "目录职能说明分析中...\n\n";
+      return "Analyzing directory purposes...\n\n";
     }
 
     const functionalFolderKeywords = FUNCTIONAL_FOLDER_KEYWORDS;
@@ -795,22 +795,22 @@ function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): strin
     
     let content = "";
     
-    content += `> 💡 命名规范和代码风格请参考 @code-style.mdc\n\n`;
+    content += `> 💡 See @code-style.mdc for naming conventions and code style\n\n`;
 
     for (const dir of keyDirectories) {
       content += `### \`${dir.path}/\`\n\n`;
-      content += `**职能**: ${dir.purpose || '未标识'}\n\n`;
+      content += `**Purpose**: ${dir.purpose || 'Unidentified'}\n\n`;
       
       // 只保留真正有价值的信息
       
       // 1. 使用 index 文件（影响文件组织方式）
       if (dir.hasIndexFiles) {
-        content += `- 使用 index 文件导出\n`;
+        content += `- Uses index files for exports\n`;
       }
       
       // 2. 架构模式（影响代码组织）
       if (dir.architecturePattern) {
-        content += `- 架构模式: ${dir.architecturePattern}\n`;
+        content += `- Architecture pattern: ${dir.architecturePattern}\n`;
       }
       
       // 3. 子目录（只显示职能子目录，不显示业务子目录）
@@ -825,7 +825,7 @@ function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): strin
         if (functionalChildren.length > 0) {
           const childCount = functionalChildren.length;
           const displayChildren = functionalChildren.slice(0, 5);
-          content += `- 职能子目录 (${childCount} 个): ${displayChildren.map((c: string) => {
+          content += `- Functional subdirectories (${childCount}): ${displayChildren.map((c: string) => {
           const childName = c.split("/").pop() || c;
           return `\`${childName}\``;
         }).join(", ")}`;
@@ -842,7 +842,7 @@ function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): strin
     // 添加深层目录的简要说明
     const deepDirectories = sorted.filter((d) => d.depth > 3);
     if (deepDirectories.length > 0) {
-      content += `\n**其他深层职能目录** (${deepDirectories.length} 个): 请参考上方目录树查看完整结构。\n\n`;
+      content += `\n**Other deep functional directories** (${deepDirectories.length}): See the directory tree above for the full structure.\n\n`;
     }
 
     return content;
@@ -855,7 +855,7 @@ function generateFileOrganizationRules(
   context: RuleGenerationContext
 ): string {
     if (!context.fileOrganization) {
-      return "项目文件组织规范待补充。\n";
+      return "File organization guidelines pending.\n";
     }
 
     const org = context.fileOrganization;
@@ -863,25 +863,25 @@ function generateFileOrganizationRules(
 
     // 组件位置
     if (org.componentLocation.length > 0) {
-      content += `### 组件目录\n\n`;
-      content += `**位置**: \`${org.componentLocation[0]}/\`\n\n`;
+      content += `### Components\n\n`;
+      content += `**Location**: \`${org.componentLocation[0]}/\`\n\n`;
       if (org.namingConvention.components) {
-        content += `**命名规范**: ${org.namingConvention.components}\n\n`;
+        content += `**Naming conventions**: ${org.namingConvention.components}\n\n`;
       }
       content += `\n`;
     }
 
     // 工具函数位置
     if (org.utilsLocation.length > 0) {
-      content += `### 工具函数目录\n\n`;
-      content += `**位置**: \`${org.utilsLocation[0]}/\`\n\n`;
-      content += `**组织方式**: 按功能分类创建文件（如 \`date.ts\`, \`validation.ts\`）\n\n`;
+      content += `### Utilities\n\n`;
+      content += `**Location**: \`${org.utilsLocation[0]}/\`\n\n`;
+      content += `**Organization**: Group by concern (e.g. \`date.ts\`, \`validation.ts\`)\n\n`;
     }
 
     // 类型定义位置
     if (org.typesLocation && org.typesLocation.length > 0) {
-      content += `### 类型定义目录\n\n`;
-      content += `**位置**: \`${org.typesLocation[0]}/\`\n\n`;
+      content += `### Type Definitions\n\n`;
+      content += `**Location**: \`${org.typesLocation[0]}/\`\n\n`;
     }
 
     // 样式目录：只在 basename 属于样式根目录语义词时展示
@@ -896,21 +896,21 @@ function generateFileOrganizationRules(
         return STYLE_ROOT_KEYWORDS.has(basename.toLowerCase());
       });
       if (styleRootDir) {
-        content += `### 样式文件目录\n\n`;
-        content += `**位置**: \`${styleRootDir}/\`\n\n`;
+        content += `### Styles\n\n`;
+        content += `**Location**: \`${styleRootDir}/\`\n\n`;
       }
     }
 
     // API 位置
     if (org.apiLocation && org.apiLocation.length > 0) {
-      content += `### API 目录\n\n`;
-      content += `**位置**: \`${org.apiLocation[0]}/\`\n\n`;
+      content += `### API\n\n`;
+      content += `**Location**: \`${org.apiLocation[0]}/\`\n\n`;
     }
 
     // Hooks 位置
     if (org.hooksLocation && org.hooksLocation.length > 0) {
-      content += `### Hooks 目录\n\n`;
-      content += `**位置**: \`${org.hooksLocation[0]}/\`\n\n`;
+      content += `### Hooks\n\n`;
+      content += `**Location**: \`${org.hooksLocation[0]}/\`\n\n`;
     }
 
     return content;
@@ -928,10 +928,10 @@ function generateNewFileGuidelines(
     const extx = isTS ? "tsx" : "jsx";
     const isFrontend = isFrontendProject(context);
 
-    let content = `### 文件位置决策表\n\n`;
-    content += `> 创建新文件时，先查此表找到正确目录，不确定则参考相似现有文件。\n\n`;
-    content += `| 要创建的文件类型 | 放到哪里 | 示例文件名 |\n`;
-    content += `|-----------------|---------|----------|\n`;
+    let content = `### File Location Decision Table\n\n`;
+    content += `> When creating a new file, use this table to find the correct directory; if unsure, follow a similar existing file.\n\n`;
+    content += `| File type | Location | Example filename |\n`;
+    content += `|-----------|----------|------------------|\n`;
 
     if (org) {
       if (isFrontend) {
@@ -944,26 +944,26 @@ function generateNewFileGuidelines(
 
         if (pageDir && org.componentLocation.length > 0 && pageDir !== org.componentLocation[0]) {
           // 有独立页面目录 → 分别映射
-          content += `| 页面组件 | \`${pageDir}/\` | \`UserList.${extx}\` |\n`;
-          content += `| 可复用 UI 组件 | \`${org.componentLocation[0]}/\` | \`Button.${extx}\` |\n`;
+          content += `| Page component | \`${pageDir}/\` | \`UserList.${extx}\` |\n`;
+          content += `| Reusable UI component | \`${org.componentLocation[0]}/\` | \`Button.${extx}\` |\n`;
         } else if (pageDir) {
-          content += `| 页面 / 可复用组件 | \`${pageDir}/\` | \`UserList.${extx}\` |\n`;
+          content += `| Page / reusable component | \`${pageDir}/\` | \`UserList.${extx}\` |\n`;
         } else if (org.componentLocation.length > 0) {
           // 无独立页面目录，组件目录兼用于页面
-          content += `| 组件（含页面）| \`${org.componentLocation[0]}/\` | \`UserList.${extx}\` |\n`;
+          content += `| Component (incl. pages) | \`${org.componentLocation[0]}/\` | \`UserList.${extx}\` |\n`;
         }
       }
       if (org.utilsLocation.length > 0) {
         const loc = org.utilsLocation[0];
-        content += `| 工具函数 | \`${loc}/\` | \`format.${ext}\`, \`validate.${ext}\` |\n`;
+        content += `| Utility function | \`${loc}/\` | \`format.${ext}\`, \`validate.${ext}\` |\n`;
       }
       if (org.hooksLocation && org.hooksLocation.length > 0) {
         const loc = org.hooksLocation[0];
-        content += `| 自定义 Hook | \`${loc}/\` | \`useXxx.${ext}\` |\n`;
+        content += `| Custom hook | \`${loc}/\` | \`useXxx.${ext}\` |\n`;
       }
       if (org.typesLocation && org.typesLocation.length > 0) {
         const loc = org.typesLocation[0];
-        content += `| 类型定义 | \`${loc}/\` | \`user.types.${ext}\` |\n`;
+        content += `| Type definition | \`${loc}/\` | \`user.types.${ext}\` |\n`;
       }
       if (org.apiLocation && org.apiLocation.length > 0) {
         const loc = org.apiLocation[0];
@@ -973,13 +973,13 @@ function generateNewFileGuidelines(
     content += `\n`;
 
     if (isFrontend && org?.namingConvention?.useIndexFiles) {
-      content += `### 组件目录结构\n\n`;
+      content += `### Component Directory Layout\n\n`;
       const compLoc = org.componentLocation[0] || 'src/components';
       content += `\`\`\`\n`;
       content += `${compLoc}/ComponentName/\n`;
-      content += `  ├── index.${extx}       # 导出入口\n`;
-      content += `  ├── ComponentName.${extx} # 实现文件\n`;
-      content += `  └── ComponentName.test.${ext} # 测试文件\n`;
+      content += `  ├── index.${extx}       # Export entry\n`;
+      content += `  ├── ComponentName.${extx} # Implementation\n`;
+      content += `  └── ComponentName.test.${ext} # Test file\n`;
       content += `\`\`\`\n\n`;
     }
 
@@ -988,8 +988,8 @@ function generateNewFileGuidelines(
       Object.keys(context.projectConfig.pathAliases).length > 0
     ) {
       const aliases = Object.keys(context.projectConfig.pathAliases);
-      content += `### 导入路径别名\n\n`;
-      content += `使用别名代替相对路径：${aliases.map(a => `\`${a}\``).join(", ")}\n\n`;
+      content += `### Import Path Aliases\n\n`;
+      content += `Use aliases instead of relative paths: ${aliases.map(a => `\`${a}\``).join(", ")}\n\n`;
     }
 
     return content;
@@ -1008,7 +1008,7 @@ function assessDeepAnalysisQuality(
     if (!deepAnalysis || deepAnalysis.length === 0) {
       return {
         isIncomplete: true,
-        reason: "未获取到任何目录分析数据",
+        reason: "No directory analysis data retrieved",
         quality: "missing",
       };
     }
@@ -1018,7 +1018,7 @@ function assessDeepAnalysisQuality(
     if (rootDirs.length === 0) {
       return {
         isIncomplete: true,
-        reason: "缺少根目录分析数据",
+        reason: "Missing root directory analysis data",
         quality: "poor",
       };
     }
@@ -1028,7 +1028,7 @@ function assessDeepAnalysisQuality(
     if (!hasHierarchy && deepAnalysis.length > rootDirs.length) {
       return {
         isIncomplete: true,
-        reason: "目录层级关系不完整",
+        reason: "Directory hierarchy relationships incomplete",
         quality: "fair",
       };
     }
@@ -1046,7 +1046,7 @@ function assessDeepAnalysisQuality(
     if (otherRatio > 0.5) {
       return {
         isIncomplete: true,
-        reason: `超过 ${Math.round(otherRatio * 100)}% 的目录职能未能识别`,
+        reason: `Purpose unidentified for over ${Math.round(otherRatio * 100)}% of directories`,
         quality: "fair",
       };
     }

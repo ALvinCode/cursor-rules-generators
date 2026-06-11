@@ -25,7 +25,7 @@ export async function generateModuleOverviewRule(
 ): Promise<CursorRule> {
     const moduleOverviewGlobs = `${module.path}/**`;
     const metadata = buildRuleMetadata(
-      `${module.name} 模块规则`,
+      `${module.name} Module Rules`,
       module.description || `Development conventions for the ${module.name} module`,
       50,
       context.techStack.primary,
@@ -52,41 +52,41 @@ export async function generateModuleOverviewRule(
         )
       : null;
 
-    let content = metadata + `\n# ${module.name} 模块\n\n`;
+    let content = metadata + `\n# ${module.name} Module\n\n`;
 
     // 1. 模块标识（关键信息，用于代码生成时识别目标模块）
     const packageName = module.packageName || module.name;
     const packageInfo = await getModulePackageInfo(module.path);
     const effectivePackageName = packageInfo?.name || packageName;
     
-    content += `## 📦 模块标识\n\n`;
-    content += `- **包名称**: \`${effectivePackageName}\`\n`;
-    content += `- **模块名称**: \`${module.name}\`\n`;
-    content += `- **模块类型**: ${getModuleTypeName(module.type)}\n`;
+    content += `## 📦 Module Identity\n\n`;
+    content += `- **Package name**: \`${effectivePackageName}\`\n`;
+    content += `- **Module name**: \`${module.name}\`\n`;
+    content += `- **Module type**: ${getModuleTypeName(module.type)}\n`;
     if (packageInfo?.description) {
-      content += `- **描述**: ${packageInfo.description}\n`;
+      content += `- **Description**: ${packageInfo.description}\n`;
     }
     content += `\n`;
 
     // 2. 模块职责
-    content += `## 🎯 模块职责\n\n`;
+    content += `## 🎯 Module Responsibilities\n\n`;
     content += `${generateModuleResponsibilities(module, businessAnalysis)}\n\n`;
 
     // 3. 目录结构（引用 project-structure）
-    content += `## 📁 目录结构\n\n`;
-    content += `**MUST**: 在生成代码前，查看 @project-structure.mdc 中 \`${module.name}\` 模块的目录结构和文件夹职能说明。\n\n`;
-    content += `目录结构信息位于 @project-structure.mdc，包含：\n`;
-    content += `- 完整的目录树结构\n`;
-    content += `- 每个目录的职能说明\n`;
-    content += `- 文件组织模式和命名规范\n\n`;
+    content += `## 📁 Directory Structure\n\n`;
+    content += `**MUST**: Before generating code, review the directory tree and folder purpose descriptions for the \`${module.name}\` module in @project-structure.mdc.\n\n`;
+    content += `@project-structure.mdc includes:\n`;
+    content += `- Full directory tree\n`;
+    content += `- Purpose description for each directory\n`;
+    content += `- File organization patterns and naming conventions\n\n`;
 
     // 4. 代码生成指南
-    content += `## 💻 代码生成指南\n\n`;
+    content += `## 💻 Code Generation Guide\n\n`;
     content += generateModuleCodeGenerationGuide(module, context, structureAnalysis, businessAnalysis, effectivePackageName);
 
     // 5. 相关规则
-    content += `## 📚 相关规则\n\n`;
-    content += `参考以下全局规则：\n\n`;
+    content += `## 📚 Related Rules\n\n`;
+    content += `See also these global rules:\n\n`;
     content += `- @../global-rules.mdc\n`;
     content += `- @../code-style.mdc\n`;
     content += `- @../architecture.mdc\n`;
@@ -115,22 +115,22 @@ function generateModuleResponsibilities(
 
     // 如果有业务分析，使用业务领域信息
     if (businessAnalysis?.businessDomain) {
-      description = `负责 ${businessAnalysis.businessDomain} 相关的功能`;
+      description = `Handles ${businessAnalysis.businessDomain}-related functionality`;
     } else {
     const typeDescriptions: Record<string, string> = {
-      frontend: "负责用户界面展示和交互逻辑",
-      backend: "负责业务逻辑处理和数据管理",
-      shared: "提供跨模块共享的工具和类型定义",
-      service: "提供特定领域的服务功能",
-      package: "作为独立包提供特定功能",
-      other: "提供项目所需的功能",
+      frontend: "Handles user interface presentation and interaction logic",
+      backend: "Handles business logic and data management",
+      shared: "Provides cross-module shared utilities and type definitions",
+      service: "Provides domain-specific services",
+      package: "Provides specific functionality as a standalone package",
+      other: "Provides functionality required by the project",
     };
-      description = typeDescriptions[module.type] || "提供项目所需的功能";
+      description = typeDescriptions[module.type] || "Provides functionality required by the project";
     }
 
     // 如果有主要功能，添加到描述中
     if (businessAnalysis?.mainFeatures && businessAnalysis.mainFeatures.length > 0) {
-      description += `，主要包括：${businessAnalysis.mainFeatures.slice(0, 3).join("、")}`;
+      description += `, including: ${businessAnalysis.mainFeatures.slice(0, 3).join(", ")}`;
     }
 
     return description;
@@ -178,22 +178,22 @@ function generateModuleCodeGenerationGuide(
     let guide = "";
 
     // 代码生成规则（使用明确的指令格式）
-    guide += `### 代码生成规则\n\n`;
-    guide += `**MUST** 遵循以下规则：\n\n`;
-    guide += `1. **文件位置**: 查看 @project-structure.mdc 中 \`${module.name}\` 模块的目录结构，根据文件类型选择正确目录\n`;
-    guide += `2. **命名规范**: 参考 @code-style.mdc 和 @project-structure.mdc\n`;
-    guide += `3. **导入路径**: 遵循依赖引用规则（见下文）\n`;
-    guide += `4. **代码风格**: 参考 @code-style.mdc 保持一致性\n`;
+    guide += `### Code Generation Rules\n\n`;
+    guide += `**MUST** follow these rules:\n\n`;
+    guide += `1. **File location**: Review the directory structure for the \`${module.name}\` module in @project-structure.mdc and choose the correct directory by file type\n`;
+    guide += `2. **Naming conventions**: See @code-style.mdc and @project-structure.mdc\n`;
+    guide += `3. **Import paths**: Follow dependency reference rules (below)\n`;
+    guide += `4. **Code style**: See @code-style.mdc for consistency\n`;
     
     if (module.type === "shared") {
-      guide += `5. **模块边界**: 此模块为共享模块，代码必须保持通用性，避免特定业务逻辑\n\n`;
+      guide += `5. **Module boundary**: This is a shared module; keep code generic and avoid business-specific logic\n\n`;
     } else {
-      guide += `5. **模块边界**: 此模块为 ${getModuleTypeName(module.type)} 类型，代码需符合该类型职责范围\n\n`;
+      guide += `5. **Module boundary**: This is a ${getModuleTypeName(module.type)} module; code must stay within that responsibility scope\n\n`;
     }
 
     // 文件存放规则（从 project-structure 获取）
-    guide += `### 文件存放规则\n\n`;
-    guide += `**MUST**: 参考 @project-structure.mdc 中 \`${module.name}\` 模块的目录结构和文件夹职能说明。\n\n`;
+    guide += `### File Placement Rules\n\n`;
+    guide += `**MUST**: See directory structure and folder purpose descriptions for the \`${module.name}\` module in @project-structure.mdc.\n\n`;
     
     if (structureAnalysis && structureAnalysis.mainDirectories.length > 0) {
       const dirs = structureAnalysis.mainDirectories
@@ -206,7 +206,7 @@ function generateModuleCodeGenerationGuide(
         .slice(0, 8);
       
       if (dirs.length > 0) {
-        guide += `主要目录（完整信息见 @project-structure.mdc）：\n\n`;
+        guide += `Key directories (full details in @project-structure.mdc):\n\n`;
         for (const dir of dirs) {
           const dirPath = dir.path;
           // 计算相对于模块路径的相对路径
@@ -232,17 +232,17 @@ function generateModuleCodeGenerationGuide(
     }
 
     // 依赖引用规则（使用明确的指令格式）
-    guide += `### 依赖引用规则\n\n`;
+    guide += `### Dependency Reference Rules\n\n`;
     
-    guide += `**模块内部引用** (SHOULD):\n`;
+    guide += `**Within module** (SHOULD):\n`;
     guide += `\`\`\`typescript\n`;
     guide += `import { X } from '../utils/helper';\n`;
-    guide += `import { X } from '@/utils/helper'; // 如果配置了别名\n`;
+    guide += `import { X } from '@/utils/helper'; // when aliases are configured\n`;
     guide += `\`\`\`\n\n`;
     
     // 引用其他内部模块
     if (businessAnalysis && businessAnalysis.internalDependencies.length > 0) {
-      guide += `**引用其他内部模块** (SHOULD):\n`;
+      guide += `**Other internal modules** (SHOULD):\n`;
       guide += `\`\`\`typescript\n`;
       for (const dep of businessAnalysis.internalDependencies.slice(0, 3)) {
         guide += `import { X } from '${dep}';\n`;
@@ -252,22 +252,22 @@ function generateModuleCodeGenerationGuide(
     
     // 被其他模块引用
     if (businessAnalysis && businessAnalysis.dependentModules.length > 0) {
-      guide += `**被其他模块引用** (参考):\n`;
-      guide += `其他模块可通过包名引用：\`import { X } from '${packageName}'\`\n\n`;
+      guide += `**Referenced by other modules** (Reference):\n`;
+      guide += `Other modules may import via package name: \`import { X } from '${packageName}'\`\n\n`;
     }
     
     // 外部依赖
-    guide += `**外部依赖** (SHOULD):\n`;
+    guide += `**External dependencies** (SHOULD):\n`;
     guide += `\`\`\`typescript\n`;
     guide += `import { X } from 'package-name';\n`;
     guide += `\`\`\`\n\n`;
 
     // 命名规范（仅在有明确模式时显示）
     if (structureAnalysis && structureAnalysis.fileOrganizationPattern.primaryNamingPattern !== "mixed") {
-      guide += `### 命名规范\n\n`;
+      guide += `### Naming Conventions\n\n`;
       const pattern = structureAnalysis.fileOrganizationPattern.primaryNamingPattern;
-      guide += `主要命名模式: **${pattern}**\n\n`;
-      guide += `示例：\n`;
+      guide += `Primary naming pattern: **${pattern}**\n\n`;
+      guide += `Examples:\n`;
       if (pattern === "PascalCase") {
         guide += `- \`UserProfile.tsx\`, \`ApiClient.ts\`, \`UserType.ts\`\n`;
       } else if (pattern === "camelCase") {
@@ -276,15 +276,15 @@ function generateModuleCodeGenerationGuide(
         guide += `- \`user-profile.tsx\`, \`api-client.ts\`, \`user-helper.ts\`\n`;
       }
       guide += `\n`;
-      guide += `完整规范见 @code-style.mdc\n\n`;
+      guide += `Full conventions in @code-style.mdc\n\n`;
     }
 
     // 导入导出模式（仅在有明确模式时显示）
     if (structureAnalysis && structureAnalysis.fileOrganizationPattern.usesIndexFiles) {
-      guide += `### 导入导出模式\n\n`;
-      guide += `使用 \`index.ts\` 作为目录入口：\n`;
+      guide += `### Import/Export Pattern\n\n`;
+      guide += `Use \`index.ts\` as the directory entry point:\n`;
       guide += `\`\`\`typescript\n`;
-      guide += `// 从目录导入\n`;
+      guide += `// Import from directory\n`;
       guide += `import { Component } from './components';\n`;
       guide += `\`\`\`\n\n`;
     }

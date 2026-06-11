@@ -551,7 +551,15 @@ export class RulesGenerator {
       }
     }
 
-    return rules;
+    const validRules = rules.filter((r) => r.content.trim().length > 0);
+
+    // Post-process: strip cross-references to rules that weren't generated
+    const generatedFileNames = new Set(validRules.map((r) => r.fileName));
+    for (const rule of validRules) {
+      rule.content = stripDeadReferences(rule.content, generatedFileNames);
+    }
+
+    return validRules;
   }
 
   /**
@@ -769,4 +777,45 @@ export class RulesGenerator {
   /**
    * 生成自定义工具使用规则（v1.2）
    */
+}
+
+/**
+ * Remove @xxx.mdc references that point to rule files not in the generated set.
+ * Handles patterns: "@xxx.mdc", "See also: @xxx.mdc", "| @xxx.mdc |" (Rule Index rows),
+ * and "See **@xxx.mdc**" inline references.
+ */
+function stripDeadReferences(content: string, generated: Set<string>): string {
+  // Remove full Rule Index table rows: "| @xxx.mdc | description |\n"
+  let result = content.replace(
+    /\| @([\w-]+\.mdc) \|[^\n]*\|\n/g,
+    (match, file: string) => generated.has(file) ? match : ""
+  );
+
+  // Remove "See also: @xxx.mdc, @yyy.mdc" — rebuild with only valid refs
+  result = result.replace(
+    /See also:\s*(@[\w-]+\.mdc(?:,\s*@[\w-]+\.mdc)*)/g,
+    (_match, refs: string) => {
+      const validRefs = refs
+        .split(/,\s*/)
+        .filter((r: string) => {
+          const file = r.replace("@", "");
+          return generated.has(file);
+        });
+      return validRefs.length > 0 ? `See also: ${validRefs.join(", ")}` : "";
+    }
+  );
+
+  // Remove inline "> See **@xxx.mdc** for ..." lines
+  result = result.replace(
+    /^>?\s*See\s+\*\*@([\w-]+\.mdc)\*\*[^\n]*\n/gm,
+    (match, file: string) => generated.has(file) ? match : ""
+  );
+
+  // Remove "Reference: @xxx.mdc" or "See: @xxx.mdc" standalone lines
+  result = result.replace(
+    /^(?:Reference|See):\s*@([\w-]+\.mdc)\s*\n/gm,
+    (match, file: string) => generated.has(file) ? match : ""
+  );
+
+  return result;
 }

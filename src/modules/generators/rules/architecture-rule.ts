@@ -11,7 +11,6 @@ import { ArchitecturePattern, CursorRule, RuleGenerationContext } from "../../..
 import type { ExtractedBestPractice } from "../best-practice-extractor.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import {
-  getLanguageGlobs,
   formatMissingPractices,
   getArchitecturePatternName,
   getModuleTypeName,
@@ -23,27 +22,46 @@ export function generateArchitectureRule(
   context: RuleGenerationContext,
   missingPractices?: ExtractedBestPractice[]
 ): CursorRule {
-    const srcGlobs = getLanguageGlobs(context);
+    // architecture 规则通过 description 关键词触发（designing features / adding modules），
+    // 不设 globs，避免与 code-style 在每个源码文件上重复触发
     const metadata = buildRuleMetadata(
-      "项目架构",
+      "Project Architecture",
       "Consult when designing features, adding modules, or making architectural decisions",
       90,
       context.techStack.primary,
       ["architecture", "modules"],
       "guideline",
-      ["global-rules", "project-structure"],
-      { globs: srcGlobs }
+      ["global-rules", "project-structure"]
     );
 
-    // 补充缺失的最佳实践
     const architecturePractices =
       missingPractices?.filter((p) => p.category === "architecture") || [];
-    const additionalPractices = formatMissingPractices(
-      architecturePractices
-    );
-
+    const additionalPractices = formatMissingPractices(architecturePractices);
     const codeFeaturesSection = generateCodeFeaturesSection(context);
     const platformArch = getPlatformSections(context, "architecture");
+    const principles = generateArchitecturePrinciples(context);
+
+    // Value gate: only generate a standalone file when there's concrete
+    // architectural detail beyond what global-rules & project-structure cover.
+    const pattern = context.architecturePattern;
+    const hasConcreteStructure = !!(pattern?.layerStructure || pattern?.featureStructure);
+    const hasSubstantialContent =
+      hasConcreteStructure ||
+      !!additionalPractices ||
+      !!platformArch ||
+      (context.modules.length > 1);
+
+    if (!hasSubstantialContent) {
+      return {
+        scope: "specialized",
+        modulePath: context.projectPath,
+        content: "",
+        fileName: "architecture.mdc",
+        priority: 90,
+        type: "guideline",
+        depends: ["global-rules", "project-structure"],
+      };
+    }
 
     const content =
       metadata +
@@ -54,25 +72,12 @@ See also: @global-rules.mdc, @project-structure.mdc
 
 ## Architecture Pattern
 
-${
-  context.architecturePattern
-    ? generateArchitecturePatternSection(context.architecturePattern)
-    : generateArchitecturePatternSection(context.architecturePattern || {
-        type: "unknown",
-        confidence: "low",
-        indicators: []
-      })
-}
+${generateArchitecturePatternSection(pattern)}
 
 ## Module Structure
 
 ${generateModuleStructureSection(context)}
-${codeFeaturesSection}
-## Design Principles
-
-${generateArchitecturePrinciples(context)}
-
-${additionalPractices ? `\n## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
+${codeFeaturesSection}${principles ? `## Design Principles\n\n${principles}` : ""}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
 `;
 
     return {
@@ -104,36 +109,36 @@ function generateCodeFeaturesSection(context: RuleGenerationContext): string {
 
 function generateArchitecturePatternSection(pattern: ArchitecturePattern | undefined): string {
     if (!pattern || pattern.type === "unknown") {
-      return "项目架构模式：标准架构（基于目录结构推断）\n\n";
+      return "Project architecture: standard layout (inferred from directory structure)\n\n";
     }
 
-    let content = `项目采用 **${getArchitecturePatternName(pattern.type)}** 架构模式。\n\n`;
+    let content = `This project uses **${getArchitecturePatternName(pattern.type)}** architecture.\n\n`;
 
     // 注意：置信度（confidence）和识别依据（indicators）是生成器内部分析元数据，
     // 不应出现在规则内容中 — 规则只输出对 AI Agent 有指导意义的约束。
 
     if (pattern.layerStructure) {
-      content += `### 层级结构\n\n`;
+      content += `### Layer Structure\n\n`;
       if (pattern.layerStructure.presentation) {
-        content += `- **表示层**: ${pattern.layerStructure.presentation.map((p: string) => `\`${p}\``).join(", ")}\n`;
+        content += `- **Presentation layer**: ${pattern.layerStructure.presentation.map((p: string) => `\`${p}\``).join(", ")}\n`;
       }
       if (pattern.layerStructure.application) {
-        content += `- **应用层**: ${pattern.layerStructure.application.map((a: string) => `\`${a}\``).join(", ")}\n`;
+        content += `- **Application layer**: ${pattern.layerStructure.application.map((a: string) => `\`${a}\``).join(", ")}\n`;
       }
       if (pattern.layerStructure.domain) {
-        content += `- **领域层**: ${pattern.layerStructure.domain.map((d: string) => `\`${d}\``).join(", ")}\n`;
+        content += `- **Domain layer**: ${pattern.layerStructure.domain.map((d: string) => `\`${d}\``).join(", ")}\n`;
       }
       if (pattern.layerStructure.infrastructure) {
-        content += `- **基础设施层**: ${pattern.layerStructure.infrastructure.map((i: string) => `\`${i}\``).join(", ")}\n`;
+        content += `- **Infrastructure layer**: ${pattern.layerStructure.infrastructure.map((i: string) => `\`${i}\``).join(", ")}\n`;
       }
       content += `\n`;
     }
     
     if (pattern.featureStructure) {
-      content += `### 功能结构\n\n`;
-      content += `- **功能模块**: ${pattern.featureStructure.features.map((f: string) => `\`${f}\``).join(", ")}\n`;
+      content += `### Feature Structure\n\n`;
+      content += `- **Feature modules**: ${pattern.featureStructure.features.map((f: string) => `\`${f}\``).join(", ")}\n`;
       if (pattern.featureStructure.shared) {
-        content += `- **共享模块**: ${pattern.featureStructure.shared.map((s: string) => `\`${s}\``).join(", ")}\n`;
+        content += `- **Shared modules**: ${pattern.featureStructure.shared.map((s: string) => `\`${s}\``).join(", ")}\n`;
       }
       content += `\n`;
     }
@@ -152,7 +157,7 @@ function generateModuleStructureSection(context: RuleGenerationContext): string 
 
     // 降级：使用 modules 信息
     if (context.modules.length <= 1) {
-      return "这是一个单体应用项目，没有明确的模块划分。\n";
+      return "This is a monolithic application with no clear module boundaries.\n";
     }
 
     const modulesByType = new Map<string, any[]>();
@@ -163,10 +168,10 @@ function generateModuleStructureSection(context: RuleGenerationContext): string 
       modulesByType.get(module.type)!.push(module);
     }
 
-    let content = `项目包含 **${context.modules.length}** 个模块：\n\n`;
+    let content = `The project contains **${context.modules.length}** modules:\n\n`;
 
     for (const [type, modules] of modulesByType) {
-      content += `### ${getModuleTypeName(type)}模块\n\n`;
+      content += `### ${getModuleTypeName(type)} Modules\n\n`;
       for (const module of modules) {
         content += `- **${module.name}** (\`${module.path}\`)\n`;
         if (module.description) {
@@ -207,59 +212,24 @@ function generateModuleStructureFromDeepAnalysis(
       dirsByCategory.get(category)!.push(dir);
     }
 
-    let content = `基于项目目录结构分析，项目主要包含以下模块和目录：\n\n`;
-
-    // 按类别组织显示
-    const categoryOrder = [
-      "package",
-      "project",
-      "module",
-      "component",
-      "service",
-      "api",
-      "shared",
-      "common",
-      "other",
-    ];
+    // 只输出有约束意义的顶层目录摘要，详细结构由 project-structure.mdc 提供
+    const categoryOrder = ["component", "service", "api", "shared"];
+    const meaningfulDirs: string[] = [];
 
     for (const category of categoryOrder) {
       if (!dirsByCategory.has(category)) continue;
-
       const dirs = dirsByCategory.get(category)!;
       const categoryName = getCategoryDisplayName(category);
-
-      content += `### ${categoryName}\n\n`;
-
-      for (const dir of dirs.sort((a, b) =>
-        path.basename(a.path).localeCompare(path.basename(b.path))
-      )) {
-        const dirName = path.basename(dir.path);
-        content += `- **\`${dirName}/\`** - ${dir.purpose}\n`;
-        if (dir.fileCount > 0) {
-          content += `  - 包含 ${dir.fileCount} 个文件\n`;
-        }
-        if (dir.childDirectories && dir.childDirectories.length > 0) {
-          const childCount = dir.childDirectories.length;
-          content += `  - 包含 ${childCount} 个子目录\n`;
-        }
+      for (const dir of dirs) {
+        meaningfulDirs.push(`- **\`${path.basename(dir.path)}/\`** — ${categoryName}: ${dir.purpose}`);
       }
-      content += `\n`;
     }
 
-    // 如果有 modules 信息，也补充显示
-    if (context.modules.length > 1) {
-      content += `### 模块列表\n\n`;
-      content += `项目包含 **${context.modules.length}** 个已识别的模块：\n\n`;
-      for (const module of context.modules) {
-        content += `- **${module.name}** (\`${module.path}\`)\n`;
-        if (module.description) {
-          content += `  - ${module.description}\n`;
-        }
-      }
-      content += `\n`;
+    let content = "";
+    if (meaningfulDirs.length > 0) {
+      content += meaningfulDirs.join("\n") + "\n\n";
     }
-
-    content += `> 💡 **提示**: 详细的目录结构和职能说明请参考 @project-structure.mdc。\n\n`;
+    content += `> See also @project-structure.mdc for detailed directory layout and responsibilities\n\n`;
 
     return content;
 }
@@ -267,30 +237,32 @@ function generateModuleStructureFromDeepAnalysis(
 /**
  * 生成架构设计原则
  */
+/**
+ * 仅在项目有明确架构类型时输出对应原则，不输出泛化的"模块化、可维护性"等通用常识。
+ */
 function generateArchitecturePrinciples(context: RuleGenerationContext): string {
-    let content = `### 核心原则\n\n`;
-    content += `- **模块化**: 按功能模块组织代码，保持模块间的低耦合\n`;
-    content += `- **可维护性**: 代码结构清晰，易于理解和修改\n`;
-    content += `- **可扩展性**: 支持功能扩展而不影响现有代码\n`;
-    content += `- **单一职责**: 每个模块、组件、函数只负责一个功能\n`;
-    content += `\n`;
-
-    if (context.architecturePattern) {
-      const pattern = context.architecturePattern;
-      if (pattern.type === "clean-architecture") {
-        content += `### Clean Architecture 原则\n\n`;
-        content += `- 依赖方向：外层依赖内层，内层不依赖外层\n`;
-        content += `- 业务逻辑在领域层，不依赖框架和外部服务\n`;
-        content += `- 接口定义在应用层，实现在基础设施层\n`;
-        content += `\n`;
-      } else if (pattern.type === "feature-based") {
-        content += `### Feature-based 原则\n\n`;
-        content += `- 按功能特性组织代码，而非按技术类型\n`;
-        content += `- 每个功能模块包含完整的业务逻辑\n`;
-        content += `- 共享代码放在 shared 或 common 目录\n`;
-        content += `\n`;
-      }
+    if (!context.architecturePattern || context.architecturePattern.type === "unknown") {
+      return "";
     }
 
-    return content;
+    const pattern = context.architecturePattern;
+    if (pattern.type === "clean-architecture") {
+      return `### Clean Architecture Principles\n\n` +
+        `- Dependency direction: outer layers depend on inner layers; inner layers do not depend on outer layers\n` +
+        `- Business logic lives in the domain layer and does not depend on frameworks or external services\n` +
+        `- Interfaces are defined in the application layer and implemented in the infrastructure layer\n\n`;
+    }
+    if (pattern.type === "feature-based") {
+      return `### Feature-based Principles\n\n` +
+        `- Organize code by feature, not by technical type\n` +
+        `- Each feature module contains complete business logic\n` +
+        `- Place shared code in shared or common directories\n\n`;
+    }
+    if (pattern.type === "layered") {
+      return `### Layered Architecture Principles\n\n` +
+        `- Call strictly by layer: upper layers call lower layers; no reverse dependencies\n` +
+        `- Controller → Service → Repository; do not skip layers\n\n`;
+    }
+
+    return "";
 }

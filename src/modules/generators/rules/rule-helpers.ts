@@ -342,10 +342,10 @@ export function sanitizeFileName(name: string): string {
  */
 export function getRouterTypeDescription(type: string): string {
   const descriptions: Record<string, string> = {
-    "file-based": "文件系统路由（约定式）",
-    "config-based": "配置式路由（声明式）",
-    programmatic: "编程式路由（代码定义）",
-    mixed: "混合模式",
+    "file-based": "File-based routing (convention-based)",
+    "config-based": "Config-based routing (declarative)",
+    programmatic: "Programmatic routing (code-defined)",
+    mixed: "Mixed mode",
   };
   return descriptions[type] || type;
 }
@@ -355,10 +355,10 @@ export function getRouterTypeDescription(type: string): string {
  */
 export function getOrganizationDescription(org: string): string {
   const descriptions: Record<string, string> = {
-    centralized: "集中管理",
-    distributed: "分散定义",
-    "feature-based": "按功能模块组织",
-    mixed: "混合方式",
+    centralized: "Centralized",
+    distributed: "Distributed",
+    "feature-based": "Feature-based organization",
+    mixed: "Mixed approach",
   };
   return descriptions[org] || org;
 }
@@ -374,10 +374,10 @@ export function getArchitecturePatternName(type: string): string {
     "domain-driven": "Domain-driven Design",
     layered: "Layered",
     "modular-monolith": "Modular Monolith",
-    microservices: "微服务",
+    microservices: "Microservices",
     monorepo: "Monorepo",
-    mixed: "混合架构",
-    unknown: "未知",
+    mixed: "Mixed architecture",
+    unknown: "Unknown",
   };
   return names[type] || type;
 }
@@ -387,12 +387,12 @@ export function getArchitecturePatternName(type: string): string {
  */
 export function getModuleTypeName(type: string): string {
   const names: Record<string, string> = {
-    frontend: "前端",
-    backend: "后端",
-    shared: "共享",
-    service: "服务",
-    package: "包",
-    other: "其他",
+    frontend: "Frontend",
+    backend: "Backend",
+    shared: "Shared",
+    service: "Service",
+    package: "Package",
+    other: "Other",
   };
   return names[type] || type;
 }
@@ -435,7 +435,7 @@ export function formatMissingPractices(practices: ExtractedBestPractice[]): stri
     section += `${cleanedContent}\n\n`;
 
     if (practice.techStack && practice.techStack.length > 0) {
-      section += `**相关技术栈**: ${practice.techStack.join(", ")}\n`;
+      section += `**Related Tech Stack**: ${practice.techStack.join(", ")}\n`;
     }
 
     sections.push(section.trimEnd());
@@ -449,15 +449,15 @@ export function formatMissingPractices(practices: ExtractedBestPractice[]): stri
  */
 export function getCategoryDisplayName(category: string): string {
   const names: Record<string, string> = {
-    package: "包/库模块",
-    project: "项目模块",
-    module: "功能模块",
-    component: "组件模块",
-    service: "服务模块",
-    api: "API 模块",
-    shared: "共享模块",
-    common: "公共模块",
-    other: "其他目录",
+    package: "Package/Library module",
+    project: "Project module",
+    module: "Feature module",
+    component: "Component module",
+    service: "Service module",
+    api: "API module",
+    shared: "Shared module",
+    common: "Common module",
+    other: "Other directory",
   };
   return names[category] || category;
 }

@@ -42,12 +42,12 @@ export class FileStructureLearner {
 
     return {
       structure,
-      componentLocation: this.findDirectoriesByPurpose(structure, "组件"),
-      utilsLocation: this.findDirectoriesByPurpose(structure, "工具"),
-      typesLocation: this.findDirectoriesByPurpose(structure, "类型"),
-      stylesLocation: this.findDirectoriesByPurpose(structure, "样式"),
+      componentLocation: this.findDirectoriesByPurpose(structure, "components"),
+      utilsLocation: this.findDirectoriesByPurpose(structure, "utilities"),
+      typesLocation: this.findDirectoriesByPurpose(structure, "types"),
+      stylesLocation: this.findDirectoriesByPurpose(structure, "styles"),
       apiLocation: this.findDirectoriesByPurpose(structure, "API"),
-      hooksLocation: this.findDirectoriesByPurpose(structure, "Hooks"),
+      hooksLocation: this.findDirectoriesByPurpose(structure, "hooks"),
       namingConvention: this.detectNamingConvention(files),
     };
   }
@@ -123,34 +123,33 @@ export class FileStructureLearner {
     const dirName = path.basename(dirPath).toLowerCase();
 
     // 根据目录名判断
-    if (dirName.includes("component")) return "组件";
-    if (dirName.includes("hook")) return "Hooks";
-    if (dirName.includes("composable")) return "逻辑复用（Vue）";
-    if (dirName.includes("util") || dirName.includes("helper")) return "工具";
-    if (dirName.includes("type") || dirName.includes("interface")) return "类型";
-    if (dirName.includes("style") || dirName.includes("css")) return "样式";
+    if (dirName.includes("component")) return "components";
+    if (dirName.includes("hook")) return "hooks";
+    if (dirName.includes("composable")) return "composables (Vue)";
+    if (dirName.includes("util") || dirName.includes("helper")) return "utilities";
+    if (dirName.includes("type") || dirName.includes("interface")) return "types";
+    if (dirName.includes("style") || dirName.includes("css")) return "styles";
     if (dirName.includes("api") || dirName.includes("service")) return "API";
-    if (dirName.includes("page") || dirName.includes("route")) return "页面";
-    if (dirName.includes("layout")) return "布局";
-    if (dirName.includes("feature")) return "功能模块";
-    if (dirName.includes("shared") || dirName.includes("common")) return "共享";
-    if (dirName.includes("config")) return "配置";
-    if (dirName.includes("script")) return "脚本";
-    if (dirName.includes("test") || dirName.includes("__tests__")) return "测试";
-    if (dirName.includes("directive")) return "自定义指令";
-    if (dirName.includes("plugin")) return "插件注册";
-    if (dirName.includes("guard")) return "路由守卫";
+    if (dirName.includes("page") || dirName.includes("route")) return "pages";
+    if (dirName.includes("layout")) return "layouts";
+    if (dirName.includes("feature")) return "feature modules";
+    if (dirName.includes("shared") || dirName.includes("common")) return "shared";
+    if (dirName.includes("config")) return "configuration";
+    if (dirName.includes("script")) return "scripts";
+    if (dirName.includes("test") || dirName.includes("__tests__")) return "tests";
+    if (dirName.includes("directive")) return "directives";
+    if (dirName.includes("plugin")) return "plugins";
+    if (dirName.includes("guard")) return "route guards";
 
-    // 根据文件内容判断
     const extensions = files.map((f) => path.extname(f));
     if (extensions.some((ext) => [".css", ".scss", ".less"].includes(ext))) {
-      return "样式";
+      return "styles";
     }
     if (files.some((f) => path.basename(f).includes(".test."))) {
-      return "测试";
+      return "tests";
     }
 
-    return "其他";
+    return "general";
   }
 
   /**

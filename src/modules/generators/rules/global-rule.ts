@@ -18,7 +18,6 @@ import {
   featureExists,
   detectTestFramework,
   hasCustomTools,
-  hasErrorHandling,
   hasStateManagement,
   getPlatformSections,
 } from "./rule-helpers.js";
@@ -30,7 +29,7 @@ export function generateGlobalOverviewRule(
   context: RuleGenerationContext
 ): CursorRule {
     const metadata = buildRuleMetadata(
-      `${getProjectName(context.projectPath)} - 全局规则`,
+      `${getProjectName(context.projectPath)} - Global Rules`,
       "Project-wide conventions, tech stack, and core development principles. Always loaded.",
       100,
       context.techStack.primary,
@@ -75,8 +74,7 @@ ${
 |------|-------|
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
-| @architecture.mdc | Module structure and design patterns |
-${hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${hasErrorHandling(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${hasArchitectureValue(context) ? "| @architecture.mdc | Module structure and design patterns |\n" : ""}${hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${hasErrorHandlingValue(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
 `;
 
     return {
@@ -98,43 +96,68 @@ function generateFrameworkPrinciples(context: RuleGenerationContext): string {
 
     if (frameworks.includes("React")) {
       principles += `- **React**: 
-  - 使用函数组件和 Hooks，避免类组件
-  - 保持组件单一职责原则
-  - 合理使用 \`useMemo\` 和 \`useCallback\` 优化性能
-  - 使用 TypeScript 进行类型检查
+  - Use function components and Hooks; avoid class components
+  - Keep components focused on a single responsibility
+  - Use \`useMemo\` and \`useCallback\` judiciously for performance
+  - Use TypeScript for type checking
 `;
     }
     if (frameworks.includes("Vue")) {
       principles += `- **Vue**: 
-  - 使用 Composition API（Vue 3）
-  - 保持组件模板简洁
-  - 复杂逻辑抽取到 composables
-  - 使用 TypeScript 增强类型安全
+  - Use Composition API (Vue 3)
+  - Keep component templates concise
+  - Extract complex logic into composables
+  - Use TypeScript for stronger type safety
 `;
     }
     if (frameworks.includes("Next.js")) {
       principles += `- **Next.js**: 
-  - 优先使用 App Router（如果项目使用）
-  - Server Components 中进行数据获取
-  - 使用 \`next/image\` 优化图片
-  - 配置适当的元数据以改善 SEO
-  - 最小化 'use client' 使用，优先使用 Server Components
+  - Prefer App Router when the project uses it
+  - Fetch data in Server Components
+  - Use \`next/image\` for image optimization
+  - Configure appropriate metadata for SEO
+  - Minimize \`use client\`; prefer Server Components
 `;
     }
     if (frameworks.includes("Angular")) {
       principles += `- **Angular**: 
-  - 使用组件和模块化架构
-  - 遵循 Angular 风格指南
-  - 使用 TypeScript 和依赖注入
+  - Use components and a modular architecture
+  - Follow the Angular style guide
+  - Use TypeScript and dependency injection
 `;
     }
     if (frameworks.includes("Svelte")) {
       principles += `- **Svelte**: 
-  - 利用 Svelte 的编译时优化
-  - 使用响应式声明和语句
-  - 保持组件简洁和高效
+  - Leverage Svelte's compile-time optimizations
+  - Use reactive declarations and statements
+  - Keep components concise and efficient
 `;
     }
 
-    return principles || "- 遵循框架的官方最佳实践";
+    return principles || "- Follow the framework's official best practices";
+}
+
+/**
+ * architecture.mdc only when there's concrete structural detail
+ * (layer/feature structure, multi-module, platform sections, or substantial practices).
+ */
+function hasArchitectureValue(context: RuleGenerationContext): boolean {
+    const p = context.architecturePattern;
+    return !!(
+      p?.layerStructure ||
+      p?.featureStructure ||
+      context.modules.length > 1
+    );
+}
+
+/**
+ * error-handling.mdc only when the project has distinctive error handling
+ * (custom error types or a dedicated logger library).
+ */
+function hasErrorHandlingValue(context: RuleGenerationContext): boolean {
+    const eh = context.projectPractice?.errorHandling;
+    return (
+      (eh?.customErrorTypes?.length ?? 0) > 0 ||
+      (eh?.loggingMethod === "logger-library" && !!eh?.loggerLibrary)
+    );
 }
