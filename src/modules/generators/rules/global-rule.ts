@@ -143,21 +143,28 @@ function generateFrameworkPrinciples(context: RuleGenerationContext): string {
  */
 function hasArchitectureValue(context: RuleGenerationContext): boolean {
     const p = context.architecturePattern;
+    const meaningfulDirCategories = new Set(
+      (context.deepAnalysis ?? [])
+        .filter((d) => d.category && d.category !== "other")
+        .map((d) => d.category)
+    );
     return !!(
       p?.layerStructure ||
       p?.featureStructure ||
-      context.modules.length > 1
+      context.modules.length > 1 ||
+      meaningfulDirCategories.size >= 3
     );
 }
 
 /**
- * error-handling.mdc only when the project has distinctive error handling
- * (custom error types or a dedicated logger library).
+ * error-handling.mdc when the project has distinctive error handling
+ * (custom error types, a dedicated logger library, or an API client with built-in error handling).
  */
 function hasErrorHandlingValue(context: RuleGenerationContext): boolean {
     const eh = context.projectPractice?.errorHandling;
     return (
       (eh?.customErrorTypes?.length ?? 0) > 0 ||
-      (eh?.loggingMethod === "logger-library" && !!eh?.loggerLibrary)
+      (eh?.loggingMethod === "logger-library" && !!eh?.loggerLibrary) ||
+      context.customPatterns?.apiClient?.hasErrorHandling === true
     );
 }

@@ -352,7 +352,10 @@ function generateDetailedStructureContent(
     if (hasDeepAnalysis) {
       content += `## 📋 Directory Purpose Reference\n\n`;
       content += `Detailed purpose for important directories, including file types and naming conventions:\n\n`;
-      content += generateDirectoryPurposes(deepAnalysis);
+      const relativeFiles = (context.files ?? []).map(
+        (f) => path.relative(context.projectPath, f)
+      );
+      content += generateDirectoryPurposes(deepAnalysis, relativeFiles);
       content += `\n`;
     } else {
       // 如果没有深度分析，跳过职能说明章节
@@ -733,7 +736,7 @@ function isBusinessFolder(dir: DeepDirectoryAnalysis, deepAnalysis: DeepDirector
 /**
  * 生成目录职能说明（精简版，只显示职能文件夹层，不显示详细的业务类页面和组件）
  */
-function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): string {
+function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[], projectFiles: string[]): string {
     if (deepAnalysis.length === 0) {
       return "Analyzing directory purposes...\n\n";
     }
@@ -800,7 +803,22 @@ function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[]): strin
     for (const dir of keyDirectories) {
       content += `### \`${dir.path}/\`\n\n`;
       content += `**Purpose**: ${dir.purpose || 'Unidentified'}\n\n`;
-      
+
+      // Sample files: pick up to 3 direct children (excluding index/dotfiles) to add
+      // concrete context beyond the directory name
+      const dirPrefix = dir.path.endsWith("/") ? dir.path : dir.path + "/";
+      const sampleFiles = projectFiles
+        .filter((f) => {
+          if (!f.startsWith(dirPrefix)) return false;
+          const rest = f.slice(dirPrefix.length);
+          return !rest.includes("/") && !rest.startsWith(".") && !rest.startsWith("index.");
+        })
+        .map((f) => path.basename(f))
+        .slice(0, 3);
+      if (sampleFiles.length > 0) {
+        content += `- Sample files: ${sampleFiles.map((f) => `\`${f}\``).join(", ")}\n`;
+      }
+
       // 只保留真正有价值的信息
       
       // 1. 使用 index 文件（影响文件组织方式）

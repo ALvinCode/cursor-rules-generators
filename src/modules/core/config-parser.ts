@@ -131,6 +131,18 @@ export class ConfigParser {
     commands.lintFix = this.findCommand(pkg.scripts, ["lint:fix", "eslint:fix", "fix"], runPrefix);
     commands.typeCheck = this.findCommand(pkg.scripts, ["type-check", "typecheck", "tsc"], runPrefix);
 
+    // Fallback: if no standalone typeCheck script was found, extract `tsc --noEmit`
+    // from composite commands (e.g. "tsc --noEmit && vite") as a direct invocation
+    if (!commands.typeCheck) {
+      for (const value of Object.values(pkg.scripts)) {
+        const match = (value as string).match(/\b((?:vue-)?tsc\s+--noEmit)\b/);
+        if (match) {
+          commands.typeCheck = match[1];
+          break;
+        }
+      }
+    }
+
     return commands;
   }
 
@@ -333,10 +345,11 @@ export class ConfigParser {
     if (await FileUtils.fileExists(tsconfigPath)) {
       const content = await FileUtils.readFile(tsconfigPath);
       try {
-        // 移除注释（简单处理）
+        // tsconfig.json is JSONC: strip comments and trailing commas
         const cleanContent = content
           .replace(/\/\/.*$/gm, "")
-          .replace(/\/\*[\s\S]*?\*\//g, "");
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/,\s*([\]}])/g, "$1");
         return JSON.parse(cleanContent);
       } catch (error) {
         logger.debug("解析 tsconfig.json 失败", error);

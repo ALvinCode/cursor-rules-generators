@@ -91,14 +91,10 @@ function generateCustomToolsRules(context: RuleGenerationContext): string {
       rules += `### Custom Hooks\n\n`;
       rules += `The project defines the following custom hooks — **always prefer them when generating code**:\n\n`;
 
-      const allActiveHooks = context.customPatterns.customHooks
-        .filter((h) => h.frequency > 0);
-      // 高频（>10 使用）全部展示，中频（4-10）最多展示 10 个
-      const highFreq = allActiveHooks.filter((h) => h.frequency > 10);
-      const midFreq = allActiveHooks
-        .filter((h) => h.frequency >= 4 && h.frequency <= 10)
-        .slice(0, Math.max(0, 10 - highFreq.length));
-      const activeHooks = [...highFreq, ...midFreq];
+      const activeHooks = context.customPatterns.customHooks
+        .filter((h) => h.frequency > 0)
+        .sort((a, b) => b.frequency - a.frequency)
+        .slice(0, 15);
 
       if (activeHooks.length === 0) {
         rules += `> No usage of custom hooks detected yet. See @project-structure.mdc to confirm the hooks directory location.\n\n`;

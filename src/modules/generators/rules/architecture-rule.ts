@@ -45,11 +45,18 @@ export function generateArchitectureRule(
     // architectural detail beyond what global-rules & project-structure cover.
     const pattern = context.architecturePattern;
     const hasConcreteStructure = !!(pattern?.layerStructure || pattern?.featureStructure);
+    const meaningfulDirCategories = new Set(
+      (context.deepAnalysis ?? [])
+        .filter((d) => d.category && d.category !== "other")
+        .map((d) => d.category)
+    );
+    const hasRichDirectoryStructure = meaningfulDirCategories.size >= 3;
     const hasSubstantialContent =
       hasConcreteStructure ||
       !!additionalPractices ||
       !!platformArch ||
-      (context.modules.length > 1);
+      (context.modules.length > 1) ||
+      hasRichDirectoryStructure;
 
     if (!hasSubstantialContent) {
       return {

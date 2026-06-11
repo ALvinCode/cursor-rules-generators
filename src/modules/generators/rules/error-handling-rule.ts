@@ -121,10 +121,10 @@ export function generateErrorHandlingRule(
 
   const hasCustomErrorTypes = (eh?.customErrorTypes?.length ?? 0) > 0;
   const hasLoggerLibrary = eh?.loggingMethod === "logger-library" && !!eh?.loggerLibrary;
-  // A single generic best-practice (e.g. "Use exceptions") is not enough to justify a standalone file
   const hasSubstantialPractices = errorHandlingPractices.length >= 2;
+  const hasApiClientErrorHandling = context.customPatterns?.apiClient?.hasErrorHandling === true;
 
-  if (!hasCustomErrorTypes && !hasLoggerLibrary && !hasSubstantialPractices) {
+  if (!hasCustomErrorTypes && !hasLoggerLibrary && !hasSubstantialPractices && !hasApiClientErrorHandling) {
     return {
       scope: "specialized",
       modulePath: context.projectPath,

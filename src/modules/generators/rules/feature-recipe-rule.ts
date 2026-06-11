@@ -14,16 +14,6 @@ import { detectMobXPattern } from "./state-management-rule.js";
  * 回答"我要新增一个完整功能需要创建哪些文件、遵循什么步骤"这个核心问题
  */
 export async function generateFeatureRecipeRule(context: RuleGenerationContext): Promise<CursorRule> {
-    const metadata = buildRuleMetadata(
-      "End-to-End Feature Creation Guide",
-      "Step-by-step recipe for adding a complete feature: types → API → store → component → route",
-      88,
-      context.techStack.primary,
-      ["feature", "workflow", "recipe"],
-      "guideline",
-      ["global-rules", "project-structure", "architecture"]
-    );
-
     const isTS = context.techStack.languages.includes("TypeScript");
     const ext = isTS ? "ts" : "js";
     const extx = isTS ? "tsx" : "jsx";
@@ -33,6 +23,19 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
       ["redux", "mobx", "zustand", "pinia", "vuex"].some((lib) =>
         d.name.toLowerCase().includes(lib)
       )
+    );
+
+    const descSteps = stateLib
+      ? "types → API → store → component → route"
+      : "types → API → component → route";
+    const metadata = buildRuleMetadata(
+      "End-to-End Feature Creation Guide",
+      `Step-by-step recipe for adding a complete feature: ${descSteps}`,
+      88,
+      context.techStack.primary,
+      ["feature", "workflow", "recipe"],
+      "guideline",
+      ["global-rules", "project-structure", "architecture"]
     );
     const hasMobX = stateLib?.name?.toLowerCase().includes("mobx");
     const hasRedux = stateLib?.name?.toLowerCase().includes("redux");
