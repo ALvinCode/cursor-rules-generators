@@ -514,12 +514,14 @@ export class RulesGenerator {
       }
     }
 
-    // 11. 测试规则：仅在有测试框架或显式测试需求时生成（无框架 = 跳过，不生成空文件）
+    // 11. 测试规则：有测试框架时生成完整规则；无框架但有 lint/typeCheck 命令时生成验证命令表
     const needsTesting = requirements.some((r) => r.ruleType === "testing");
     const hasTestingFeature = featureExists(context, "testing");
     const hasTestFramework = detectTestFramework(context) !== null;
     const isFrontend = isFrontendProject(context);
-    if (needsTesting || hasTestingFeature || hasTestFramework) {
+    const cmds = context.projectConfig?.commands;
+    const hasVerificationCommands = !!(cmds?.lint || cmds?.typeCheck || cmds?.test || cmds?.format);
+    if (needsTesting || hasTestingFeature || hasTestFramework || hasVerificationCommands) {
       const testingRule = generateTestingRule(context);
       rules.push(testingRule);
     }
@@ -528,7 +530,7 @@ export class RulesGenerator {
     const hasApiClient = context.customPatterns?.apiClient?.exists;
     const hasAxiosDep = context.techStack.dependencies.some((d) => d.name === "axios");
     if (isFrontend && (hasApiClient || hasAxiosDep)) {
-      const apiPatternsRule = generateApiPatternsRule(context);
+      const apiPatternsRule = await generateApiPatternsRule(context);
       rules.push(apiPatternsRule);
     }
 

@@ -57,6 +57,7 @@ export interface ProjectConfig {
     lintFix?: string;
     typeCheck?: string;
   };
+  commitConvention?: string;
 }
 
 export class ConfigParser {
@@ -90,6 +91,9 @@ export class ConfigParser {
 
     // v1.3.4: 检测格式化命令
     config.commands = await this.detectFormattingCommands(projectPath);
+
+    // Detect commit convention (commitlint)
+    config.commitConvention = await this.detectCommitConvention(projectPath);
 
     return config;
   }
@@ -318,6 +322,18 @@ export class ConfigParser {
       }
     }
 
+    // 尝试读取 .eslintrc.cjs / .eslintrc.js（CommonJS/ESM — regex 提取 rules 子集）
+    for (const ext of [".cjs", ".js"]) {
+      const eslintJsPath = path.join(projectPath, `.eslintrc${ext}`);
+      if (await FileUtils.fileExists(eslintJsPath)) {
+        const content = await FileUtils.readFile(eslintJsPath);
+        const rules = this.extractRulesFromJsConfig(content);
+        if (rules && Object.keys(rules).length > 0) {
+          return { rules };
+        }
+      }
+    }
+
     // 尝试从 package.json 读取
     const packageJsonPath = path.join(projectPath, "package.json");
     if (await FileUtils.fileExists(packageJsonPath)) {
@@ -336,6 +352,22 @@ export class ConfigParser {
   }
 
   /**
+   * Best-effort rule extraction from .eslintrc.cjs/.js via regex.
+   * Only captures simple `"rule-name": "off"` / `"rule-name": 0` patterns.
+   */
+  private extractRulesFromJsConfig(content: string): Record<string, unknown> | null {
+    // Scan the entire file for simple rule entries (handles nested braces in rules block)
+    const rules: Record<string, unknown> = {};
+    const rulePattern = /["'](@?[\w/-]+)["']\s*:\s*["']?(off|warn|error|\d)["']?/g;
+    let m: RegExpExecArray | null;
+    while ((m = rulePattern.exec(content)) !== null) {
+      const value = m[2];
+      rules[m[1]] = value === "0" ? 0 : value === "1" ? 1 : value === "2" ? 2 : value;
+    }
+    return Object.keys(rules).length > 0 ? rules : null;
+  }
+
+  /**
    * 解析 TypeScript 配置
    */
   private async parseTSConfig(
@@ -345,14 +377,26 @@ export class ConfigParser {
     if (await FileUtils.fileExists(tsconfigPath)) {
       const content = await FileUtils.readFile(tsconfigPath);
       try {
-        // tsconfig.json is JSONC: strip comments and trailing commas
-        const cleanContent = content
-          .replace(/\/\/.*$/gm, "")
-          .replace(/\/\*[\s\S]*?\*\//g, "")
-          .replace(/,\s*([\]}])/g, "$1");
-        return JSON.parse(cleanContent);
-      } catch (error) {
-        logger.debug("解析 tsconfig.json 失败", error);
+        return JSON.parse(content);
+      } catch {
+        // Fallback: tsconfig.json may be JSONC (comments, trailing commas).
+        // Protect string literals from the block-comment regex (`/*` in paths
+        // like `"@/*"` would otherwise be treated as a comment start).
+        try {
+          const placeholders: string[] = [];
+          let processed = content.replace(/"(?:[^"\\]|\\.)*"/g, (m) => {
+            placeholders.push(m);
+            return `"__S${placeholders.length - 1}__"`;
+          });
+          processed = processed
+            .replace(/\/\/.*$/gm, "")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+          processed = processed.replace(/"__S(\d+)__"/g, (_, i) => placeholders[Number(i)]);
+          processed = processed.replace(/,\s*([\]}])/g, "$1");
+          return JSON.parse(processed);
+        } catch (error) {
+          logger.debug("解析 tsconfig.json 失败", error);
+        }
       }
     }
     return undefined;
@@ -396,6 +440,25 @@ export class ConfigParser {
     // 从 next.config 提取（暂时跳过，较复杂）
 
     return aliases;
+  }
+
+  private async detectCommitConvention(projectPath: string): Promise<string | undefined> {
+    const pkgPath = path.join(projectPath, "package.json");
+    if (!(await FileUtils.fileExists(pkgPath))) return undefined;
+    const content = await FileUtils.readFile(pkgPath);
+    try {
+      const pkg = JSON.parse(content);
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      if (deps["@commitlint/cli"] || deps["commitlint"]) {
+        const configPkg = Object.keys(deps).find(
+          (d) => d.includes("commitlint-config") || d === "@commitlint/config-conventional"
+        );
+        return configPkg ? "conventional-commits" : "commitlint";
+      }
+    } catch {
+      // ignore
+    }
+    return undefined;
   }
 
 }

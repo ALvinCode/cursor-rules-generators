@@ -44,6 +44,20 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
     // 基于版本 + 实际代码检测 MobX 模式，与 state-management.mdc 保持一致
     const mobxPattern = hasMobX ? await detectMobXPattern(context) : 'makeAutoObservable';
 
+    // Sample a real business name from pages/views for example naming
+    const PAGE_DIR_KW = new Set(['views', 'pages', 'screens']);
+    const pageDirs = (context.deepAnalysis ?? []).filter((d) => {
+      if (d.depth < 2) return false;
+      const parentName = d.path.split('/').slice(-2, -1)[0]?.toLowerCase() ?? '';
+      if (!PAGE_DIR_KW.has(parentName)) return false;
+      const dirName = d.path.split('/').pop() ?? '';
+      return /^[a-zA-Z]/.test(dirName);
+    });
+    const sampleBizName = pageDirs.length > 0
+      ? pageDirs[0].path.split('/').pop()!.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s/g, '')
+      : 'Feature';
+    const sampleBizLower = sampleBizName.charAt(0).toLowerCase() + sampleBizName.slice(1);
+
     const typeDir = org?.typesLocation?.[0] || `src/types`;
     const apiDir = org?.apiLocation?.[0] || `src/api`;
     const storeDir = `src/store`;
@@ -76,10 +90,10 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
       // 根据检测到的实际 MobX 模式选择模板
       const mobxStoreBody = mobxPattern === 'makeAutoObservable'
         ? `import { makeAutoObservable } from "mobx";
-import type { FeatureItem } from "${typeAlias}/feature";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
 
-class FeatureStore {
-  items: FeatureItem[] = [];
+class ${sampleBizName}Store {
+  items: ${sampleBizName}Item[] = [];
   loading = false;
   error: string | null = null;
 
@@ -88,7 +102,7 @@ class FeatureStore {
   async fetchItems() {
     this.loading = true;
     try {
-      this.items = await fetchFeatureList();
+      this.items = await fetch${sampleBizName}List();
     } catch (err) {
       this.error = String(err);
     } finally {
@@ -97,9 +111,9 @@ class FeatureStore {
   }
 }`
         : `import { makeObservable, observable, action } from "mobx";
-import type { FeatureItem } from "${typeAlias}/feature";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
 
-class FeatureStore {
+class ${sampleBizName}Store {
   @observable items: FeatureItem[] = [];
   @observable loading = false;
   @observable error: string | null = null;
@@ -110,7 +124,7 @@ class FeatureStore {
   async fetchItems() {
     this.loading = true;
     try {
-      this.items = await fetchFeatureList();
+      this.items = await fetch${sampleBizName}List();
     } catch (err) {
       this.error = String(err);
     } finally {
@@ -123,9 +137,9 @@ class FeatureStore {
 ### 3. Store（MobX）
 
 \`\`\`${ext}
-// ${storeDir}/featureStore.${ext}
+// ${storeDir}/${sampleBizLower}Store.${ext}
 ${mobxStoreBody}
-export const featureStore = new FeatureStore();
+export const ${sampleBizLower}Store = new ${sampleBizName}Store();
 \`\`\`
 `;
     } else if (hasRedux) {
@@ -135,21 +149,21 @@ export const featureStore = new FeatureStore();
 \`\`\`${ext}
 // ${storeDir}/featureSlice.${ext}
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { FeatureItem } from "${typeAlias}/feature";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
 
-export const loadFeatures = createAsyncThunk("feature/load", fetchFeatureList);
+export const load${sampleBizName}s = createAsyncThunk("${sampleBizLower}/load", fetch${sampleBizName}List);
 
-const featureSlice = createSlice({
-  name: "feature",
-  initialState: { items: [] as FeatureItem[], loading: false, error: null as string | null },
+const ${sampleBizLower}Slice = createSlice({
+  name: "${sampleBizLower}",
+  initialState: { items: [] as ${sampleBizName}Item[], loading: false, error: null as string | null },
   reducers: {},
   extraReducers: (b) => {
-    b.addCase(loadFeatures.pending, (s) => { s.loading = true; });
-    b.addCase(loadFeatures.fulfilled, (s, a) => { s.loading = false; s.items = a.payload; });
-    b.addCase(loadFeatures.rejected, (s, a) => { s.loading = false; s.error = a.error.message ?? null; });
+    b.addCase(load${sampleBizName}s.pending, (s) => { s.loading = true; });
+    b.addCase(load${sampleBizName}s.fulfilled, (s, a) => { s.loading = false; s.items = a.payload; });
+    b.addCase(load${sampleBizName}s.rejected, (s, a) => { s.loading = false; s.error = a.error.message ?? null; });
   },
 });
-export default featureSlice.reducer;
+export default ${sampleBizLower}Slice.reducer;
 \`\`\`
 `;
     } else if (hasZustand) {
@@ -157,22 +171,22 @@ export default featureSlice.reducer;
 ### 3. Store（Zustand）
 
 \`\`\`${ext}
-// ${storeDir}/featureStore.${ext}
+// ${storeDir}/${sampleBizLower}Store.${ext}
 import { create } from "zustand";
-import type { FeatureItem } from "${typeAlias}/feature";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
 
-interface FeatureStore {
-  items: FeatureItem[];
+interface ${sampleBizName}Store {
+  items: ${sampleBizName}Item[];
   loading: boolean;
   fetchItems: () => Promise<void>;
 }
 
-export const useFeatureStore = create<FeatureStore>((set) => ({
+export const use${sampleBizName}Store = create<${sampleBizName}Store>((set) => ({
   items: [],
   loading: false,
   fetchItems: async () => {
     set({ loading: true });
-    const items = await fetchFeatureList();
+    const items = await fetch${sampleBizName}List();
     set({ items, loading: false });
   },
 }));
@@ -190,14 +204,14 @@ export const useFeatureStore = create<FeatureStore>((set) => ({
 ### 1. Type Definitions
 
 \`\`\`${ext}
-// ${typeDir}/feature.${ext}
-export interface FeatureItem {
+// ${typeDir}/${sampleBizLower}.${ext}
+export interface ${sampleBizName}Item {
   id: string;
   name: string;
   // ...actual project fields
 }
 
-export interface FeatureListParams {
+export interface ${sampleBizName}ListParams {
   page: number;
   pageSize: number;
 }
@@ -206,20 +220,20 @@ export interface FeatureListParams {
 ### 2. API Functions
 
 \`\`\`${ext}
-// ${apiDir}/feature.${ext}
-import type { FeatureItem, FeatureListParams } from "${typeAlias}/feature";
+// ${apiDir}/${sampleBizLower}.${ext}
+import type { ${sampleBizName}Item, ${sampleBizName}ListParams } from "${typeAlias}/${sampleBizLower}";
 ${clientImportStmt}
 
-export ${isTS ? "const" : "async function"} fetchFeatureList${isTS ? " = " : ""}(params${isTS ? ": FeatureListParams" : ""})${isTS ? " =>" : ""} {
-  return ${hasHttpClient ? `${apiClientName}.get${isTS ? "<FeatureItem[]>" : ""}("/features", { params })` : 'fetch(`/api/features?page=${params.page}`)'};
+export ${isTS ? "const" : "async function"} fetch${sampleBizName}List${isTS ? " = " : ""}(params${isTS ? `: ${sampleBizName}ListParams` : ""})${isTS ? " =>" : ""} {
+  return ${hasHttpClient ? `${apiClientName}.get${isTS ? `<${sampleBizName}Item[]>` : ""}("/${sampleBizLower}s", { params })` : `fetch(\`/api/${sampleBizLower}s?page=\${params.page}\`)`};
 }${isTS ? ";" : ""}
 \`\`\`
 ${storeStep}
 ### ${stateLib ? "4" : "3"}. Reusable Hook (Optional)
 
 \`\`\`${ext}
-// ${hookDir}/useFeature.${ext}
-export function useFeature(id: string) {
+// ${hookDir}/use${sampleBizName}.${ext}
+export function use${sampleBizName}(id: string) {
   // Encapsulate data fetching, loading state, and error handling
   // Components call this directly; don't duplicate fetch logic
 }
@@ -228,9 +242,9 @@ export function useFeature(id: string) {
 ### ${stateLib ? "5" : "4"}. Page Component
 
 \`\`\`${extx}
-// ${pageDir}/FeatureList/FeatureList.${extx}
+// ${pageDir}/${sampleBizName}List/${sampleBizName}List.${extx}
 // Rendering only; business logic lives in Hook / Store
-export function FeatureList() {
+export function ${sampleBizName}List() {
   // 1. Get data from store/hook
   // 2. Handle loading / error states
   // 3. Render the list
@@ -241,18 +255,18 @@ export function FeatureList() {
 
 \`\`\`${extx}
 // ${routeDir}/index.${extx} or route config file
-{ path: "/features", element: <FeatureList /> }
-{ path: "/features/:id", element: <FeatureDetail /> }
+{ path: "/${sampleBizLower}s", element: <${sampleBizName}List /> }
+{ path: "/${sampleBizLower}s/:id", element: <${sampleBizName}Detail /> }
 \`\`\`
 
 ## File Checklist
 
 After adding a feature, confirm the following files were created/updated:
 
-- [ ] \`${typeDir}/feature.${ext}\` — Type definitions
-- [ ] \`${apiDir}/feature.${ext}\` — API functions
-${stateLib ? `- [ ] \`${storeDir}/featureStore.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/useFeature.${ext}\` — Data hook (optional)
-- [ ] \`${pageDir}/FeatureList/\` — Page component
+- [ ] \`${typeDir}/${sampleBizLower}.${ext}\` — Type definitions
+- [ ] \`${apiDir}/${sampleBizLower}.${ext}\` — API functions
+${stateLib ? `- [ ] \`${storeDir}/${sampleBizLower}Store.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/use${sampleBizName}.${ext}\` — Data hook (optional)
+- [ ] \`${pageDir}/${sampleBizName}List/\` — Page component
 - [ ] Route config updated
 
 ---

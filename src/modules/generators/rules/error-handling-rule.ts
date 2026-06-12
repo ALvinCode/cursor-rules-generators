@@ -100,6 +100,15 @@ export function generatePracticeBasedErrorHandling(
   rules += `- **Distinguish error types**: Business errors (recoverable) vs system errors (unrecoverable); throw system errors directly.\n`;
   rules += `- **User-friendly messages**: Messages shown to users must not contain technical details; log the original error.\n`;
 
+  // API client interceptor description
+  const api = context.customPatterns?.apiClient;
+  if (api?.hasErrorHandling && api.filePath) {
+    rules += `\n### API Error Interceptor\n\n`;
+    rules += `The project has a centralized error interceptor in \`${api.filePath}\`.\n`;
+    rules += `- All API errors are handled by the interceptor — do NOT add redundant try-catch around API calls unless you need to handle specific business errors\n`;
+    rules += `- Use the project's \`${api.exportName || api.name || "apiClient"}\` for all HTTP requests (see @custom-tools.mdc)\n`;
+  }
+
   return rules;
 }
 

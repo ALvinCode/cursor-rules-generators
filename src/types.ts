@@ -152,6 +152,7 @@ export interface ProjectConfiguration {
     lintFix?: string;
     typeCheck?: string;
   };
+  commitConvention?: string;
 }
 
 export interface CustomPatterns {

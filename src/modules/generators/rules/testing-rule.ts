@@ -81,8 +81,21 @@ export function generateConditionalTestingRules(
   const hasTests = featureExists(context, "testing");
 
   if (!hasTests) {
-    // 项目没有测试 - 简短提示
-    return `## Testing\n\n### Current Status\n⚠️ The project has no test framework configured\n\nTo add tests, see testing best practices for your stack.\n\n`;
+    let section = `## Verification\n\n`;
+    const cmds = context.projectConfig?.commands;
+    const cmdLines: string[] = [];
+    if (cmds?.lint) cmdLines.push(`| Lint | \`${cmds.lint}\` |`);
+    if (cmds?.lintFix) cmdLines.push(`| Lint Fix | \`${cmds.lintFix}\` |`);
+    if (cmds?.format) cmdLines.push(`| Format | \`${cmds.format}\` |`);
+    if (cmds?.typeCheck) cmdLines.push(`| Type Check | \`${cmds.typeCheck}\` |`);
+    if (cmds?.test) cmdLines.push(`| Test | \`${cmds.test}\` |`);
+    if (cmdLines.length > 0) {
+      section += `| Task | Command |\n|------|---------|
+${cmdLines.join("\n")}\n\n`;
+      section += `Run these commands after code changes to verify correctness.\n\n`;
+    }
+    section += `> ⚠️ No test framework configured. When adding tests, follow the project's tech stack conventions.\n\n`;
+    return section;
   }
 
   // v1.9: 添加引用说明，避免重复基础规范

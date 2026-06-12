@@ -84,7 +84,7 @@ ${generateArchitecturePatternSection(pattern)}
 ## Module Structure
 
 ${generateModuleStructureSection(context)}
-${codeFeaturesSection}${principles ? `## Design Principles\n\n${principles}` : ""}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
+${codeFeaturesSection}${generateContextSection(context)}${principles ? `## Design Principles\n\n${principles}` : ""}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
 `;
 
     return {
@@ -272,4 +272,21 @@ function generateArchitecturePrinciples(context: RuleGenerationContext): string 
     }
 
     return "";
+}
+
+/**
+ * Detect React Context directories and output a state management note.
+ * This covers projects that use Context + useContext instead of redux/mobx/zustand.
+ */
+function generateContextSection(context: RuleGenerationContext): string {
+    const contextDirs = (context.deepAnalysis ?? []).filter(
+      (d) => path.basename(d.path).toLowerCase() === "context"
+    );
+    if (contextDirs.length === 0) return "";
+
+    const dirPaths = contextDirs.map((d) => `\`${d.path}/\``).join(", ");
+    return `\n## State Management (React Context)\n\n` +
+      `This project uses **React Context** for state management (${dirPaths}).\n` +
+      `- Use existing Context providers — do not introduce external state management libraries without discussion\n` +
+      `- Keep Context values focused; split into multiple Contexts if unrelated concerns are grouped\n\n`;
 }

@@ -159,15 +159,26 @@ export class TechStackDetector {
       });
     }
 
-    // 检测包管理器
-    const packageManagers: string[] = ["npm"]; // 默认有 npm
+    // 检测包管理器：优先使用 packageManager 字段，否则根据 lockfile 推断
+    const packageManagers: string[] = [];
     const projectDir = path.dirname(filePath);
 
-    if (await FileUtils.fileExists(path.join(projectDir, "yarn.lock"))) {
-      packageManagers.push("yarn");
+    const pkgManagerField = (data as Record<string, unknown>).packageManager;
+    if (typeof pkgManagerField === "string") {
+      const pmName = pkgManagerField.split("@")[0].toLowerCase();
+      if (pmName === "pnpm") packageManagers.push("pnpm");
+      else if (pmName === "yarn") packageManagers.push("yarn");
+      else if (pmName === "npm") packageManagers.push("npm");
     }
-    if (await FileUtils.fileExists(path.join(projectDir, "pnpm-lock.yaml"))) {
-      packageManagers.push("pnpm");
+
+    if (packageManagers.length === 0) {
+      if (await FileUtils.fileExists(path.join(projectDir, "pnpm-lock.yaml"))) {
+        packageManagers.push("pnpm");
+      } else if (await FileUtils.fileExists(path.join(projectDir, "yarn.lock"))) {
+        packageManagers.push("yarn");
+      } else {
+        packageManagers.push("npm");
+      }
     }
 
     return { dependencies, packageManagers, frameworks };

@@ -7,10 +7,12 @@
 
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
+import { FileUtils } from "../../../utils/file-utils.js";
+import * as path from "path";
 
-export function generateApiPatternsRule(
+export async function generateApiPatternsRule(
   context: RuleGenerationContext
-): CursorRule {
+): Promise<CursorRule> {
   const org = context.fileOrganization;
   const apiClient = context.customPatterns?.apiClient;
   const apiDir = org?.apiLocation?.[0] || 'src/api';
@@ -94,6 +96,7 @@ useEffect(() => {
 ${!hasErrorHandling ? `## Error Handling
 
 Each API function must handle exceptions, or the caller must try-catch. See also: @error-handling.mdc` : ""}
+${generateResponseTypeHint(context)}
 `;
 
   return {
@@ -105,4 +108,28 @@ Each API function must handle exceptions, or the caller must try-catch. See also
     type: "practice",
     depends: ["global-rules"],
   };
+}
+
+async function generateResponseTypeHint(context: RuleGenerationContext): Promise<string> {
+  const typeDirs = context.fileOrganization?.typesLocation ?? [];
+  const typeFiles = (context.files ?? []).filter((f) => {
+    const rel = path.relative(context.projectPath, f);
+    return typeDirs.some((d) => rel.startsWith(d)) &&
+      (rel.endsWith("base.ts") || rel.endsWith("common.ts") || rel.endsWith("response.ts"));
+  });
+
+  for (const file of typeFiles.slice(0, 3)) {
+    try {
+      const content = await FileUtils.readFile(file);
+      const match = content.match(/export\s+(?:interface|type)\s+(I?(?:Response|ApiResponse|BaseResponse)\b[^{]*)/);
+      if (match) {
+        const typeName = match[1].trim().split(/\s/)[0];
+        const relPath = path.relative(context.projectPath, file);
+        return `\n## Response Type Convention\n\nThe project defines a unified response type \`${typeName}\` in \`${relPath}\`. All API functions should use this type for type-safe responses.\n`;
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return "";
 }

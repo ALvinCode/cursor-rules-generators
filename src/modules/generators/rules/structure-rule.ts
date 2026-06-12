@@ -802,7 +802,7 @@ function generateDirectoryPurposes(deepAnalysis: DeepDirectoryAnalysis[], projec
 
     for (const dir of keyDirectories) {
       content += `### \`${dir.path}/\`\n\n`;
-      content += `**Purpose**: ${dir.purpose || 'Unidentified'}\n\n`;
+      content += `**Purpose**: ${enrichPurpose(dir)}\n\n`;
 
       // Sample files: pick up to 3 direct children (excluding index/dotfiles) to add
       // concrete context beyond the directory name
@@ -1075,4 +1075,25 @@ function assessDeepAnalysisQuality(
       reason: "",
       quality: "good",
     };
+}
+
+/**
+ * When the purpose just echoes the directory basename, enrich it with
+ * file type and count information to provide actual value.
+ */
+function enrichPurpose(dir: DeepDirectoryAnalysis): string {
+    const raw = dir.purpose || "Unidentified";
+    const basename = path.basename(dir.path).toLowerCase();
+    const purposeLower = raw.toLowerCase().replace(/\s+/g, "");
+
+    if (purposeLower !== basename && purposeLower !== `${basename}s` && purposeLower !== basename.replace(/s$/, "")) {
+      return raw;
+    }
+
+    const types = dir.primaryFileTypes;
+    const count = dir.fileCount;
+    const parts: string[] = [raw];
+    if (count > 0) parts.push(`${count} files`);
+    if (types.length > 0) parts.push(types.slice(0, 2).join(", "));
+    return parts.join(" — ");
 }

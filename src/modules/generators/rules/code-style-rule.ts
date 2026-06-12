@@ -69,7 +69,7 @@ const count: number = 0;
 
 ` : ""}> See **@error-handling.mdc** for error handling conventions
 
-${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
+${generateTechSpecificConventions(context)}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
 `;
 
     return {
@@ -431,4 +431,38 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
     }
 
     return rules;
+}
+
+function generateTechSpecificConventions(context: RuleGenerationContext): string {
+    const deps = context.techStack.dependencies;
+    const sections: string[] = [];
+
+    const i18nLibs = [
+      { pkg: "react-intl", label: "react-intl (FormatMessage)" },
+      { pkg: "i18next", label: "i18next" },
+      { pkg: "react-i18next", label: "react-i18next (useTranslation)" },
+      { pkg: "vue-i18n", label: "vue-i18n" },
+    ];
+    const foundI18n = i18nLibs.find((lib) => deps.some((d) => d.name === lib.pkg));
+    if (foundI18n) {
+      sections.push(`## Internationalization (i18n)\n\n` +
+        `This project uses **${foundI18n.label}** for internationalization.\n` +
+        `- All user-facing strings must use the i18n system — do not hardcode display text\n` +
+        `- Add new translation keys to the existing locale files\n`);
+    }
+
+    const cssLibs = [
+      { pkg: "stylus", label: "Stylus", ext: ".styl" },
+      { pkg: "sass", label: "Sass/SCSS", ext: ".scss" },
+      { pkg: "less", label: "Less", ext: ".less" },
+    ];
+    const foundCss = cssLibs.find((lib) => deps.some((d) => d.name === lib.pkg));
+    if (foundCss) {
+      sections.push(`## CSS Preprocessor\n\n` +
+        `This project uses **${foundCss.label}** (\`${foundCss.ext}\` files).\n` +
+        `- Write styles in \`${foundCss.ext}\` files, not plain CSS\n` +
+        `- Follow existing naming conventions for CSS classes\n`);
+    }
+
+    return sections.length > 0 ? sections.join("\n") + "\n" : "";
 }

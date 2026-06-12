@@ -56,13 +56,14 @@ ${techVersions}
 ${commandsSection}
 ## Hard Constraints
 
-${isJsTsProject(context) ? `- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.\n` : ""}- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
+${isJsTsProject(context) && !isAnyAllowed(context) ? `- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.\n` : ""}- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
 - NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
 - NEVER generate markdown documentation files — express intent through code, types, and naming.
 - Before creating files, consult @project-structure.mdc for correct location.
 - Reuse existing project tools — do not re-implement what already exists.
 - Follow the project's established patterns and conventions.
 ${generatePostCodingConstraint(context)}
+${context.projectConfig?.commitConvention ? `- Follow **Conventional Commits** for commit messages (enforced by commitlint + husky).\n` : ""}
 ${
   context.techStack.frameworks.length > 0
     ? `\n${generateFrameworkPrinciples(context)}\n`
@@ -74,7 +75,7 @@ ${
 |------|-------|
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
-${hasArchitectureValue(context) ? "| @architecture.mdc | Module structure and design patterns |\n" : ""}${hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${hasErrorHandlingValue(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null) ? "| @testing.mdc | Testing patterns and organization |\n" : ""}
+${hasArchitectureValue(context) ? "| @architecture.mdc | Module structure and design patterns |\n" : ""}${hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${hasErrorHandlingValue(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null || !!(context.projectConfig?.commands?.lint || context.projectConfig?.commands?.typeCheck)) ? "| @testing.mdc | Testing and verification commands |\n" : ""}
 `;
 
     return {
@@ -135,6 +136,17 @@ function generateFrameworkPrinciples(context: RuleGenerationContext): string {
     }
 
     return principles || "- Follow the framework's official best practices";
+}
+
+/**
+ * Whether the project's ESLint config explicitly allows `any`.
+ * When true, the "NEVER use any" constraint is suppressed.
+ */
+function isAnyAllowed(context: RuleGenerationContext): boolean {
+    const rule = context.projectConfig?.eslint?.rules?.["@typescript-eslint/no-explicit-any"];
+    if (rule === "off" || rule === 0) return true;
+    if (Array.isArray(rule) && (rule[0] === "off" || rule[0] === 0)) return true;
+    return false;
 }
 
 /**
