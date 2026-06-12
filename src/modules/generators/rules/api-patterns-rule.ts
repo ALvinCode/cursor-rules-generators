@@ -96,7 +96,7 @@ useEffect(() => {
 ${!hasErrorHandling ? `## Error Handling
 
 Each API function must handle exceptions, or the caller must try-catch. See also: @error-handling.mdc` : ""}
-${generateResponseTypeHint(context)}
+${await generateResponseTypeHint(context)}
 `;
 
   return {

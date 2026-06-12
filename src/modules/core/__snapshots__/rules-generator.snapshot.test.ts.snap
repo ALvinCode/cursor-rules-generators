@@ -154,6 +154,7 @@ You are an expert in Express, TypeScript with deep knowledge of backend developm
 - Follow the project's established patterns and conventions.
 - After writing code, run \`npm run build\` before considering the task complete.
 
+
 - Follow the framework's official best practices
 
 ## Rule Index
@@ -163,6 +164,7 @@ You are an expert in Express, TypeScript with deep knowledge of backend developm
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @api-routing.mdc | API endpoint conventions |
+| @testing.mdc | Testing and verification commands |
 
 ",
     "fileName": "global-rules.mdc",
@@ -200,11 +202,13 @@ Detailed purpose for important directories, including file types and naming conv
 
 **Purpose**: controller layer
 
+- Sample files: \`userController.ts\`
 
 ### \`src/routes/\`
 
 **Purpose**: route definitions
 
+- Sample files: \`users.ts\`
 
 
 ## 🎯 File Organization (Quick Reference)
@@ -228,6 +232,30 @@ Common file type locations for quick lookup:
 *Before creating new files, see this file for correct directory locations and naming conventions.*
 ",
     "fileName": "project-structure.mdc",
+  },
+  {
+    "content": "---
+description: Testing recommendations for the project
+alwaysApply: false
+globs: **/*.{test,spec}.{ts,tsx,js,jsx}
+---
+
+
+# Testing
+
+## Verification
+
+| Task | Command |
+|------|---------|
+| Type Check | \`npm run build\` |
+
+Run these commands after code changes to verify correctness.
+
+> ⚠️ No test framework configured. When adding tests, follow the project's tech stack conventions.
+
+
+",
+    "fileName": "testing.mdc",
   },
 ]
 `;
@@ -296,7 +324,7 @@ Utilize TypeScript's type system fully: use interfaces, type aliases, and generi
   },
   {
     "content": "---
-description: Step-by-step recipe for adding a complete feature: types → API → store → component → route
+description: Step-by-step recipe for adding a complete feature: types → API → component → route
 alwaysApply: false
 ---
 
@@ -417,6 +445,7 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 - Follow the project's established patterns and conventions.
 - After writing code, run \`npm run build\` before considering the task complete.
 
+
 - **React**: 
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
@@ -432,6 +461,7 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 | @project-structure.mdc | Directory layout and file placement |
 | @ui-ux.mdc | UI component and UX patterns |
 | @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @testing.mdc | Testing and verification commands |
 
 ",
     "fileName": "global-rules.mdc",
@@ -468,6 +498,7 @@ Detailed purpose for important directories, including file types and naming conv
 
 **Purpose**: shared components
 
+- Sample files: \`UserForm.tsx\`, \`UserTable.tsx\`
 
 
 ## 🎯 File Organization (Quick Reference)
@@ -499,6 +530,30 @@ Common file type locations for quick lookup:
 *Before creating new files, see this file for correct directory locations and naming conventions.*
 ",
     "fileName": "project-structure.mdc",
+  },
+  {
+    "content": "---
+description: Testing recommendations for the project
+alwaysApply: false
+globs: **/*.{test,spec}.{ts,tsx,js,jsx}
+---
+
+
+# Testing
+
+## Verification
+
+| Task | Command |
+|------|---------|
+| Type Check | \`npm run build\` |
+
+Run these commands after code changes to verify correctness.
+
+> ⚠️ No test framework configured. When adding tests, follow the project's tech stack conventions.
+
+
+",
+    "fileName": "testing.mdc",
   },
   {
     "content": "---
@@ -635,7 +690,7 @@ Utilize TypeScript's type system fully: use interfaces, type aliases, and generi
   },
   {
     "content": "---
-description: Step-by-step recipe for adding a complete feature: types → API → store → component → route
+description: Step-by-step recipe for adding a complete feature: types → API → component → route
 alwaysApply: false
 ---
 
@@ -755,6 +810,7 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 - Follow the project's established patterns and conventions.
 - After writing code, run \`npm run build\` before considering the task complete.
 
+
 - **React**: 
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
@@ -769,6 +825,7 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @testing.mdc | Testing and verification commands |
 
 ",
     "fileName": "global-rules.mdc",
@@ -832,6 +889,30 @@ src/components/ComponentName/
 ",
     "fileName": "project-structure.mdc",
   },
+  {
+    "content": "---
+description: Testing recommendations for the project
+alwaysApply: false
+globs: **/*.{test,spec}.{ts,tsx,js,jsx}
+---
+
+
+# Testing
+
+## Verification
+
+| Task | Command |
+|------|---------|
+| Type Check | \`npm run build\` |
+
+Run these commands after code changes to verify correctness.
+
+> ⚠️ No test framework configured. When adding tests, follow the project's tech stack conventions.
+
+
+",
+    "fileName": "testing.mdc",
+  },
 ]
 `;
 
@@ -874,8 +955,42 @@ useEffect(() => {
 ## Error Handling
 
 Each API function must handle exceptions, or the caller must try-catch. 
+
 ",
     "fileName": "api-patterns.mdc",
+  },
+  {
+    "content": "---
+description: Consult when designing features, adding modules, or making architectural decisions
+alwaysApply: false
+---
+
+
+# Project Architecture
+
+See also: @global-rules.mdc, @project-structure.mdc
+
+## Architecture Pattern
+
+Project architecture: standard layout (inferred from directory structure)
+
+
+
+## Module Structure
+
+- **\`src/\`** — Component module: source code
+
+> See also @project-structure.mdc for detailed directory layout and responsibilities
+
+
+
+## Core Code Patterns
+
+- Uses custom component structure
+- Uses zustand for state management
+
+",
+    "fileName": "architecture.mdc",
   },
   {
     "content": "---
@@ -957,7 +1072,13 @@ See also: @global-rules.mdc
 
 The project defines the following custom hooks — **always prefer them when generating code**:
 
-> No usage of custom hooks detected yet. See @project-structure.mdc to confirm the hooks directory location.
+**useUserStore** 
+- Location: \`src/store/useUserStore.ts\`
+- Usage frequency: Low ⚠️ Low frequency (only 1 usage(s) — prefer only when the use case clearly matches)
+- Usage:
+  \`\`\`typescript
+  const result = useUserStore()
+  \`\`\`
 
 ### Custom Utility Functions
 
@@ -1105,7 +1226,7 @@ globs: src/**
 
 # Frontend Routing Guidelines
 
-See also: @global-rules.mdc
+See also: @global-rules.mdc, @architecture.mdc
 
 ## Project Stack
 
@@ -1181,6 +1302,7 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 - Follow the project's established patterns and conventions.
 - After writing code, run \`npm run type-check\` before considering the task complete.
 
+
 - **React**: 
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
@@ -1194,12 +1316,13 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 |------|-------|
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
+| @architecture.mdc | Module structure and design patterns |
 | @custom-tools.mdc | Project-specific hooks, utils, API clients |
 | @state-management.mdc | State management conventions |
 | @frontend-routing.mdc | Frontend routing patterns |
 | @api-patterns.mdc | API call conventions and HTTP client usage |
 | @feature-recipe.mdc | End-to-end guide for adding a new feature |
-| @testing.mdc | Testing patterns and organization |
+| @testing.mdc | Testing and verification commands |
 
 ",
     "fileName": "global-rules.mdc",
@@ -1239,21 +1362,25 @@ Detailed purpose for important directories, including file types and naming conv
 
 **Purpose**: API definitions
 
+- Sample files: \`client.ts\`
 
 ### \`src/pages/\`
 
-**Purpose**: pages
+**Purpose**: pages — 1 files — component
 
+- Sample files: \`Home.tsx\`
 
 ### \`src/store/\`
 
 **Purpose**: state management
 
+- Sample files: \`useUserStore.ts\`
 
 ### \`src/utils/\`
 
 **Purpose**: utilities
 
+- Sample files: \`safeFetch.ts\`
 
 
 ## 🎯 File Organization (Quick Reference)
@@ -1392,6 +1519,38 @@ exports[`rules generation snapshots (refactor safety net) > produces stable rule
 [
   {
     "content": "---
+description: Consult when designing features, adding modules, or making architectural decisions
+alwaysApply: false
+---
+
+
+# Project Architecture
+
+See also: @global-rules.mdc, @project-structure.mdc
+
+## Architecture Pattern
+
+Project architecture: standard layout (inferred from directory structure)
+
+
+
+## Module Structure
+
+- **\`src/\`** — Component module: source code
+
+> See also @project-structure.mdc for detailed directory layout and responsibilities
+
+
+
+## Core Code Patterns
+
+- Uses custom component structure
+
+",
+    "fileName": "architecture.mdc",
+  },
+  {
+    "content": "---
 description: Code style, formatting, and naming conventions derived from project config
 alwaysApply: false
 globs: **/*.{ts,tsx,js,jsx}
@@ -1519,7 +1678,7 @@ The project defines the following utility functions — **always prefer them whe
   },
   {
     "content": "---
-description: Step-by-step recipe for adding a complete feature: types → API → store → component → route
+description: Step-by-step recipe for adding a complete feature: types → API → component → route
 alwaysApply: false
 ---
 
@@ -1640,6 +1799,7 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 - Follow the project's established patterns and conventions.
 - After writing code, run \`npm run lint\` and \`npm run type-check\` before considering the task complete.
 
+
 - **React**: 
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
@@ -1653,8 +1813,10 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 |------|-------|
 | @code-style.mdc | Formatting and naming conventions |
 | @project-structure.mdc | Directory layout and file placement |
+| @architecture.mdc | Module structure and design patterns |
 | @custom-tools.mdc | Project-specific hooks, utils, API clients |
 | @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @testing.mdc | Testing and verification commands |
 
 ",
     "fileName": "global-rules.mdc",
@@ -1693,16 +1855,19 @@ Detailed purpose for important directories, including file types and naming conv
 
 **Purpose**: shared components
 
+- Sample files: \`Button.tsx\`
 
 ### \`src/hooks/\`
 
 **Purpose**: logic reuse
 
+- Sample files: \`useCounter.ts\`
 
 ### \`src/utils/\`
 
 **Purpose**: utilities
 
+- Sample files: \`format.ts\`
 
 
 ## 🎯 File Organization (Quick Reference)
@@ -1746,6 +1911,31 @@ Common file type locations for quick lookup:
 *Before creating new files, see this file for correct directory locations and naming conventions.*
 ",
     "fileName": "project-structure.mdc",
+  },
+  {
+    "content": "---
+description: Testing recommendations for the project
+alwaysApply: false
+globs: **/*.{test,spec}.{ts,tsx,js,jsx}
+---
+
+
+# Testing
+
+## Verification
+
+| Task | Command |
+|------|---------|
+| Lint | \`npm run lint\` |
+| Type Check | \`npm run type-check\` |
+
+Run these commands after code changes to verify correctness.
+
+> ⚠️ No test framework configured. When adding tests, follow the project's tech stack conventions.
+
+
+",
+    "fileName": "testing.mdc",
   },
 ]
 `;
