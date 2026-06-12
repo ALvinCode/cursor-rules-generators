@@ -310,9 +310,9 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
         p.useTabs ? "Tab" : `${p.tabWidth || 2} spaces`
       }\n`;
       rules += `- **Quotes**: ${p.singleQuote ? "single quotes" : "double quotes"}\n`;
-      rules += `- **Semicolons**: ${p.semi ? "use semicolons" : "omit semicolons"}\n`;
-      rules += `- **Line length**: ${p.printWidth || 80} characters\n`;
-      rules += `- **Trailing commas**: ${p.trailingComma || "none"}\n\n`;
+      rules += `- **Semicolons**: ${(p.semi ?? true) ? "use semicolons" : "omit semicolons"}\n`;
+      rules += `- **Line length**: ${p.printWidth ?? 80} characters\n`;
+      rules += `- **Trailing commas**: ${p.trailingComma ?? "all"}\n\n`;
       rules += `**Config file**: @.prettierrc\n\n`;
 
       rules += `### Formatting Requirements\n\n`;
@@ -321,7 +321,7 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       rules += `- Indent with ${
         p.useTabs ? "tabs" : `${p.tabWidth || 2} spaces`
       }\n`;
-      rules += `- ${p.semi ? "Include" : "Omit"} semicolons\n\n`;
+      rules += `- ${(p.semi ?? true) ? "Include" : "Omit"} semicolons\n\n`;
     } else if (context.projectPractice?.codeStyle) {
       // 使用分析出的代码风格：仅输出能明确判定的项，"mixed"/不确定的项一律省略，
       // 避免产出对 AI 无指导价值的「混合」占位内容（置信度闸门）

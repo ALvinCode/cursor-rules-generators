@@ -30,6 +30,32 @@ export async function generateApiPatternsRule(
   const hasAuth = apiClient?.hasAuth ?? false;
   const hasErrorHandling = apiClient?.hasErrorHandling ?? false;
 
+  // Sample a real business name from pages/views for example naming
+  const PAGE_KW = new Set(['views', 'pages', 'screens']);
+  const pageDirs = (context.deepAnalysis ?? []).filter((d) => {
+    if (d.depth < 2) return false;
+    const parent = d.path.split('/').slice(-2, -1)[0]?.toLowerCase() ?? '';
+    if (!PAGE_KW.has(parent)) return false;
+    return /^[a-zA-Z]/.test(d.path.split('/').pop() ?? '');
+  });
+  let bizName = 'Feature';
+  if (pageDirs.length > 0) {
+    bizName = pageDirs[0].path.split('/').pop()!.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s/g, '');
+  } else {
+    // Fallback: sample from api or interfaces/types directory files
+    const sampleDirs = [...(context.fileOrganization?.apiLocation ?? []), ...(context.fileOrganization?.typesLocation ?? [])];
+    const sampleFile = (context.files ?? []).find((f) => {
+      const rel = path.relative(context.projectPath, f);
+      return sampleDirs.some((d) => rel.startsWith(d)) && /^[a-zA-Z]/.test(path.basename(f)) && !path.basename(f).startsWith('index') && !path.basename(f).startsWith('base');
+    });
+    if (sampleFile) {
+      bizName = path.basename(sampleFile, path.extname(sampleFile)).replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s/g, '');
+    }
+  }
+  const bizLower = bizName.charAt(0).toLowerCase() + bizName.slice(1);
+  const typeDir = context.fileOrganization?.typesLocation?.[0] || 'src/types';
+  const typeAlias = typeDir.replace(/^src\//, '@/');
+
   const globs = `${apiDir}/**`;
   const metadata = buildRuleMetadata(
     "API Call Guidelines",
@@ -57,11 +83,11 @@ ${hasErrorHandling ? `> ✅ Built-in unified error handling (interceptor handles
 ## Standard Function Structure
 
 \`\`\`${ext}
-// ${apiDir}/feature.${ext}
+// ${apiDir}/${bizLower}.${ext}
 ${importStatement}
-${isTS ? `import type { FeatureItem, FeatureListParams } from "@/interface/feature";\n` : ""}
-export const fetchFeatureList = (${isTS ? "params: FeatureListParams" : "params"}) => {
-  return ${clientName}.get${isTS ? "<FeatureItem[]>" : ""}("/features", { params });
+${isTS ? `import type { ${bizName}Item, ${bizName}ListParams } from "${typeAlias}/${bizLower}";\n` : ""}
+export const fetch${bizName}List = (${isTS ? `params: ${bizName}ListParams` : "params"}) => {
+  return ${clientName}.get${isTS ? `<${bizName}Item[]>` : ""}("/${bizLower}s", { params });
 };
 \`\`\``
     : `## HTTP Client
@@ -89,7 +115,7 @@ useEffect(() => {
 
 // ✅ Call wrapper function
 useEffect(() => {
-  fetchFeatureList({ page: 1, pageSize: 20 }).then(setList);
+  fetch${bizName}List({ page: 1, pageSize: 20 }).then(setList);
 }, []);
 \`\`\`
 

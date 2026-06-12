@@ -948,7 +948,7 @@ useEffect(() => {
 
 // ✅ Call wrapper function
 useEffect(() => {
-  fetchFeatureList({ page: 1, pageSize: 20 }).then(setList);
+  fetchClientList({ page: 1, pageSize: 20 }).then(setList);
 }, []);
 \`\`\`
 
@@ -1120,14 +1120,14 @@ alwaysApply: false
 ### 1. Type Definitions
 
 \`\`\`ts
-// src/types/feature.ts
-export interface FeatureItem {
+// src/types/client.ts
+export interface ClientItem {
   id: string;
   name: string;
   // ...actual project fields
 }
 
-export interface FeatureListParams {
+export interface ClientListParams {
   page: number;
   pageSize: number;
 }
@@ -1136,34 +1136,34 @@ export interface FeatureListParams {
 ### 2. API Functions
 
 \`\`\`ts
-// src/api/feature.ts
-import type { FeatureItem, FeatureListParams } from "@/types/feature";
+// src/api/client.ts
+import type { ClientItem, ClientListParams } from "@/types/client";
 
 
-export const fetchFeatureList = (params: FeatureListParams) => {
-  return apiClient.get<FeatureItem[]>("/features", { params });
+export const fetchClientList = (params: ClientListParams) => {
+  return apiClient.get<ClientItem[]>("/clients", { params });
 };
 \`\`\`
 
 ### 3. Store（Zustand）
 
 \`\`\`ts
-// src/store/featureStore.ts
+// src/store/clientStore.ts
 import { create } from "zustand";
-import type { FeatureItem } from "@/types/feature";
+import type { ClientItem } from "@/types/client";
 
-interface FeatureStore {
-  items: FeatureItem[];
+interface ClientStore {
+  items: ClientItem[];
   loading: boolean;
   fetchItems: () => Promise<void>;
 }
 
-export const useFeatureStore = create<FeatureStore>((set) => ({
+export const useClientStore = create<ClientStore>((set) => ({
   items: [],
   loading: false,
   fetchItems: async () => {
     set({ loading: true });
-    const items = await fetchFeatureList();
+    const items = await fetchClientList();
     set({ items, loading: false });
   },
 }));
@@ -1172,8 +1172,8 @@ export const useFeatureStore = create<FeatureStore>((set) => ({
 ### 4. Reusable Hook (Optional)
 
 \`\`\`ts
-// src/hooks/useFeature.ts
-export function useFeature(id: string) {
+// src/hooks/useClient.ts
+export function useClient(id: string) {
   // Encapsulate data fetching, loading state, and error handling
   // Components call this directly; don't duplicate fetch logic
 }
@@ -1182,9 +1182,9 @@ export function useFeature(id: string) {
 ### 5. Page Component
 
 \`\`\`tsx
-// src/pages/FeatureList/FeatureList.tsx
+// src/pages/ClientList/ClientList.tsx
 // Rendering only; business logic lives in Hook / Store
-export function FeatureList() {
+export function ClientList() {
   // 1. Get data from store/hook
   // 2. Handle loading / error states
   // 3. Render the list
@@ -1195,19 +1195,19 @@ export function FeatureList() {
 
 \`\`\`tsx
 // src/index.tsx or route config file
-{ path: "/features", element: <FeatureList /> }
-{ path: "/features/:id", element: <FeatureDetail /> }
+{ path: "/clients", element: <ClientList /> }
+{ path: "/clients/:id", element: <ClientDetail /> }
 \`\`\`
 
 ## File Checklist
 
 After adding a feature, confirm the following files were created/updated:
 
-- [ ] \`src/types/feature.ts\` — Type definitions
-- [ ] \`src/api/feature.ts\` — API functions
-- [ ] \`src/store/featureStore.ts\` — Store
-- [ ] \`src/hooks/useFeature.ts\` — Data hook (optional)
-- [ ] \`src/pages/FeatureList/\` — Page component
+- [ ] \`src/types/client.ts\` — Type definitions
+- [ ] \`src/api/client.ts\` — API functions
+- [ ] \`src/store/clientStore.ts\` — Store
+- [ ] \`src/hooks/useClient.ts\` — Data hook (optional)
+- [ ] \`src/pages/ClientList/\` — Page component
 - [ ] Route config updated
 
 ---
@@ -1569,7 +1569,7 @@ This project uses Prettier for code formatting with the following settings:
 - **Quotes**: single quotes
 - **Semicolons**: use semicolons
 - **Line length**: 80 characters
-- **Trailing commas**: none
+- **Trailing commas**: all
 
 **Config file**: @.prettierrc
 

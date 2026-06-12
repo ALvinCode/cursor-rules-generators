@@ -1,5 +1,6 @@
 import * as path from "path";
 import { FileUtils } from "../../utils/file-utils.js";
+import { logger } from "../../utils/logger.js";
 
 /**
  * 自定义模式检测器
@@ -213,16 +214,35 @@ export class CustomPatternDetector {
       "request", "api", "axios", "http",
     ];
 
-    // 策略 1：精确文件名匹配
+    // 策略 1：精确文件名匹配 + 广度验证（确保不选中局部模块的文件）
     for (const pattern of namePatterns) {
-      const apiFile = files.find(
+      const matchedFiles = files.filter(
         (f) =>
           path.basename(f, path.extname(f)) === pattern &&
           /\.(ts|tsx|js|jsx)$/.test(f)
       );
-      if (apiFile) {
+      for (const apiFile of matchedFiles) {
         const result = await this.analyzeHttpClientFile(projectPath, apiFile);
-        if (result) return result;
+        if (!result) continue;
+        // Breadth check: count distinct top-level directories that import this file
+        const relPath = FileUtils.getRelativePath(projectPath, apiFile);
+        const baseName = path.basename(apiFile, path.extname(apiFile));
+        const dirName = path.dirname(relPath);
+        const importPattern = new RegExp(
+          `(?:from|require\\()\\s*['"][^'"]*${dirName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/${baseName}['"]`
+        );
+        const importDirs = new Set<string>();
+        for (const f of files.slice(0, 800)) {
+          if (f === apiFile) continue;
+          try {
+            const content = await FileUtils.readFile(f);
+            if (importPattern.test(content)) {
+              importDirs.add(path.dirname(FileUtils.getRelativePath(projectPath, f)).split('/').slice(0, 2).join('/'));
+            }
+          } catch { /* skip */ }
+        }
+        if (importDirs.size >= 3) return result;
+        logger.debug(`API client candidate ${relPath} skipped (only used in ${importDirs.size} directory groups)`);
       }
     }
 

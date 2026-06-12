@@ -5,6 +5,7 @@
  * 按 types → API → store → component → route 顺序给出基于项目实际技术栈的模板。
  */
 
+import * as path from "path";
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import { detectMobXPattern } from "./state-management-rule.js";
@@ -53,9 +54,19 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
       const dirName = d.path.split('/').pop() ?? '';
       return /^[a-zA-Z]/.test(dirName);
     });
-    const sampleBizName = pageDirs.length > 0
-      ? pageDirs[0].path.split('/').pop()!.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s/g, '')
-      : 'Feature';
+    let sampleBizName = 'Feature';
+    if (pageDirs.length > 0) {
+      sampleBizName = pageDirs[0].path.split('/').pop()!.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s/g, '');
+    } else {
+      const sampleDirs = [...(org?.apiLocation ?? []), ...(org?.typesLocation ?? [])];
+      const sampleFile = (context.files ?? []).find((f) => {
+        const rel = path.relative(context.projectPath, f);
+        return sampleDirs.some((d) => rel.startsWith(d)) && /^[a-zA-Z]/.test(path.basename(f)) && !path.basename(f).startsWith('index') && !path.basename(f).startsWith('base');
+      });
+      if (sampleFile) {
+        sampleBizName = path.basename(sampleFile, path.extname(sampleFile)).replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s/g, '');
+      }
+    }
     const sampleBizLower = sampleBizName.charAt(0).toLowerCase() + sampleBizName.slice(1);
 
     const typeDir = org?.typesLocation?.[0] || `src/types`;
@@ -114,7 +125,7 @@ class ${sampleBizName}Store {
 import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
 
 class ${sampleBizName}Store {
-  @observable items: FeatureItem[] = [];
+  @observable items: ${sampleBizName}Item[] = [];
   @observable loading = false;
   @observable error: string | null = null;
 

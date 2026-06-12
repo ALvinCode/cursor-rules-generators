@@ -426,18 +426,28 @@ export class ConfigParser {
       }
     }
 
-    // 从 vite.config 提取
-    const viteConfigPath = path.join(projectPath, "vite.config.ts");
-    if (await FileUtils.fileExists(viteConfigPath)) {
-      const content = await FileUtils.readFile(viteConfigPath);
-      // 简单的正则提取 alias 配置
-      const aliasMatch = content.match(/alias:\s*{([^}]+)}/);
-      if (aliasMatch) {
-        // 这里需要更复杂的解析，暂时跳过
+    // 从 vite.config.ts/.js 提取 resolve.alias
+    for (const viteExt of ["vite.config.ts", "vite.config.js", "vite.config.mts"]) {
+      const viteConfigPath = path.join(projectPath, viteExt);
+      if (await FileUtils.fileExists(viteConfigPath)) {
+        const content = await FileUtils.readFile(viteConfigPath);
+        const aliasMatch = content.match(/alias\s*:\s*\{([\s\S]*?)\}/);
+        if (aliasMatch) {
+          const block = aliasMatch[1];
+          // Match quoted or unquoted keys: 'name'/name: path.resolve(..., 'dir') or 'dir'
+          const entryRe = /(?:['"]([^'"]+)['"]|(\w+))\s*:\s*(?:path\.resolve\s*\([^,]*,\s*['"]([^'"]+)['"]\)|['"]([^'"]+)['"])/g;
+          let m: RegExpExecArray | null;
+          while ((m = entryRe.exec(block)) !== null) {
+            const aliasName = m[1] || m[2];
+            const aliasTarget = (m[3] || m[4]).replace(/^\.\//, '');
+            if (aliasName && aliasTarget && !aliases[aliasName] && !aliasTarget.includes('node_modules')) {
+              aliases[aliasName] = aliasTarget;
+            }
+          }
+        }
+        break;
       }
     }
-
-    // 从 next.config 提取（暂时跳过，较复杂）
 
     return aliases;
   }

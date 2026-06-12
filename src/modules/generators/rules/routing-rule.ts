@@ -165,7 +165,7 @@ function generateFrontendRouterContent(
 
     // 新建路由规范
     content += `## Adding New Routes\n\n`;
-    content += generateNewRouteGuidelines(info, pattern, examples);
+    content += generateNewRouteGuidelines(info, pattern, examples, context.techStack.dependencies);
 
     // 路由特性
     if (pattern.hasRouteGroups) {
@@ -260,7 +260,11 @@ function generateBackendRouterContent(
  * 根据路由框架类型生成「注册新路由」的代码片段。
  * 基于框架语义生成模板，不依赖读取特定项目文件，具备通用性。
  */
-function generateRouteRegistrationSnippet(info: RouterInfo, pattern: RoutingPattern): string {
+function generateRouteRegistrationSnippet(
+  info: RouterInfo,
+  pattern: RoutingPattern,
+  deps?: Array<{ name: string; version: string }>
+): string {
     const framework: string = info.framework ?? '';
     const routerType: string = info.type ?? 'config-based';
     const usesLazy: boolean = !!pattern.usesLazyLoading;
@@ -295,15 +299,31 @@ pages/
     }
 
     if (framework.includes('React Router') || routerType === 'config-based') {
-      const lazy = usesLazy
-        ? `element: React.lazy(() => import('@/views/FeatureName'))`
-        : `element: <FeatureName />`;
-      return `\`\`\`tsx
+      const rrDep = (deps ?? []).find((d) => d.name === 'react-router-dom' || d.name === 'react-router');
+      const majorVersion = rrDep?.version ? parseInt(rrDep.version.replace(/^[\^~>=]*/, ''), 10) : 6;
+
+      if (majorVersion >= 6) {
+        const lazy = usesLazy
+          ? `element: React.lazy(() => import('@/views/FeatureName'))`
+          : `element: <FeatureName />`;
+        return `\`\`\`tsx
 // src/router/index.tsx or route config file
 {
   path: '/feature-name',
   ${lazy},
 }
+\`\`\``;
+      }
+
+      // React Router v5 and below: component prop + <Switch>
+      const lazy5 = usesLazy
+        ? `component: React.lazy(() => import('@/views/FeatureName'))`
+        : `component: FeatureName`;
+      return `\`\`\`tsx
+// src/router/index.tsx or route config file
+<Switch>
+  <Route path="/feature-name" ${lazy5} />
+</Switch>
 \`\`\``;
     }
 
@@ -317,7 +337,8 @@ pages/
 function generateNewRouteGuidelines(
   info: RouterInfo,
   pattern: RoutingPattern,
-  examples: RouteExample[]
+  examples: RouteExample[],
+  deps?: Array<{ name: string; version: string }>
 ): string {
     let guidelines = "";
 
@@ -332,7 +353,7 @@ function generateNewRouteGuidelines(
         }
         guidelines += `\n`;
         guidelines += `### Route Registration Format\n\n`;
-        guidelines += generateRouteRegistrationSnippet(info, pattern);
+        guidelines += generateRouteRegistrationSnippet(info, pattern, deps);
         guidelines += `\n\n`;
 
         if (examples.length > 0) {
@@ -358,7 +379,7 @@ function generateNewRouteGuidelines(
         guidelines += `\n`;
       } else {
         guidelines += `### Route Registration Format\n\n`;
-        guidelines += generateRouteRegistrationSnippet(info, pattern);
+        guidelines += generateRouteRegistrationSnippet(info, pattern, deps);
         guidelines += `\n\n`;
       }
     }
