@@ -13,6 +13,7 @@ import { buildRuleMetadata } from "./rule-metadata.js";
  */
 export function generateUIUXGuidelines(context: RuleGenerationContext): string {
   const deps = context.techStack.dependencies || [];
+  const projectHooks = (context.customPatterns?.customHooks ?? []).map((h: { name: string }) => h.name);
   // 基于"真实使用"的 UI 库（代码扫描裁定）而非仅安装，避免输出未实际使用的库规范
   const activeUINames = new Set(
     (context.uiLibraries?.active ?? []).map((l) => l.name)
@@ -74,7 +75,8 @@ export function generateUIUXGuidelines(context: RuleGenerationContext): string {
     content += `### Common Scenarios\n\n`;
     content += `| Scenario | Components |\n`;
     content += `|----------|------------|\n`;
-    content += `| Data lists | \`Table\` + \`useTable\` hook |\n`;
+    const tableHook = projectHooks.includes('useTable') ? ' + `useTable` hook' : '';
+    content += `| Data lists | \`Table\`${tableHook} |\n`;
     content += `| Form submission | \`Form\` + \`Form.useForm()\` |\n`;
     content += `| Confirmation dialogs | \`Modal.confirm()\` |\n`;
     content += `| Action feedback | \`message.success/error()\` |\n`;
@@ -112,7 +114,11 @@ export function generateUIUXRule(context: RuleGenerationContext): CursorRule {
   // 收窄到 components/views 目录，文件扩展名根据项目实际框架动态决定
   const org = context.fileOrganization;
   const compDir = org?.componentLocation?.[0]?.replace(/\/$/, '') || 'src/components';
-  const viewDir = 'src/views';
+  const hasViewsDir = (context.files ?? []).some((f) => {
+    const rel = f.includes('/src/views/');
+    return rel;
+  });
+  const viewDir = hasViewsDir ? 'src/views' : null;
   const frameworks = context.techStack.frameworks.map((f) => f.toLowerCase());
   const uiExts: string[] = [];
   if (frameworks.some((f) => f.includes("react") || f.includes("next") || f.includes("preact"))) {
@@ -129,7 +135,9 @@ export function generateUIUXRule(context: RuleGenerationContext): CursorRule {
   }
   if (uiExts.length === 0) uiExts.push("tsx", "jsx");
   const extGlob = uiExts.length === 1 ? `*.${uiExts[0]}` : `*.{${uiExts.join(",")}}`;
-  const uiGlobs = `${compDir}/**/${extGlob}, ${viewDir}/**/${extGlob}`;
+  const globParts = [`${compDir}/**/${extGlob}`];
+  if (viewDir) globParts.push(`${viewDir}/**/${extGlob}`);
+  const uiGlobs = globParts.join(', ');
   const metadata = buildRuleMetadata(
     "UI/UX Guidelines",
     "UI component patterns and conventions for this project's UI library",

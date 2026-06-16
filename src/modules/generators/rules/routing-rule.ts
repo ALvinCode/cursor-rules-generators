@@ -317,8 +317,8 @@ pages/
 
       // React Router v5 and below: component prop + <Switch>
       const lazy5 = usesLazy
-        ? `component: React.lazy(() => import('@/views/FeatureName'))`
-        : `component: FeatureName`;
+        ? `component={React.lazy(() => import('@/views/FeatureName'))}`
+        : `component={FeatureName}`;
       return `\`\`\`tsx
 // src/router/index.tsx or route config file
 <Switch>

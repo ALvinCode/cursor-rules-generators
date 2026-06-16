@@ -332,6 +332,7 @@ alwaysApply: false
 # End-to-End Feature Creation Guide
 
 > When adding a complete feature, create files in this order to avoid gaps.
+> Examples below use **Feature** as a representative module — adapt names to your actual feature.
 
 ## Standard Steps
 
@@ -559,7 +560,7 @@ Run these commands after code changes to verify correctness.
     "content": "---
 description: UI component patterns and conventions for this project's UI library
 alwaysApply: false
-globs: src/components/**/*.{tsx,jsx}, src/views/**/*.{tsx,jsx}
+globs: src/components/**/*.{tsx,jsx}
 ---
 
 
@@ -602,7 +603,7 @@ const MyAlert = () => <div className="alert">{msg}</div>;
 
 | Scenario | Components |
 |----------|------------|
-| Data lists | \`Table\` + \`useTable\` hook |
+| Data lists | \`Table\` |
 | Form submission | \`Form\` + \`Form.useForm()\` |
 | Confirmation dialogs | \`Modal.confirm()\` |
 | Action feedback | \`message.success/error()\` |
@@ -698,6 +699,7 @@ alwaysApply: false
 # End-to-End Feature Creation Guide
 
 > When adding a complete feature, create files in this order to avoid gaps.
+> Examples below use **Feature** as a representative module — adapt names to your actual feature.
 
 ## Standard Steps
 
@@ -1114,6 +1116,7 @@ alwaysApply: false
 # End-to-End Feature Creation Guide
 
 > When adding a complete feature, create files in this order to avoid gaps.
+> Examples below use **Client** as a representative module — adapt names to your actual feature.
 
 ## Standard Steps
 
@@ -1686,6 +1689,7 @@ alwaysApply: false
 # End-to-End Feature Creation Guide
 
 > When adding a complete feature, create files in this order to avoid gaps.
+> Examples below use **Feature** as a representative module — adapt names to your actual feature.
 
 ## Standard Steps
 

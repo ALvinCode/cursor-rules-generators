@@ -47,27 +47,7 @@ ${
     : generateCodeStyleGuidelines(context)
 }
 
-${isJsTsProject(context) ? `## Do / Don't
-
-\`\`\`typescript
-// DON'T: use any — loses type safety
-function process(data: any) { return data.value; }
-
-// DO: use precise types
-function process(data: ProcessInput): ProcessOutput {
-  return data.value;
-}
-\`\`\`
-
-\`\`\`typescript
-// DON'T: implicit typing + mutable default
-var count = 0;
-
-// DO: explicit types + prefer immutability
-const count: number = 0;
-\`\`\`
-
-` : ""}> See **@error-handling.mdc** for error handling conventions
+${isJsTsProject(context) ? generateDosDonts(context) : ""}> See **@error-handling.mdc** for error handling conventions
 
 ${generateTechSpecificConventions(context)}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
 `;
@@ -312,7 +292,12 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       rules += `- **Quotes**: ${p.singleQuote ? "single quotes" : "double quotes"}\n`;
       rules += `- **Semicolons**: ${(p.semi ?? true) ? "use semicolons" : "omit semicolons"}\n`;
       rules += `- **Line length**: ${p.printWidth ?? 80} characters\n`;
-      rules += `- **Trailing commas**: ${p.trailingComma ?? "all"}\n\n`;
+      const prettierDep = context.techStack.dependencies.find((d) => d.name === "prettier");
+      const prettierMajor = prettierDep?.version
+        ? parseInt(prettierDep.version.replace(/^[\^~>=<]+/, '').split('.')[0] ?? '3', 10)
+        : 3;
+      const trailingCommaDefault = prettierMajor >= 3 ? "all" : "es5";
+      rules += `- **Trailing commas**: ${p.trailingComma ?? trailingCommaDefault}\n\n`;
       rules += `**Config file**: @.prettierrc\n\n`;
 
       rules += `### Formatting Requirements\n\n`;
@@ -431,6 +416,36 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
     }
 
     return rules;
+}
+
+function generateDosDonts(context: RuleGenerationContext): string {
+    const anyRule = context.projectConfig?.eslint?.rules?.["@typescript-eslint/no-explicit-any"];
+    const anyAllowed = anyRule === "off" || anyRule === 0
+      || (Array.isArray(anyRule) && (anyRule[0] === "off" || anyRule[0] === 0));
+
+    const anySection = anyAllowed ? "" : `\`\`\`typescript
+// DON'T: use any — loses type safety
+function process(data: any) { return data.value; }
+
+// DO: use precise types
+function process(data: ProcessInput): ProcessOutput {
+  return data.value;
+}
+\`\`\`
+
+`;
+
+    return `## Do / Don't
+
+${anySection}\`\`\`typescript
+// DON'T: implicit typing + mutable default
+var count = 0;
+
+// DO: explicit types + prefer immutability
+const count: number = 0;
+\`\`\`
+
+`;
 }
 
 function generateTechSpecificConventions(context: RuleGenerationContext): string {

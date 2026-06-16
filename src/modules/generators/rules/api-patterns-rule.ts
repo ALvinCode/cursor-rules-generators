@@ -82,6 +82,8 @@ ${hasErrorHandling ? `> ✅ Built-in unified error handling (interceptor handles
 
 ## Standard Function Structure
 
+> Examples below use **${bizName}** as a representative module — adapt names to your actual feature.
+
 \`\`\`${ext}
 // ${apiDir}/${bizLower}.${ext}
 ${importStatement}
@@ -147,9 +149,9 @@ async function generateResponseTypeHint(context: RuleGenerationContext): Promise
   for (const file of typeFiles.slice(0, 3)) {
     try {
       const content = await FileUtils.readFile(file);
-      const match = content.match(/export\s+(?:interface|type)\s+(I?(?:Response|ApiResponse|BaseResponse)\b[^{]*)/);
+      const match = content.match(/export\s+(?:interface|type)\s+(I?(?:Response|ApiResponse|BaseResponse)\w*)/);
       if (match) {
-        const typeName = match[1].trim().split(/\s/)[0];
+        const typeName = match[1].trim();
         const relPath = path.relative(context.projectPath, file);
         return `\n## Response Type Convention\n\nThe project defines a unified response type \`${typeName}\` in \`${relPath}\`. All API functions should use this type for type-safe responses.\n`;
       }

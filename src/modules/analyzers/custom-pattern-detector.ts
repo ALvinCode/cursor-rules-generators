@@ -215,6 +215,10 @@ export class CustomPatternDetector {
     ];
 
     // 策略 1：精确文件名匹配 + 广度验证（确保不选中局部模块的文件）
+    const NEGATIVE_KEYWORDS = /(?:mock|apifox|test|fixture|stub|fake|__test)/i;
+    interface BreadthCandidate { result: APIClientInfo; breadth: number; relPath: string }
+    const breadthCandidates: BreadthCandidate[] = [];
+
     for (const pattern of namePatterns) {
       const matchedFiles = files.filter(
         (f) =>
@@ -222,13 +226,16 @@ export class CustomPatternDetector {
           /\.(ts|tsx|js|jsx)$/.test(f)
       );
       for (const apiFile of matchedFiles) {
+        const relPath = FileUtils.getRelativePath(projectPath, apiFile);
+        if (NEGATIVE_KEYWORDS.test(path.basename(apiFile))) {
+          logger.debug(`API client candidate ${relPath} skipped (negative keyword match)`);
+          continue;
+        }
         const result = await this.analyzeHttpClientFile(projectPath, apiFile);
         if (!result) continue;
-        // Breadth check: count distinct top-level directories that import this file
-        const relPath = FileUtils.getRelativePath(projectPath, apiFile);
         const baseName = path.basename(apiFile, path.extname(apiFile));
         const dirName = path.dirname(relPath);
-        const importPattern = new RegExp(
+        const importPatternRe = new RegExp(
           `(?:from|require\\()\\s*['"][^'"]*${dirName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/${baseName}['"]`
         );
         const importDirs = new Set<string>();
@@ -236,14 +243,23 @@ export class CustomPatternDetector {
           if (f === apiFile) continue;
           try {
             const content = await FileUtils.readFile(f);
-            if (importPattern.test(content)) {
+            if (importPatternRe.test(content)) {
               importDirs.add(path.dirname(FileUtils.getRelativePath(projectPath, f)).split('/').slice(0, 2).join('/'));
             }
           } catch { /* skip */ }
         }
-        if (importDirs.size >= 3) return result;
-        logger.debug(`API client candidate ${relPath} skipped (only used in ${importDirs.size} directory groups)`);
+        if (importDirs.size >= 3) {
+          breadthCandidates.push({ result, breadth: importDirs.size, relPath });
+        } else {
+          logger.debug(`API client candidate ${relPath} skipped (only used in ${importDirs.size} directory groups)`);
+        }
       }
+    }
+
+    if (breadthCandidates.length > 0) {
+      breadthCandidates.sort((a, b) => b.breadth - a.breadth);
+      logger.debug(`API client selected: ${breadthCandidates[0].relPath} (breadth: ${breadthCandidates[0].breadth})`);
+      return breadthCandidates[0].result;
     }
 
     // 策略 2：扫描 lib/, utils/, services/ 下的文件查找 axios 实例
@@ -252,7 +268,8 @@ export class CustomPatternDetector {
       (f) =>
         scanDirs.some((d) => f.includes(`/${d}`)) &&
         /\.(ts|js)$/.test(f) &&
-        !f.includes(".test.") && !f.includes(".spec.")
+        !f.includes(".test.") && !f.includes(".spec.") &&
+        !NEGATIVE_KEYWORDS.test(path.basename(f))
     );
     for (const file of candidates.slice(0, 30)) {
       const content = await FileUtils.readFile(file);

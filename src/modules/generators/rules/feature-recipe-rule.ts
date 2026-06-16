@@ -42,8 +42,8 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
     const hasRedux = stateLib?.name?.toLowerCase().includes("redux");
     const hasZustand = stateLib?.name?.toLowerCase().includes("zustand");
 
-    // 基于版本 + 实际代码检测 MobX 模式，与 state-management.mdc 保持一致
     const mobxPattern = hasMobX ? await detectMobXPattern(context) : 'makeAutoObservable';
+    const isDecoratorLegacy = mobxPattern === 'decorator-legacy';
 
     // Sample a real business name from pages/views for example naming
     const PAGE_DIR_KW = new Set(['views', 'pages', 'screens']);
@@ -121,7 +121,28 @@ class ${sampleBizName}Store {
     }
   }
 }`
-        : `import { makeObservable, observable, action } from "mobx";
+        : isDecoratorLegacy
+          ? `import { observable, action } from "mobx";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
+
+class ${sampleBizName}Store {
+  @observable items: ${sampleBizName}Item[] = [];
+  @observable loading = false;
+  @observable error: string | null = null;
+
+  @action
+  async fetchItems() {
+    this.loading = true;
+    try {
+      this.items = await fetch${sampleBizName}List();
+    } catch (err) {
+      this.error = String(err);
+    } finally {
+      this.loading = false;
+    }
+  }
+}`
+          : `import { makeObservable, observable, action } from "mobx";
 import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
 
 class ${sampleBizName}Store {
@@ -209,6 +230,7 @@ export const use${sampleBizName}Store = create<${sampleBizName}Store>((set) => (
 # End-to-End Feature Creation Guide
 
 > When adding a complete feature, create files in this order to avoid gaps.
+> Examples below use **${sampleBizName}** as a representative module — adapt names to your actual feature.
 
 ## Standard Steps
 
@@ -264,11 +286,24 @@ export function ${sampleBizName}List() {
 
 ### ${stateLib ? "6" : "5"}. Route Registration
 
-\`\`\`${extx}
+${(() => {
+  const rrDep = context.techStack.dependencies.find((d) => d.name === 'react-router-dom' || d.name === 'react-router');
+  const rrMajor = rrDep?.version ? parseInt(rrDep.version.replace(/^[\^~>=<]+/, ''), 10) : 6;
+  if (rrMajor < 6) {
+    return `\`\`\`${extx}
+// ${routeDir}/index.${extx} or route config file
+<Switch>
+  <Route path="/${sampleBizLower}s" component={${sampleBizName}List} />
+  <Route path="/${sampleBizLower}s/:id" component={${sampleBizName}Detail} />
+</Switch>
+\`\`\``;
+  }
+  return `\`\`\`${extx}
 // ${routeDir}/index.${extx} or route config file
 { path: "/${sampleBizLower}s", element: <${sampleBizName}List /> }
 { path: "/${sampleBizLower}s/:id", element: <${sampleBizName}Detail /> }
-\`\`\`
+\`\`\``;
+})()}
 
 ## File Checklist
 

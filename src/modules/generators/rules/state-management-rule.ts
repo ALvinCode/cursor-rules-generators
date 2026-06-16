@@ -103,7 +103,7 @@ function getStoreGlobs(context: RuleGenerationContext): string | null {
  */
 export async function detectMobXPattern(
   context: RuleGenerationContext
-): Promise<'makeAutoObservable' | 'decorator'> {
+): Promise<'makeAutoObservable' | 'decorator' | 'decorator-legacy'> {
     // --- 步骤 1：扫描实际 store 文件内容 ---
     const deep = context.deepAnalysis || [];
     const storeDirs = deep
@@ -138,25 +138,26 @@ export async function detectMobXPattern(
       }
     }
 
-    // 实际代码中有 makeAutoObservable → 优先
-    if (foundAutoObservable) return 'makeAutoObservable';
-    // 实际代码中有 decorator 写法
-    if (foundDecorator) return 'decorator';
-
-    // --- 步骤 2：依据安装版本判断 ---
+    // --- 步骤 2：获取 MobX 主版本号 ---
     const mobxDep = context.techStack.dependencies.find(
       (d) => d.name === 'mobx' || d.name === 'mobx-react' || d.name === 'mobx-react-lite'
     );
-    if (mobxDep?.version) {
-      // 去掉版本前缀符号（^, ~, >=）
-      const rawVersion = mobxDep.version.replace(/^[\^~>=<]+/, '');
-      const majorVersion = parseInt(rawVersion.split('.')[0] ?? '0', 10);
-      // MobX 4/5 只有 decorator 写法；MobX 6+ 默认推荐 makeAutoObservable
-      if (majorVersion < 6) return 'decorator';
-      if (majorVersion >= 6) return 'makeAutoObservable';
+    const mobxMajor = mobxDep?.version
+      ? parseInt(mobxDep.version.replace(/^[\^~>=<]+/, '').split('.')[0] ?? '0', 10)
+      : 0;
+
+    // 实际代码中有 makeAutoObservable → 优先
+    if (foundAutoObservable) return 'makeAutoObservable';
+    // 实际代码中有 decorator 写法 → 区分 MobX 5（纯装饰器）和 MobX 6+（需要 makeObservable）
+    if (foundDecorator) return mobxMajor > 0 && mobxMajor < 6 ? 'decorator-legacy' : 'decorator';
+
+    // --- 步骤 3：依据安装版本判断 ---
+    if (mobxMajor > 0) {
+      if (mobxMajor < 6) return 'decorator-legacy';
+      return 'makeAutoObservable';
     }
 
-    // --- 步骤 3：fallback ---
+    // --- 步骤 4：fallback ---
     return 'makeAutoObservable';
 }
 
@@ -227,7 +228,7 @@ export async function detectMobXAccessPattern(
 function generateStateManagementContent(
   context: RuleGenerationContext,
   libName?: string,
-  mobxPattern: 'makeAutoObservable' | 'decorator' = 'makeAutoObservable',
+  mobxPattern: 'makeAutoObservable' | 'decorator' | 'decorator-legacy' = 'makeAutoObservable',
   mobxAccess?: MobXAccessInfo
 ): string {
     if (!libName) {
@@ -301,7 +302,18 @@ class UserStore {
   }
 }`
         : isTS
-          ? `import { makeObservable, observable, action } from 'mobx'
+          ? (mobxPattern === 'decorator-legacy'
+            ? `import { observable, action } from 'mobx'
+
+class UserStore {
+  @observable user: User | null = null
+
+  @action
+  setUser(user: User): void {
+    this.user = user
+  }
+}`
+            : `import { makeObservable, observable, action } from 'mobx'
 
 class UserStore {
   @observable user: User | null = null
@@ -314,8 +326,19 @@ class UserStore {
   setUser(user: User): void {
     this.user = user
   }
+}`)
+          : (mobxPattern === 'decorator-legacy'
+            ? `import { observable, action } from 'mobx'
+
+class UserStore {
+  @observable user = null
+
+  @action
+  setUser(user) {
+    this.user = user
+  }
 }`
-          : `import { makeObservable, observable, action } from 'mobx'
+            : `import { makeObservable, observable, action } from 'mobx'
 
 class UserStore {
   @observable user = null
@@ -328,15 +351,22 @@ class UserStore {
   setUser(user) {
     this.user = user
   }
-}`;
+}`);
 
       const bestPractices = mobxPattern === 'makeAutoObservable'
         ? `- Use makeAutoObservable to automatically infer all properties as observable/action
 - No need to manually declare @observable/@action (reduces boilerplate)
 - Wrap components with observer()
 - Avoid mutating observables directly (mutate inside actions)`
+        : mobxPattern === 'decorator-legacy'
+        ? `- Use @observable for reactive state
+- Use @action for state mutation methods
+- Wrap components with observer()
+- Avoid mutating observables directly
+- No makeObservable() call needed (MobX 5 decorator mode)`
         : `- Use @observable for reactive state
 - Use @action for state mutation methods
+- Call makeObservable(this) in constructor (required for MobX 6+ decorators)
 - Wrap components with observer()
 - Avoid mutating observables directly`;
 
@@ -345,7 +375,7 @@ class UserStore {
 ### Current Project Usage
 - State management library: MobX
 - Store location: \`${storeDir}/\`
-- Usage pattern: ${mobxPattern === 'makeAutoObservable' ? 'makeAutoObservable (auto-inferred)' : 'makeObservable + Decorators (explicit declarations)'}
+- Usage pattern: ${mobxPattern === 'makeAutoObservable' ? 'makeAutoObservable (auto-inferred)' : mobxPattern === 'decorator-legacy' ? 'Decorators (MobX 5 — no makeObservable needed)' : 'makeObservable + Decorators (explicit declarations)'}
 
 ### Usage Guidelines
 
