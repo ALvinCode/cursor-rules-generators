@@ -284,9 +284,22 @@ function generateContextSection(context: RuleGenerationContext): string {
     );
     if (contextDirs.length === 0) return "";
 
+    const hasExternalStateLib = context.techStack.dependencies.some((d) =>
+      ["redux", "mobx", "zustand", "pinia", "vuex"].some((lib) =>
+        d.name.toLowerCase().includes(lib)
+      )
+    );
+
     const dirPaths = contextDirs.map((d) => `\`${d.path}/\``).join(", ");
-    return `\n## State Management (React Context)\n\n` +
-      `This project uses **React Context** for state management (${dirPaths}).\n` +
-      `- Use existing Context providers — do not introduce external state management libraries without discussion\n` +
-      `- Keep Context values focused; split into multiple Contexts if unrelated concerns are grouped\n\n`;
+    let section = `\n## React Context Usage\n\n` +
+      `This project uses **React Context** (${dirPaths}).\n`;
+
+    if (hasExternalStateLib) {
+      section += `- The project uses both an external state library and React Context — choose per use case\n`;
+      section += `- Use Context for UI-scoped state (theme, locale, auth); use the state library for complex business state\n`;
+    } else {
+      section += `- Use existing Context providers — do not introduce external state management libraries without discussion\n`;
+    }
+    section += `- Keep Context values focused; split into multiple Contexts if unrelated concerns are grouped\n\n`;
+    return section;
 }

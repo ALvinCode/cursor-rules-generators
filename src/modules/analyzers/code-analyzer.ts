@@ -198,6 +198,7 @@ export class CodeAnalyzer {
         "antd",
         "sass",
         "less",
+        "stylus",
       ].some((lib) => d.name.includes(lib))
     );
 
@@ -208,7 +209,8 @@ export class CodeAnalyzer {
           (f.endsWith(".css") ||
             f.endsWith(".scss") ||
             f.endsWith(".sass") ||
-            f.endsWith(".less")) &&
+            f.endsWith(".less") ||
+            f.endsWith(".styl")) &&
           !f.includes("node_modules")
       );
 

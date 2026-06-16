@@ -223,9 +223,28 @@ export class FileStructureLearner {
     const componentNaming =
       pascalComponents > kebabComponents ? "PascalCase" : "kebab-case";
 
+    // Detect general file naming by sampling non-component source files
+    const sourceFiles = files.filter(
+      (f) => /\.(ts|js)$/.test(f) &&
+        !f.includes("node_modules") &&
+        !path.basename(f).startsWith("index.") &&
+        !path.basename(f).startsWith(".")
+    );
+    let camelCount = 0;
+    let kebabFileCount = 0;
+    for (const f of sourceFiles.slice(0, 200)) {
+      const base = path.basename(f, path.extname(f));
+      if (/^[a-z][a-zA-Z0-9]+$/.test(base) && /[A-Z]/.test(base)) camelCount++;
+      else if (/^[a-z][a-z0-9]+(-[a-z0-9]+)+$/.test(base)) kebabFileCount++;
+    }
+    const fileNaming: "camelCase" | "kebab-case" | "mixed" =
+      kebabFileCount > camelCount * 2 ? "kebab-case"
+      : camelCount > kebabFileCount * 2 ? "camelCase"
+      : "mixed";
+
     return {
       components: componentNaming,
-      files: "camelCase", // 默认
+      files: fileNaming,
       useIndexFiles,
     };
   }
@@ -237,7 +256,10 @@ export class FileStructureLearner {
     structure: DirectoryPurpose[],
     purpose: string
   ): string[] {
-    return structure.filter((d) => d.purpose === purpose).map((d) => d.path);
+    return structure
+      .filter((d) => d.purpose === purpose)
+      .sort((a, b) => a.path.split('/').length - b.path.split('/').length)
+      .map((d) => d.path);
   }
 }
 

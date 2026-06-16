@@ -68,6 +68,16 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
       }
     }
     const sampleBizLower = sampleBizName.charAt(0).toLowerCase() + sampleBizName.slice(1);
+    const fileNaming = context.fileOrganization?.namingConvention?.files ?? 'camelCase';
+    const sampleBizFile = fileNaming === 'kebab-case'
+      ? sampleBizName.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+      : sampleBizLower;
+    const pluralize = (s: string) => {
+      if (s.endsWith('s') || s.endsWith('x') || s.endsWith('z')) return s + 'es';
+      if (s.endsWith('y') && !/[aeiou]y$/i.test(s)) return s.slice(0, -1) + 'ies';
+      return s + 's';
+    };
+    const sampleBizPlural = pluralize(sampleBizLower);
 
     const typeDir = org?.typesLocation?.[0] || `src/types`;
     const apiDir = org?.apiLocation?.[0] || `src/api`;
@@ -101,7 +111,8 @@ export async function generateFeatureRecipeRule(context: RuleGenerationContext):
       // 根据检测到的实际 MobX 模式选择模板
       const mobxStoreBody = mobxPattern === 'makeAutoObservable'
         ? `import { makeAutoObservable } from "mobx";
-import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
+import { fetch${sampleBizName}List } from "${apiAlias}/${sampleBizFile}";
 
 class ${sampleBizName}Store {
   items: ${sampleBizName}Item[] = [];
@@ -123,7 +134,8 @@ class ${sampleBizName}Store {
 }`
         : isDecoratorLegacy
           ? `import { observable, action } from "mobx";
-import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
+import { fetch${sampleBizName}List } from "${apiAlias}/${sampleBizFile}";
 
 class ${sampleBizName}Store {
   @observable items: ${sampleBizName}Item[] = [];
@@ -143,7 +155,8 @@ class ${sampleBizName}Store {
   }
 }`
           : `import { makeObservable, observable, action } from "mobx";
-import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
+import { fetch${sampleBizName}List } from "${apiAlias}/${sampleBizFile}";
 
 class ${sampleBizName}Store {
   @observable items: ${sampleBizName}Item[] = [];
@@ -181,7 +194,7 @@ export const ${sampleBizLower}Store = new ${sampleBizName}Store();
 \`\`\`${ext}
 // ${storeDir}/featureSlice.${ext}
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
 
 export const load${sampleBizName}s = createAsyncThunk("${sampleBizLower}/load", fetch${sampleBizName}List);
 
@@ -205,7 +218,7 @@ export default ${sampleBizLower}Slice.reducer;
 \`\`\`${ext}
 // ${storeDir}/${sampleBizLower}Store.${ext}
 import { create } from "zustand";
-import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizLower}";
+import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
 
 interface ${sampleBizName}Store {
   items: ${sampleBizName}Item[];
@@ -237,7 +250,7 @@ export const use${sampleBizName}Store = create<${sampleBizName}Store>((set) => (
 ### 1. Type Definitions
 
 \`\`\`${ext}
-// ${typeDir}/${sampleBizLower}.${ext}
+// ${typeDir}/${sampleBizFile}.${ext}
 export interface ${sampleBizName}Item {
   id: string;
   name: string;
@@ -253,12 +266,12 @@ export interface ${sampleBizName}ListParams {
 ### 2. API Functions
 
 \`\`\`${ext}
-// ${apiDir}/${sampleBizLower}.${ext}
-import type { ${sampleBizName}Item, ${sampleBizName}ListParams } from "${typeAlias}/${sampleBizLower}";
+// ${apiDir}/${sampleBizFile}.${ext}
+import type { ${sampleBizName}Item, ${sampleBizName}ListParams } from "${typeAlias}/${sampleBizFile}";
 ${clientImportStmt}
 
 export ${isTS ? "const" : "async function"} fetch${sampleBizName}List${isTS ? " = " : ""}(params${isTS ? `: ${sampleBizName}ListParams` : ""})${isTS ? " =>" : ""} {
-  return ${hasHttpClient ? `${apiClientName}.get${isTS ? `<${sampleBizName}Item[]>` : ""}("/${sampleBizLower}s", { params })` : `fetch(\`/api/${sampleBizLower}s?page=\${params.page}\`)`};
+  return ${hasHttpClient ? `${apiClientName}.get${isTS ? `<${sampleBizName}Item[]>` : ""}("/${sampleBizPlural}", { params })` : `fetch(\`/api/${sampleBizPlural}?page=\${params.page}\`)`};
 }${isTS ? ";" : ""}
 \`\`\`
 ${storeStep}
@@ -293,15 +306,15 @@ ${(() => {
     return `\`\`\`${extx}
 // ${routeDir}/index.${extx} or route config file
 <Switch>
-  <Route path="/${sampleBizLower}s" component={${sampleBizName}List} />
-  <Route path="/${sampleBizLower}s/:id" component={${sampleBizName}Detail} />
+  <Route path="/${sampleBizPlural}" component={${sampleBizName}List} />
+  <Route path="/${sampleBizPlural}/:id" component={${sampleBizName}Detail} />
 </Switch>
 \`\`\``;
   }
   return `\`\`\`${extx}
 // ${routeDir}/index.${extx} or route config file
-{ path: "/${sampleBizLower}s", element: <${sampleBizName}List /> }
-{ path: "/${sampleBizLower}s/:id", element: <${sampleBizName}Detail /> }
+{ path: "/${sampleBizPlural}", element: <${sampleBizName}List /> }
+{ path: "/${sampleBizPlural}/:id", element: <${sampleBizName}Detail /> }
 \`\`\``;
 })()}
 
@@ -309,9 +322,9 @@ ${(() => {
 
 After adding a feature, confirm the following files were created/updated:
 
-- [ ] \`${typeDir}/${sampleBizLower}.${ext}\` — Type definitions
-- [ ] \`${apiDir}/${sampleBizLower}.${ext}\` — API functions
-${stateLib ? `- [ ] \`${storeDir}/${sampleBizLower}Store.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/use${sampleBizName}.${ext}\` — Data hook (optional)
+- [ ] \`${typeDir}/${sampleBizFile}.${ext}\` — Type definitions
+- [ ] \`${apiDir}/${sampleBizFile}.${ext}\` — API functions
+${stateLib ? `- [ ] \`${storeDir}/${sampleBizFile}Store.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/use${sampleBizName}.${ext}\` — Data hook (optional)
 - [ ] \`${pageDir}/${sampleBizName}List/\` — Page component
 - [ ] Route config updated
 

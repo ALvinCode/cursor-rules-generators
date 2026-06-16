@@ -5,6 +5,9 @@
  * `generateCodeStyleGuidelines` 同时被 module 生成器复用，故导出。
  */
 
+import * as fs from "fs";
+import * as path from "path";
+
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
 import type { ExtractedBestPractice } from "../best-practice-extractor.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
@@ -364,7 +367,8 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
       rules += `### ESLint\n\n`;
       if (context.projectConfig.eslint) {
         rules += `This project uses ESLint for code quality checks.\n\n`;
-        rules += `**Config file**: @.eslintrc\n\n`;
+        const eslintFile = detectEslintConfigFile(context.projectPath);
+        rules += `**Config file**: @${eslintFile}\n\n`;
       }
       // 命令由下方「代码生成后标准流程」统一输出，此处不重复
     }
@@ -416,6 +420,20 @@ function generateConfigBasedStyleRules(context: RuleGenerationContext): string {
     }
 
     return rules;
+}
+
+function detectEslintConfigFile(projectPath: string): string {
+    const candidates = [
+      '.eslintrc.cjs', '.eslintrc.js', '.eslintrc.mjs',
+      '.eslintrc.json', '.eslintrc.yaml', '.eslintrc.yml', '.eslintrc',
+      'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs',
+    ];
+    for (const name of candidates) {
+      try {
+        if (fs.existsSync(path.join(projectPath, name))) return name;
+      } catch { /* skip */ }
+    }
+    return '.eslintrc';
 }
 
 function generateDosDonts(context: RuleGenerationContext): string {

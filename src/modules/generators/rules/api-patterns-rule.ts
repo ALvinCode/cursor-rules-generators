@@ -53,6 +53,16 @@ export async function generateApiPatternsRule(
     }
   }
   const bizLower = bizName.charAt(0).toLowerCase() + bizName.slice(1);
+  const fileNaming = context.fileOrganization?.namingConvention?.files ?? 'camelCase';
+  const bizFile = fileNaming === 'kebab-case'
+    ? bizName.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+    : bizLower;
+  const pluralize = (s: string) => {
+    if (s.endsWith('s') || s.endsWith('x') || s.endsWith('z')) return s + 'es';
+    if (s.endsWith('y') && !/[aeiou]y$/i.test(s)) return s.slice(0, -1) + 'ies';
+    return s + 's';
+  };
+  const bizPlural = pluralize(bizLower);
   const typeDir = context.fileOrganization?.typesLocation?.[0] || 'src/types';
   const typeAlias = typeDir.replace(/^src\//, '@/');
 
@@ -85,11 +95,11 @@ ${hasErrorHandling ? `> ✅ Built-in unified error handling (interceptor handles
 > Examples below use **${bizName}** as a representative module — adapt names to your actual feature.
 
 \`\`\`${ext}
-// ${apiDir}/${bizLower}.${ext}
+// ${apiDir}/${bizFile}.${ext}
 ${importStatement}
-${isTS ? `import type { ${bizName}Item, ${bizName}ListParams } from "${typeAlias}/${bizLower}";\n` : ""}
+${isTS ? `import type { ${bizName}Item, ${bizName}ListParams } from "${typeAlias}/${bizFile}";\n` : ""}
 export const fetch${bizName}List = (${isTS ? `params: ${bizName}ListParams` : "params"}) => {
-  return ${clientName}.get${isTS ? `<${bizName}Item[]>` : ""}("/${bizLower}s", { params });
+  return ${clientName}.get${isTS ? `<${bizName}Item[]>` : ""}("/${bizPlural}", { params });
 };
 \`\`\``
     : `## HTTP Client
