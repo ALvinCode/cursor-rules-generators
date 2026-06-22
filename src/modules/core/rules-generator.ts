@@ -16,17 +16,12 @@ import { SuggestionCollector } from '../generators/suggestion-collector.js';
 import {
     findBestTechStackMatches, MultiCategoryMatch, TechStackMatch
 } from '../generators/tech-stack-matcher.js';
-import { generateApiPatternsRule } from '../generators/rules/api-patterns-rule.js';
-import { generateErrorHandlingRule } from '../generators/rules/error-handling-rule.js';
-import { generateUIUXRule } from '../generators/rules/ui-ux-rule.js';
 import {
   featureExists,
   isFrontendProject,
   detectTestFramework,
   hasCustomTools,
-  hasErrorHandling,
   hasStateManagement,
-  hasUISignal,
 } from '../generators/rules/rule-helpers.js';
 import { generateTestingRule } from '../generators/rules/testing-rule.js';
 import {
@@ -323,16 +318,7 @@ export class RulesGenerator {
       rules.push(customToolsRule);
     }
 
-    // 6. 错误处理规则（按需，约 180 行）
-    if (hasErrorHandling(context)) {
-      const errorHandlingRule = generateErrorHandlingRule(
-        context,
-        missingPractices
-      );
-      rules.push(errorHandlingRule);
-    }
-
-    // 7. 状态管理规则（按需，约 200 行）
+    // 6. 状态管理规则（按需，约 200 行）
     // v1.7: 基于需求分析器结果或原有检测逻辑
     const needsStateManagement =
       requirements.some((r) => r.ruleType === "state-management") ||
@@ -342,16 +328,7 @@ export class RulesGenerator {
       rules.push(stateManagementRule);
     }
 
-    // 8. UI/UX 规则（按需，约 250 行）
-    const needsUIUX =
-      requirements.some((r) => r.ruleType === "ui-ux") ||
-      (isFrontendProject(context) && hasUISignal(context));
-    if (needsUIUX) {
-      const uiUxRule = generateUIUXRule(context);
-      rules.push(uiUxRule);
-    }
-
-    // 9. 前端路由规则（按需，约 300 行）
+    // 7. 前端路由规则（按需，约 300 行）
     // v1.7: 基于需求分析器结果，即使没有路由文件，只要有依赖就生成
     const needsFrontendRouting = requirements.some(
       (r) => r.ruleType === "frontend-routing"
@@ -526,15 +503,7 @@ export class RulesGenerator {
       rules.push(testingRule);
     }
 
-    // 11b. API Patterns（前端项目有 axios 或自定义 apiClient 时生成）
-    const hasApiClient = context.customPatterns?.apiClient?.exists;
-    const hasAxiosDep = context.techStack.dependencies.some((d) => d.name === "axios");
-    if (isFrontend && (hasApiClient || hasAxiosDep)) {
-      const apiPatternsRule = await generateApiPatternsRule(context);
-      rules.push(apiPatternsRule);
-    }
-
-    // 11c. Feature Recipe（端到端功能创建模板，前端项目必生成）
+    // 11b. Feature Recipe（端到端功能创建模板，含 API 调用规范，前端项目必生成）
     if (isFrontend) {
       const featureRecipeRule = await generateFeatureRecipeRule(context);
       rules.push(featureRecipeRule);

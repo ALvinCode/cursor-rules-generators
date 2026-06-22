@@ -22,10 +22,7 @@ export function generateErrorHandlingGuidelines(
     context.techStack.languages.includes("TypeScript");
   const isPython = context.techStack.languages.includes("Python");
 
-  // v1.9: 精简版，避免与 error-handling.mdc 重复
   return `## Error Handling Guidelines
-
-> 💡 **Detailed guidelines**: See **@error-handling.mdc** for the full error handling guide
 
 ### Basic Principles
 - Anticipate possible errors and handle them proactively

@@ -9,6 +9,7 @@ import * as path from "path";
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import { detectMobXPattern } from "./state-management-rule.js";
+import { generateApiConventionsContent } from "./api-patterns-rule.js";
 
 /**
  * Feature Recipe — 端到端功能创建指南
@@ -239,13 +240,20 @@ export const use${sampleBizName}Store = create<${sampleBizName}Store>((set) => (
 `;
     }
 
+    // Generate API conventions section (merged from api-patterns)
+    const hasApiClient = context.customPatterns?.apiClient?.exists;
+    const hasAxiosDep = context.techStack.dependencies.some((d) => d.name === "axios");
+    const apiConventions = (hasApiClient || hasAxiosDep)
+      ? await generateApiConventionsContent(context)
+      : "";
+
     const content = metadata + `
 # End-to-End Feature Creation Guide
 
 > When adding a complete feature, create files in this order to avoid gaps.
 > Examples below use **${sampleBizName}** as a representative module — adapt names to your actual feature.
 
-## Standard Steps
+${apiConventions}## Standard Steps
 
 ### 1. Type Definitions
 

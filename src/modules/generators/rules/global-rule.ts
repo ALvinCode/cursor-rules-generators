@@ -73,9 +73,9 @@ ${
 
 | Rule | Scope |
 |------|-------|
-| @code-style.mdc | Formatting and naming conventions |
+| @code-style.mdc | Formatting, naming, error handling, and UI conventions |
 | @project-structure.mdc | Directory layout and file placement |
-${hasArchitectureValue(context) ? "| @architecture.mdc | Module structure and design patterns |\n" : ""}${hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${hasErrorHandlingValue(context) ? "| @error-handling.mdc | Error handling and logging patterns |\n" : ""}${hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @ui-ux.mdc | UI component and UX patterns |\n" : ""}${(isFrontendProject(context) && (context.customPatterns?.apiClient?.exists || context.techStack.dependencies.some((d) => d.name === "axios"))) ? "| @api-patterns.mdc | API call conventions and HTTP client usage |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide for adding a new feature |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null || !!(context.projectConfig?.commands?.lint || context.projectConfig?.commands?.typeCheck)) ? "| @testing.mdc | Testing and verification commands |\n" : ""}
+${hasArchitectureValue(context) ? "| @architecture.mdc | Module structure and design patterns |\n" : ""}${hasCustomTools(context) ? "| @custom-tools.mdc | Project-specific hooks, utils, API clients |\n" : ""}${hasStateManagement(context) ? "| @state-management.mdc | State management conventions |\n" : ""}${context.frontendRouter ? "| @frontend-routing.mdc | Frontend routing patterns |\n" : ""}${context.backendRouter ? "| @api-routing.mdc | API endpoint conventions |\n" : ""}${isFrontendProject(context) ? "| @feature-recipe.mdc | End-to-end guide (API + feature creation) |\n" : ""}${(featureExists(context, "testing") || detectTestFramework(context) !== null || !!(context.projectConfig?.commands?.lint || context.projectConfig?.commands?.typeCheck)) ? "| @testing.mdc | Testing and verification commands |\n" : ""}
 `;
 
     return {
@@ -168,15 +168,3 @@ function hasArchitectureValue(context: RuleGenerationContext): boolean {
     );
 }
 
-/**
- * error-handling.mdc when the project has distinctive error handling
- * (custom error types, a dedicated logger library, or an API client with built-in error handling).
- */
-function hasErrorHandlingValue(context: RuleGenerationContext): boolean {
-    const eh = context.projectPractice?.errorHandling;
-    return (
-      (eh?.customErrorTypes?.length ?? 0) > 0 ||
-      (eh?.loggingMethod === "logger-library" && !!eh?.loggerLibrary) ||
-      context.customPatterns?.apiClient?.hasErrorHandling === true
-    );
-}

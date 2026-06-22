@@ -18,10 +18,13 @@ import { buildRuleMetadata } from "./rule-metadata.js";
 export async function generateStateManagementRule(
   context: RuleGenerationContext
 ): Promise<CursorRule> {
+    const STATE_LIBS = [
+      "redux", "@reduxjs/toolkit", "mobx", "zustand", "pinia", "vuex",
+      "nanostores", "recoil", "jotai", "valtio", "xstate",
+      "riverpod", "bloc", "provider", "getx",
+    ];
     const stateLib = context.techStack.dependencies.find((d) =>
-      ["redux", "mobx", "zustand", "pinia", "vuex"].some((lib) =>
-        d.name.toLowerCase().includes(lib)
-      )
+      STATE_LIBS.some((lib) => d.name.toLowerCase().includes(lib))
     );
 
     // MobX 时基于版本 + 实际代码检测使用模式
@@ -67,10 +70,13 @@ ${generateStateManagementContent(context, stateLib?.name, mobxPattern, mobxAcces
 }
 
 function getStoreGlobs(context: RuleGenerationContext): string | null {
+    const STATE_LIBS_GLOB = [
+      "redux", "@reduxjs/toolkit", "mobx", "zustand", "pinia", "vuex",
+      "nanostores", "recoil", "jotai", "valtio", "xstate",
+      "riverpod", "bloc", "provider", "getx",
+    ];
     const stateLib = context.techStack.dependencies.find((d) =>
-      ['redux', 'mobx', 'zustand', 'pinia', 'vuex'].some((lib) =>
-        d.name.toLowerCase().includes(lib)
-      )
+      STATE_LIBS_GLOB.some((lib) => d.name.toLowerCase().includes(lib))
     );
     if (!stateLib) return null;
 

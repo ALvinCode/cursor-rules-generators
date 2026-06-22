@@ -10,6 +10,49 @@ import { buildRuleMetadata } from "./rule-metadata.js";
 import { FileUtils } from "../../../utils/file-utils.js";
 import * as path from "path";
 
+/**
+ * 生成 API 调用约定内容（HTTP Client + 规范 + 响应类型），
+ * 供 feature-recipe 合并使用。
+ */
+export async function generateApiConventionsContent(
+  context: RuleGenerationContext
+): Promise<string> {
+  const apiClient = context.customPatterns?.apiClient;
+  const org = context.fileOrganization;
+  const apiDir = org?.apiLocation?.[0] || 'src/api';
+  const isTS = context.techStack.languages.includes("TypeScript");
+  const ext = isTS ? "ts" : "js";
+  const clientDetected = apiClient?.exists === true;
+  const clientName = apiClient?.exportName || apiClient?.name || "apiClient";
+  const clientPath = apiClient?.filePath
+    ? apiClient.filePath.replace(/^.*?src\//, 'src/')
+    : `${apiDir}/index.${ext}`;
+  const clientImportAlias = clientPath.replace(/^src\//, '@/').replace(/\.(ts|js)$/, '');
+  const importStatement = apiClient?.importStyle === "default"
+    ? `import ${clientName} from "${clientImportAlias}";`
+    : `import { ${clientName} } from "${clientImportAlias}";`;
+  const hasAuth = apiClient?.hasAuth ?? false;
+  const hasErrHandling = apiClient?.hasErrorHandling ?? false;
+
+  let content = `## API Conventions\n\n`;
+  content += `- Keep all API functions in \`${apiDir}/\`, split by business module\n`;
+  content += `- **Do not** call \`fetch\`/\`axios.get\` directly in components/stores — use wrapper functions\n\n`;
+
+  if (clientDetected) {
+    content += `### HTTP Client\n\n`;
+    content += `The project wraps \`${clientName}\` at \`${clientPath}\`:\n\n`;
+    content += `\`\`\`${ext}\n${importStatement}\n\`\`\`\n\n`;
+    if (hasAuth) content += `> ✅ Built-in auth (token auto-injected)\n`;
+    if (hasErrHandling) content += `> ✅ Built-in unified error handling (interceptor)\n`;
+    content += `\n`;
+  } else {
+    content += `> ⚠️ Could not auto-detect the project's HTTP client wrapper.\n\n`;
+  }
+
+  content += await generateResponseTypeHint(context);
+  return content;
+}
+
 export async function generateApiPatternsRule(
   context: RuleGenerationContext
 ): Promise<CursorRule> {
@@ -133,7 +176,7 @@ useEffect(() => {
 
 ${!hasErrorHandling ? `## Error Handling
 
-Each API function must handle exceptions, or the caller must try-catch. See also: @error-handling.mdc` : ""}
+Each API function must handle exceptions, or the caller must try-catch. See also: @code-style.mdc` : ""}
 ${await generateResponseTypeHint(context)}
 `;
 

@@ -11,7 +11,9 @@ import * as path from "path";
 import { CursorRule, RuleGenerationContext } from "../../../types.js";
 import type { ExtractedBestPractice } from "../best-practice-extractor.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
-import { getLanguageGlobs, formatMissingPractices, isJsTsProject, getPlatformSections } from "./rule-helpers.js";
+import { getLanguageGlobs, formatMissingPractices, isJsTsProject, getPlatformSections, isFrontendProject, hasUISignal, hasErrorHandling } from "./rule-helpers.js";
+import { generatePracticeBasedErrorHandling } from "./error-handling-rule.js";
+import { generateUIUXGuidelines } from "./ui-ux-rule.js";
 
 /**
  * v1.3: 生成代码风格规则（约 200 行）
@@ -38,7 +40,20 @@ export function generateCodeStyleRule(
       missingPractices?.filter((p) => p.category === "code-style") || [];
     const additionalPractices = formatMissingPractices(codeStylePractices);
 
+    const errorHandlingPractices =
+      missingPractices?.filter((p) => p.category === "error-handling") || [];
+    const allAdditional = formatMissingPractices([...codeStylePractices, ...errorHandlingPractices]);
+
     const platformStyle = getPlatformSections(context, "code-style");
+
+    // Conditionally include merged sections
+    const errorSection = hasErrorHandling(context)
+      ? `\n${generatePracticeBasedErrorHandling(context)}\n`
+      : "";
+    const uiSection = (isFrontendProject(context) && hasUISignal(context))
+      ? `\n${generateUIUXGuidelines(context)}\n`
+      : "";
+
     const content =
       metadata +
       `
@@ -50,9 +65,7 @@ ${
     : generateCodeStyleGuidelines(context)
 }
 
-${isJsTsProject(context) ? generateDosDonts(context) : ""}> See **@error-handling.mdc** for error handling conventions
-
-${generateTechSpecificConventions(context)}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
+${isJsTsProject(context) ? generateDosDonts(context) : ""}${generateTechSpecificConventions(context)}${errorSection}${uiSection}${allAdditional ? `## Additional Best Practices\n\n${allAdditional}\n` : ""}${platformStyle ? `\n${platformStyle}\n` : ""}
 `;
 
     return {

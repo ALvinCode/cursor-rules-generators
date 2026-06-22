@@ -106,7 +106,6 @@ var count = 0;
 const count: number = 0;
 \`\`\`
 
-
 ## Additional Best Practices
 
 ### Code Style:
@@ -114,6 +113,12 @@ const count: number = 0;
 Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
 
 **Related Tech Stack**: TypeScript
+
+---
+
+### Exceptions
+
+Use exceptions to handle errors you don't expect.
 
 ",
     "fileName": "code-style.mdc",
@@ -161,7 +166,7 @@ You are an expert in Express, TypeScript with deep knowledge of backend developm
 
 | Rule | Scope |
 |------|-------|
-| @code-style.mdc | Formatting and naming conventions |
+| @code-style.mdc | Formatting, naming, error handling, and UI conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @api-routing.mdc | API endpoint conventions |
 | @testing.mdc | Testing and verification commands |
@@ -311,6 +316,54 @@ const count: number = 0;
 \`\`\`
 
 
+## Project UI Stack
+
+**Currently using**: antd component library
+
+### Ant Design Conventions
+
+**Do ✅**
+\`\`\`tsx
+// Prefer antd native APIs — do not re-wrap existing capabilities
+import { Table, Form, Modal, Button, Space } from "antd";
+
+// Use Form.useForm() — do not use a raw ref
+const [form] = Form.useForm();
+
+// Table pagination via onChange callback
+<Table
+  dataSource={data}
+  columns={columns}
+  pagination={{ current, pageSize, total, onChange: handlePageChange }}
+/>;
+\`\`\`
+
+**Don't ❌**
+\`\`\`tsx
+// Do not use native <button> instead of antd Button
+<button onClick={…}>Submit</button>
+
+// Do not reimplement antd Modal.confirm / message.error
+const MyAlert = () => <div className="alert">{msg}</div>;
+\`\`\`
+
+### Common Scenarios
+
+| Scenario | Components |
+|----------|------------|
+| Data lists | \`Table\` |
+| Form submission | \`Form\` + \`Form.useForm()\` |
+| Confirmation dialogs | \`Modal.confirm()\` |
+| Action feedback | \`message.success/error()\` |
+| Loading states | \`Spin\` or Table \`loading\` prop |
+
+### Accessibility (A11y) Minimum Requirements
+
+- Interactive elements must have \`aria-label\` or visible text
+- Icon buttons must include a \`title\` attribute
+- Form fields must be associated with a \`label\` (htmlFor)
+
+
 ## Additional Best Practices
 
 ### Code Style:
@@ -318,6 +371,12 @@ const count: number = 0;
 Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
 
 **Related Tech Stack**: TypeScript
+
+---
+
+### Exceptions
+
+Use exceptions to handle errors you don't expect.
 
 ",
     "fileName": "code-style.mdc",
@@ -458,10 +517,9 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 
 | Rule | Scope |
 |------|-------|
-| @code-style.mdc | Formatting and naming conventions |
+| @code-style.mdc | Formatting, naming, error handling, and UI conventions |
 | @project-structure.mdc | Directory layout and file placement |
-| @ui-ux.mdc | UI component and UX patterns |
-| @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @feature-recipe.mdc | End-to-end guide (API + feature creation) |
 | @testing.mdc | Testing and verification commands |
 
 ",
@@ -556,73 +614,6 @@ Run these commands after code changes to verify correctness.
 ",
     "fileName": "testing.mdc",
   },
-  {
-    "content": "---
-description: UI component patterns and conventions for this project's UI library
-alwaysApply: false
-globs: src/components/**/*.{tsx,jsx}
----
-
-
-# UI/UX Guidelines
-
-See also: @global-rules.mdc, @code-style.mdc
-
-## Project UI Stack
-
-**Currently using**: antd component library
-
-### Ant Design Conventions
-
-**Do ✅**
-\`\`\`tsx
-// Prefer antd native APIs — do not re-wrap existing capabilities
-import { Table, Form, Modal, Button, Space } from "antd";
-
-// Use Form.useForm() — do not use a raw ref
-const [form] = Form.useForm();
-
-// Table pagination via onChange callback
-<Table
-  dataSource={data}
-  columns={columns}
-  pagination={{ current, pageSize, total, onChange: handlePageChange }}
-/>;
-\`\`\`
-
-**Don't ❌**
-\`\`\`tsx
-// Do not use native <button> instead of antd Button
-<button onClick={…}>Submit</button>
-
-// Do not reimplement antd Modal.confirm / message.error
-const MyAlert = () => <div className="alert">{msg}</div>;
-\`\`\`
-
-### Common Scenarios
-
-| Scenario | Components |
-|----------|------------|
-| Data lists | \`Table\` |
-| Form submission | \`Form\` + \`Form.useForm()\` |
-| Confirmation dialogs | \`Modal.confirm()\` |
-| Action feedback | \`message.success/error()\` |
-| Loading states | \`Spin\` or Table \`loading\` prop |
-
-### Accessibility (A11y) Minimum Requirements
-
-- Interactive elements must have \`aria-label\` or visible text
-- Icon buttons must include a \`title\` attribute
-- Form fields must be associated with a \`label\` (htmlFor)
-
-
-
----
-
-*UI/UX guidelines ensure good user experience and accessibility.*
-",
-    "fileName": "ui-ux.mdc",
-  },
 ]
 `;
 
@@ -677,7 +668,6 @@ var count = 0;
 const count: number = 0;
 \`\`\`
 
-
 ## Additional Best Practices
 
 ### Code Style:
@@ -685,6 +675,12 @@ const count: number = 0;
 Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
 
 **Related Tech Stack**: TypeScript
+
+---
+
+### Exceptions
+
+Use exceptions to handle errors you don't expect.
 
 ",
     "fileName": "code-style.mdc",
@@ -824,9 +820,9 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 
 | Rule | Scope |
 |------|-------|
-| @code-style.mdc | Formatting and naming conventions |
+| @code-style.mdc | Formatting, naming, error handling, and UI conventions |
 | @project-structure.mdc | Directory layout and file placement |
-| @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @feature-recipe.mdc | End-to-end guide (API + feature creation) |
 | @testing.mdc | Testing and verification commands |
 
 ",
@@ -922,47 +918,6 @@ exports[`rules generation snapshots (refactor safety net) > produces stable rule
 [
   {
     "content": "---
-description: How to call backend APIs: file location, client usage, error handling
-alwaysApply: false
-globs: src/api/**
----
-
-
-# API Call Guidelines
-
-## Core Conventions
-
-- Keep all API functions in \`src/api/\`, split by business module
-- **Do not** call \`fetch\`/\`axios.get\` directly in components/stores — use wrapper functions
-- Each function does one thing: request + return data (handle side effects at the call site)
-
-## HTTP Client
-
-> ⚠️ Could not auto-detect the project's HTTP client wrapper. Check the project's API request wrapper and ensure calls go through wrapper functions.
-
-## Do / Don't
-
-\`\`\`ts
-// ❌ Direct fetch in component
-useEffect(() => {
-  axios.get("/api/features").then(setList);
-}, []);
-
-// ✅ Call wrapper function
-useEffect(() => {
-  fetchClientList({ page: 1, pageSize: 20 }).then(setList);
-}, []);
-\`\`\`
-
-## Error Handling
-
-Each API function must handle exceptions, or the caller must try-catch. 
-
-",
-    "fileName": "api-patterns.mdc",
-  },
-  {
-    "content": "---
 description: Consult when designing features, adding modules, or making architectural decisions
 alwaysApply: false
 ---
@@ -1045,6 +1000,41 @@ const count: number = 0;
 \`\`\`
 
 
+## Project Error Handling Guidelines
+
+The project primarily uses **try-catch** for error handling.
+
+### Do ✅
+
+\`\`\`typescript
+// Async operations: catch, log, and surface meaningful errors to callers
+async function fetchData(id: string) {
+  try {
+    return await api.get(id);
+  } catch (err) {
+    console.error('[fetchData] failed', { id, err });
+    throw err; // Let the caller decide how to present the error
+  }
+}
+\`\`\`
+
+### Don't ❌
+
+\`\`\`typescript
+// Swallowing errors — causes silent failures that are hard to debug
+try { await doSomething(); } catch (_) {}
+
+// Log but don't rethrow — callers won't know the operation failed
+try { await doSomething(); } catch (err) { console.error(err); }
+\`\`\`
+
+### Rules
+
+- **catch blocks must not be empty**: Must log + re-throw or handle explicitly.
+- **Logs must include context**: \`console.error('[scope]', { ...params, err })\`
+- **Distinguish error types**: Business errors (recoverable) vs system errors (unrecoverable); throw system errors directly.
+- **User-friendly messages**: Messages shown to users must not contain technical details; log the original error.
+
 ## Additional Best Practices
 
 ### Code Style:
@@ -1052,6 +1042,12 @@ const count: number = 0;
 Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
 
 **Related Tech Stack**: TypeScript
+
+---
+
+### Exceptions
+
+Use exceptions to handle errors you don't expect.
 
 ",
     "fileName": "code-style.mdc",
@@ -1117,6 +1113,13 @@ alwaysApply: false
 
 > When adding a complete feature, create files in this order to avoid gaps.
 > Examples below use **Client** as a representative module — adapt names to your actual feature.
+
+## API Conventions
+
+- Keep all API functions in \`src/api/\`, split by business module
+- **Do not** call \`fetch\`/\`axios.get\` directly in components/stores — use wrapper functions
+
+> ⚠️ Could not auto-detect the project's HTTP client wrapper.
 
 ## Standard Steps
 
@@ -1317,14 +1320,13 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 
 | Rule | Scope |
 |------|-------|
-| @code-style.mdc | Formatting and naming conventions |
+| @code-style.mdc | Formatting, naming, error handling, and UI conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
 | @custom-tools.mdc | Project-specific hooks, utils, API clients |
 | @state-management.mdc | State management conventions |
 | @frontend-routing.mdc | Frontend routing patterns |
-| @api-patterns.mdc | API call conventions and HTTP client usage |
-| @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @feature-recipe.mdc | End-to-end guide (API + feature creation) |
 | @testing.mdc | Testing and verification commands |
 
 ",
@@ -1617,7 +1619,6 @@ var count = 0;
 const count: number = 0;
 \`\`\`
 
-
 ## Additional Best Practices
 
 ### Code Style:
@@ -1625,6 +1626,12 @@ const count: number = 0;
 Utilize TypeScript's type system fully: use interfaces, type aliases, and generics where appropriate
 
 **Related Tech Stack**: TypeScript
+
+---
+
+### Exceptions
+
+Use exceptions to handle errors you don't expect.
 
 ",
     "fileName": "code-style.mdc",
@@ -1815,11 +1822,11 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 
 | Rule | Scope |
 |------|-------|
-| @code-style.mdc | Formatting and naming conventions |
+| @code-style.mdc | Formatting, naming, error handling, and UI conventions |
 | @project-structure.mdc | Directory layout and file placement |
 | @architecture.mdc | Module structure and design patterns |
 | @custom-tools.mdc | Project-specific hooks, utils, API clients |
-| @feature-recipe.mdc | End-to-end guide for adding a new feature |
+| @feature-recipe.mdc | End-to-end guide (API + feature creation) |
 | @testing.mdc | Testing and verification commands |
 
 ",

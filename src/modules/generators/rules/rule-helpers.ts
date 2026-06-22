@@ -24,7 +24,15 @@ export function featureExists(
 
   const featureDeps: Record<string, string[]> = {
     testing: ["jest", "vitest", "mocha", "@testing-library"],
-    "state-management": ["redux", "zustand", "mobx", "pinia", "vuex", "nanostores"],
+    "state-management": [
+      // Web
+      "redux", "@reduxjs/toolkit", "zustand", "mobx", "pinia", "vuex",
+      "nanostores", "recoil", "jotai", "valtio", "xstate",
+      // Cross-platform
+      "react-native-mmkv", "expo-secure-store",
+      // Flutter (pub)
+      "riverpod", "bloc", "provider", "getx",
+    ],
     styling: ["styled-components", "@emotion", "tailwindcss", "@mui"],
   };
 
@@ -85,21 +93,57 @@ export function hasUISignal(context: RuleGenerationContext): boolean {
   return (context.uiLibraries?.active ?? []).length > 0;
 }
 
+export type ProjectType =
+  | 'web-frontend'
+  | 'web-backend'
+  | 'web-fullstack'
+  | 'mobile-ios'
+  | 'mobile-android'
+  | 'mobile-cross'
+  | 'desktop'
+  | 'library'
+  | 'cli'
+  | 'unknown';
+
+/**
+ * 检测项目类型（Web 前端/后端/全栈、Mobile、Desktop 等）。
+ * 用于按项目类型调整核心规则内容和按需规则触发。
+ */
+export function detectProjectType(context: RuleGenerationContext): ProjectType {
+  const frameworks = context.techStack.frameworks.map((f) => f.toLowerCase());
+  const deps = context.techStack.dependencies.map((d) => d.name.toLowerCase());
+  const langs = context.techStack.languages.map((l) => l.toLowerCase());
+
+  const WEB_FRONTEND = ["react", "vue", "angular", "svelte", "preact"];
+  const WEB_FULLSTACK = ["next.js", "nuxt", "remix", "sveltekit"];
+  const WEB_BACKEND = ["express", "fastify", "koa", "nestjs", "hapi", "django", "flask", "spring boot", "gin", "fiber"];
+  const MOBILE_CROSS = ["react native", "flutter", "expo"];
+
+  const hasFrontend = frameworks.some((f) => WEB_FRONTEND.some((wf) => f.includes(wf)));
+  const hasFullstack = frameworks.some((f) => WEB_FULLSTACK.some((wf) => f.includes(wf)));
+  const hasBackend = frameworks.some((f) => WEB_BACKEND.some((wf) => f.includes(wf)))
+    || deps.some((d) => ["express", "fastify", "koa", "@nestjs/core", "@hapi/hapi"].includes(d));
+  const hasMobileCross = frameworks.some((f) => MOBILE_CROSS.some((mc) => f.includes(mc)))
+    || deps.some((d) => ["react-native", "expo", "flutter"].includes(d));
+
+  if (hasMobileCross) return 'mobile-cross';
+  if (langs.includes("swift") || langs.includes("objective-c")) return 'mobile-ios';
+  if (langs.includes("kotlin") && deps.some((d) => d.includes("android"))) return 'mobile-android';
+  if (deps.some((d) => d === "electron" || d === "tauri" || d === "@tauri-apps/api")) return 'desktop';
+  if (hasFullstack) return 'web-fullstack';
+  if (hasFrontend && hasBackend) return 'web-fullstack';
+  if (hasFrontend) return 'web-frontend';
+  if (hasBackend) return 'web-backend';
+
+  return 'unknown';
+}
+
 /**
  * 是否为前端项目（基于已识别的前端框架）。
  */
 export function isFrontendProject(context: RuleGenerationContext): boolean {
-  const frontendFrameworks = [
-    "React",
-    "Vue",
-    "Angular",
-    "Svelte",
-    "Next.js",
-    "Nuxt",
-  ];
-  return context.techStack.frameworks.some((f) =>
-    frontendFrameworks.includes(f)
-  );
+  const type = detectProjectType(context);
+  return ['web-frontend', 'web-fullstack', 'mobile-cross', 'desktop'].includes(type);
 }
 
 /**
