@@ -160,7 +160,52 @@ You are an expert in Express, TypeScript with deep knowledge of backend developm
 - After writing code, run \`npm run build\` before considering the task complete.
 
 
-- Follow the framework's official best practices
+
+
+## Task Workflow
+
+### Before Coding
+- Search for similar implementations in the codebase before writing new code
+- Read adjacent files in the same module to understand local patterns
+- Check @project-structure.mdc for correct file placement
+
+### Modifying Existing Features
+- Read the module's existing tests, types, and store/hooks before editing
+- Identify the existing pattern (hook style, API convention, component pattern) and **match it**
+- Update or add tests for changed behavior — never remove existing assertions without justification
+- When the module uses a legacy pattern, follow that pattern locally; propose migration in a separate task
+
+### During Coding
+- Match the style of surrounding code (imports, naming, error handling)
+- Handle loading, empty, and error states for async operations
+
+### After Coding
+- Run verification commands (lint, typecheck, tests)
+- Review all modified files for unintended changes
+- Summarize: changed files, assumptions made, risks or unresolved items
+
+
+## Priority and Conflict Resolution
+
+When rules conflict, follow this precedence:
+1. Hard Constraints in this file (highest priority)
+2. Project-specific patterns in existing code
+3. Rule-file-specific guidelines (@code-style, @architecture, etc.)
+4. Framework official best practices (lowest priority)
+
+### Common Conflicts
+- **Shared vs feature-local**: Default to feature-local; promote to shared only when 3+ features use it
+- **Existing pattern vs best practice**: Follow the existing pattern in the same module; propose improvements in PR description, not inline
+- **Legacy code**: Do not refactor surrounding legacy code unless the task explicitly requires it
+
+
+## Completion Checklist
+
+Before considering a task done:
+- [ ] Run \`npm run build\` — no errors
+- [ ] No unintended file changes outside the task scope
+- [ ] Summarize: files changed, assumptions, and open questions
+
 
 ## Rule Index
 
@@ -423,25 +468,59 @@ export const fetchFeatureList = (params: FeatureListParams) => {
 };
 \`\`\`
 
+
 ### 3. Reusable Hook (Optional)
 
 \`\`\`ts
-// src/hooks/useFeature.ts
-export function useFeature(id: string) {
-  // Encapsulate data fetching, loading state, and error handling
-  // Components call this directly; don't duplicate fetch logic
+// src/hooks/useFeatureList.ts
+import { useEffect, useState } from "react";
+import type { FeatureItem, FeatureListParams } from "@/types/feature";
+import { fetchFeatureList } from "@/api/feature";
+
+export function useFeatureList(params: FeatureListParams) {
+  const [items, setItems] = useState<FeatureItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchFeatureList(params)
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.page, params.pageSize]);
+
+  return { items, loading, error };
 }
 \`\`\`
+
 
 ### 4. Page Component
 
 \`\`\`tsx
 // src/components/FeatureList/FeatureList.tsx
-// Rendering only; business logic lives in Hook / Store
+import { useFeatureList } from "@/hooks/useFeatureList";
+import { Table, Spin, Alert, Empty } from "antd";
+
 export function FeatureList() {
-  // 1. Get data from store/hook
-  // 2. Handle loading / error states
-  // 3. Render the list
+  const { items, loading, error } = useFeatureList({ page: 1, pageSize: 20 });
+
+  if (loading) return <Spin />;
+  if (error) return <Alert type="error" message={error} />;
+  if (!items.length) return <Empty />;
+
+  const columns = [{ title: "Name", dataIndex: "name", key: "name" }];
+  return <Table dataSource={items} rowKey="id" columns={columns} />;
 }
 \`\`\`
 
@@ -459,9 +538,16 @@ After adding a feature, confirm the following files were created/updated:
 
 - [ ] \`src/types/feature.ts\` — Type definitions
 - [ ] \`src/api/feature.ts\` — API functions
-- [ ] \`src/hooks/useFeature.ts\` — Data hook (optional)
-- [ ] \`src/components/FeatureList/\` — Page component
+- [ ] \`src/hooks/useFeatureList.ts\` — Data hook (optional)
+- [ ] \`src/components/FeatureList/FeatureList.tsx\` — Page component
 - [ ] Route config updated
+
+### Verification
+
+- [ ] All files from the checklist above exist at the expected paths
+- [ ] Route is registered and navigable
+- [ ] Loading, empty, and error states are handled in the page component
+- [ ] Run \`npm run build\` — no errors
 
 ---
 
@@ -510,7 +596,52 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
   - Use \`useMemo\` and \`useCallback\` judiciously for performance
-  - Use TypeScript for type checking
+
+
+## Task Workflow
+
+### Before Coding
+- Search for similar implementations in the codebase before writing new code
+- Read adjacent files in the same module to understand local patterns
+- Check @project-structure.mdc for correct file placement
+- For full feature work, follow @feature-recipe.mdc step order
+
+### Modifying Existing Features
+- Read the module's existing tests, types, and store/hooks before editing
+- Identify the existing pattern (hook style, API convention, component pattern) and **match it**
+- Update or add tests for changed behavior — never remove existing assertions without justification
+- When the module uses a legacy pattern, follow that pattern locally; propose migration in a separate task
+
+### During Coding
+- Match the style of surrounding code (imports, naming, error handling)
+- Handle loading, empty, and error states for async operations
+
+### After Coding
+- Run verification commands (lint, typecheck, tests)
+- Review all modified files for unintended changes
+- Summarize: changed files, assumptions made, risks or unresolved items
+
+
+## Priority and Conflict Resolution
+
+When rules conflict, follow this precedence:
+1. Hard Constraints in this file (highest priority)
+2. Project-specific patterns in existing code
+3. Rule-file-specific guidelines (@code-style, @architecture, etc.)
+4. Framework official best practices (lowest priority)
+
+### Common Conflicts
+- **Shared vs feature-local**: Default to feature-local; promote to shared only when 3+ features use it
+- **Existing pattern vs best practice**: Follow the existing pattern in the same module; propose improvements in PR description, not inline
+- **Legacy code**: Do not refactor surrounding legacy code unless the task explicitly requires it
+
+
+## Completion Checklist
+
+Before considering a task done:
+- [ ] Run \`npm run build\` — no errors
+- [ ] No unintended file changes outside the task scope
+- [ ] Summarize: files changed, assumptions, and open questions
 
 
 ## Rule Index
@@ -727,25 +858,56 @@ export const fetchFeatureList = (params: FeatureListParams) => {
 };
 \`\`\`
 
+
 ### 3. Reusable Hook (Optional)
 
 \`\`\`ts
-// src/hooks/useFeature.ts
-export function useFeature(id: string) {
-  // Encapsulate data fetching, loading state, and error handling
-  // Components call this directly; don't duplicate fetch logic
+// src/hooks/useFeatureList.ts
+import { useEffect, useState } from "react";
+import type { FeatureItem, FeatureListParams } from "@/types/feature";
+import { fetchFeatureList } from "@/api/feature";
+
+export function useFeatureList(params: FeatureListParams) {
+  const [items, setItems] = useState<FeatureItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchFeatureList(params)
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.page, params.pageSize]);
+
+  return { items, loading, error };
 }
 \`\`\`
+
 
 ### 4. Page Component
 
 \`\`\`tsx
 // src/components/FeatureList/FeatureList.tsx
-// Rendering only; business logic lives in Hook / Store
+import { useFeatureList } from "@/hooks/useFeatureList";
+
 export function FeatureList() {
-  // 1. Get data from store/hook
-  // 2. Handle loading / error states
-  // 3. Render the list
+  const { items, loading, error } = useFeatureList({ page: 1, pageSize: 20 });
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>{error}</div>;
+  if (!items.length) return <div>No data</div>;
+  return <ul>{items.map((item) => <li key={item.id}>{item.name}</li>)}</ul>;
 }
 \`\`\`
 
@@ -763,9 +925,16 @@ After adding a feature, confirm the following files were created/updated:
 
 - [ ] \`src/types/feature.ts\` — Type definitions
 - [ ] \`src/api/feature.ts\` — API functions
-- [ ] \`src/hooks/useFeature.ts\` — Data hook (optional)
-- [ ] \`src/components/FeatureList/\` — Page component
+- [ ] \`src/hooks/useFeatureList.ts\` — Data hook (optional)
+- [ ] \`src/components/FeatureList/FeatureList.tsx\` — Page component
 - [ ] Route config updated
+
+### Verification
+
+- [ ] All files from the checklist above exist at the expected paths
+- [ ] Route is registered and navigable
+- [ ] Loading, empty, and error states are handled in the page component
+- [ ] Run \`npm run build\` — no errors
 
 ---
 
@@ -810,10 +979,55 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
 
 
 - **React**: 
-  - Use function components and Hooks; avoid class components
+  - Prefer function components + Hooks for **new** code; do not convert existing class components
   - Keep components focused on a single responsibility
   - Use \`useMemo\` and \`useCallback\` judiciously for performance
-  - Use TypeScript for type checking
+
+
+## Task Workflow
+
+### Before Coding
+- Search for similar implementations in the codebase before writing new code
+- Read adjacent files in the same module to understand local patterns
+- Check @project-structure.mdc for correct file placement
+- For full feature work, follow @feature-recipe.mdc step order
+
+### Modifying Existing Features
+- Read the module's existing tests, types, and store/hooks before editing
+- Identify the existing pattern (hook style, API convention, component pattern) and **match it**
+- Update or add tests for changed behavior — never remove existing assertions without justification
+- When the module uses a legacy pattern, follow that pattern locally; propose migration in a separate task
+
+### During Coding
+- Match the style of surrounding code (imports, naming, error handling)
+- Handle loading, empty, and error states for async operations
+
+### After Coding
+- Run verification commands (lint, typecheck, tests)
+- Review all modified files for unintended changes
+- Summarize: changed files, assumptions made, risks or unresolved items
+
+
+## Priority and Conflict Resolution
+
+When rules conflict, follow this precedence:
+1. Hard Constraints in this file (highest priority)
+2. Project-specific patterns in existing code
+3. Rule-file-specific guidelines (@code-style, @architecture, etc.)
+4. Framework official best practices (lowest priority)
+
+### Common Conflicts
+- **Shared vs feature-local**: Default to feature-local; promote to shared only when 3+ features use it
+- **Existing pattern vs best practice**: Follow the existing pattern in the same module; propose improvements in PR description, not inline
+- **Legacy code**: Do not refactor surrounding legacy code unless the task explicitly requires it
+
+
+## Completion Checklist
+
+Before considering a task done:
+- [ ] Run \`npm run build\` — no errors
+- [ ] No unintended file changes outside the task scope
+- [ ] Summarize: files changed, assumptions, and open questions
 
 
 ## Rule Index
@@ -1157,6 +1371,7 @@ export const fetchClientList = (params: ClientListParams) => {
 // src/store/clientStore.ts
 import { create } from "zustand";
 import type { ClientItem } from "@/types/client";
+import { fetchClientList } from "@/api/client";
 
 interface ClientStore {
   items: ClientItem[];
@@ -1175,25 +1390,39 @@ export const useClientStore = create<ClientStore>((set) => ({
 }));
 \`\`\`
 
+
 ### 4. Reusable Hook (Optional)
 
 \`\`\`ts
-// src/hooks/useClient.ts
-export function useClient(id: string) {
-  // Encapsulate data fetching, loading state, and error handling
-  // Components call this directly; don't duplicate fetch logic
+// src/hooks/useClientList.ts
+import { useEffect } from "react";
+import { useClientStore } from "@/store/clientStore";
+
+export function useClientList() {
+  const { items, loading, fetchItems } = useClientStore();
+
+  useEffect(() => {
+    void fetchItems();
+  }, [fetchItems]);
+
+  return { items, loading, error: null };
 }
 \`\`\`
+
 
 ### 5. Page Component
 
 \`\`\`tsx
 // src/pages/ClientList/ClientList.tsx
-// Rendering only; business logic lives in Hook / Store
+import { useClientList } from "@/hooks/useClientList";
+
 export function ClientList() {
-  // 1. Get data from store/hook
-  // 2. Handle loading / error states
-  // 3. Render the list
+  const { items, loading, error } = useClientList({ page: 1, pageSize: 20 });
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>{error}</div>;
+  if (!items.length) return <div>No data</div>;
+  return <ul>{items.map((item) => <li key={item.id}>{item.name}</li>)}</ul>;
 }
 \`\`\`
 
@@ -1212,9 +1441,17 @@ After adding a feature, confirm the following files were created/updated:
 - [ ] \`src/types/client.ts\` — Type definitions
 - [ ] \`src/api/client.ts\` — API functions
 - [ ] \`src/store/clientStore.ts\` — Store
-- [ ] \`src/hooks/useClient.ts\` — Data hook (optional)
-- [ ] \`src/pages/ClientList/\` — Page component
+- [ ] \`src/hooks/useClientList.ts\` — Data hook (optional)
+- [ ] \`src/pages/ClientList/ClientList.tsx\` — Page component
 - [ ] Route config updated
+
+### Verification
+
+- [ ] All files from the checklist above exist at the expected paths
+- [ ] Route is registered and navigable
+- [ ] Loading, empty, and error states are handled in the page component
+- [ ] Run \`npm run type-check\` — no errors
+- [ ] Run \`npm run test\` — all tests pass
 
 ---
 
@@ -1313,7 +1550,54 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
   - Use \`useMemo\` and \`useCallback\` judiciously for performance
-  - Use TypeScript for type checking
+
+
+## Task Workflow
+
+### Before Coding
+- Search for similar implementations in the codebase before writing new code
+- Read adjacent files in the same module to understand local patterns
+- Check @project-structure.mdc for correct file placement
+- For full feature work, follow @feature-recipe.mdc step order
+
+### Modifying Existing Features
+- Read the module's existing tests, types, and store/hooks before editing
+- Identify the existing pattern (hook style, API convention, component pattern) and **match it**
+- Update or add tests for changed behavior — never remove existing assertions without justification
+- When the module uses a legacy pattern, follow that pattern locally; propose migration in a separate task
+
+### During Coding
+- Match the style of surrounding code (imports, naming, error handling)
+- Handle loading, empty, and error states for async operations
+- Reuse existing hooks/utils from @custom-tools.mdc
+
+### After Coding
+- Run verification commands (lint, typecheck, tests)
+- Review all modified files for unintended changes
+- Summarize: changed files, assumptions made, risks or unresolved items
+
+
+## Priority and Conflict Resolution
+
+When rules conflict, follow this precedence:
+1. Hard Constraints in this file (highest priority)
+2. Project-specific patterns in existing code
+3. Rule-file-specific guidelines (@code-style, @architecture, etc.)
+4. Framework official best practices (lowest priority)
+
+### Common Conflicts
+- **Shared vs feature-local**: Default to feature-local; promote to shared only when 3+ features use it
+- **Existing pattern vs best practice**: Follow the existing pattern in the same module; propose improvements in PR description, not inline
+- **Legacy code**: Do not refactor surrounding legacy code unless the task explicitly requires it
+
+
+## Completion Checklist
+
+Before considering a task done:
+- [ ] Run \`npm run type-check\` — no errors
+- [ ] Run \`npm run test\` — all tests pass
+- [ ] No unintended file changes outside the task scope
+- [ ] Summarize: files changed, assumptions, and open questions
 
 
 ## Rule Index
@@ -1728,25 +2012,56 @@ export const fetchFeatureList = (params: FeatureListParams) => {
 };
 \`\`\`
 
+
 ### 3. Reusable Hook (Optional)
 
 \`\`\`ts
-// src/hooks/useFeature.ts
-export function useFeature(id: string) {
-  // Encapsulate data fetching, loading state, and error handling
-  // Components call this directly; don't duplicate fetch logic
+// src/hooks/useFeatureList.ts
+import { useEffect, useState } from "react";
+import type { FeatureItem, FeatureListParams } from "@/types/feature";
+import { fetchFeatureList } from "@/api/feature";
+
+export function useFeatureList(params: FeatureListParams) {
+  const [items, setItems] = useState<FeatureItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchFeatureList(params)
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.page, params.pageSize]);
+
+  return { items, loading, error };
 }
 \`\`\`
+
 
 ### 4. Page Component
 
 \`\`\`tsx
 // src/components/FeatureList/FeatureList.tsx
-// Rendering only; business logic lives in Hook / Store
+import { useFeatureList } from "@/hooks/useFeatureList";
+
 export function FeatureList() {
-  // 1. Get data from store/hook
-  // 2. Handle loading / error states
-  // 3. Render the list
+  const { items, loading, error } = useFeatureList({ page: 1, pageSize: 20 });
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>{error}</div>;
+  if (!items.length) return <div>No data</div>;
+  return <ul>{items.map((item) => <li key={item.id}>{item.name}</li>)}</ul>;
 }
 \`\`\`
 
@@ -1764,9 +2079,17 @@ After adding a feature, confirm the following files were created/updated:
 
 - [ ] \`src/types/feature.ts\` — Type definitions
 - [ ] \`src/api/feature.ts\` — API functions
-- [ ] \`src/hooks/useFeature.ts\` — Data hook (optional)
-- [ ] \`src/components/FeatureList/\` — Page component
+- [ ] \`src/hooks/useFeatureList.ts\` — Data hook (optional)
+- [ ] \`src/components/FeatureList/FeatureList.tsx\` — Page component
 - [ ] Route config updated
+
+### Verification
+
+- [ ] All files from the checklist above exist at the expected paths
+- [ ] Route is registered and navigable
+- [ ] Loading, empty, and error states are handled in the page component
+- [ ] Run \`npm run lint\` — no new warnings
+- [ ] Run \`npm run type-check\` — no errors
 
 ---
 
@@ -1815,7 +2138,54 @@ You are an expert in React, TypeScript with deep knowledge of frontend developme
   - Use function components and Hooks; avoid class components
   - Keep components focused on a single responsibility
   - Use \`useMemo\` and \`useCallback\` judiciously for performance
-  - Use TypeScript for type checking
+
+
+## Task Workflow
+
+### Before Coding
+- Search for similar implementations in the codebase before writing new code
+- Read adjacent files in the same module to understand local patterns
+- Check @project-structure.mdc for correct file placement
+- For full feature work, follow @feature-recipe.mdc step order
+
+### Modifying Existing Features
+- Read the module's existing tests, types, and store/hooks before editing
+- Identify the existing pattern (hook style, API convention, component pattern) and **match it**
+- Update or add tests for changed behavior — never remove existing assertions without justification
+- When the module uses a legacy pattern, follow that pattern locally; propose migration in a separate task
+
+### During Coding
+- Match the style of surrounding code (imports, naming, error handling)
+- Handle loading, empty, and error states for async operations
+- Reuse existing hooks/utils from @custom-tools.mdc
+
+### After Coding
+- Run verification commands (lint, typecheck, tests)
+- Review all modified files for unintended changes
+- Summarize: changed files, assumptions made, risks or unresolved items
+
+
+## Priority and Conflict Resolution
+
+When rules conflict, follow this precedence:
+1. Hard Constraints in this file (highest priority)
+2. Project-specific patterns in existing code
+3. Rule-file-specific guidelines (@code-style, @architecture, etc.)
+4. Framework official best practices (lowest priority)
+
+### Common Conflicts
+- **Shared vs feature-local**: Default to feature-local; promote to shared only when 3+ features use it
+- **Existing pattern vs best practice**: Follow the existing pattern in the same module; propose improvements in PR description, not inline
+- **Legacy code**: Do not refactor surrounding legacy code unless the task explicitly requires it
+
+
+## Completion Checklist
+
+Before considering a task done:
+- [ ] Run \`npm run lint\` — no new warnings
+- [ ] Run \`npm run type-check\` — no errors
+- [ ] No unintended file changes outside the task scope
+- [ ] Summarize: files changed, assumptions, and open questions
 
 
 ## Rule Index

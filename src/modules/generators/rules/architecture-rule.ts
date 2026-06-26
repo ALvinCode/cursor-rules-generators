@@ -40,6 +40,7 @@ export function generateArchitectureRule(
     const codeFeaturesSection = generateCodeFeaturesSection(context);
     const platformArch = getPlatformSections(context, "architecture");
     const principles = generateArchitecturePrinciples(context);
+    const canonicalSection = generateCanonicalReferencesSection(context);
 
     // Value gate: only generate a standalone file when there's concrete
     // architectural detail beyond what global-rules & project-structure cover.
@@ -70,6 +71,8 @@ export function generateArchitectureRule(
       };
     }
 
+    const patternBoundary = generatePatternBoundarySection(context);
+
     const content =
       metadata +
       `
@@ -84,7 +87,7 @@ ${generateArchitecturePatternSection(pattern)}
 ## Module Structure
 
 ${generateModuleStructureSection(context)}
-${codeFeaturesSection}${generateContextSection(context)}${principles ? `## Design Principles\n\n${principles}` : ""}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
+${canonicalSection}${codeFeaturesSection}${generateContextSection(context)}${patternBoundary}${principles ? `## Design Principles\n\n${principles}` : ""}${additionalPractices ? `## Additional Best Practices\n\n${additionalPractices}\n` : ""}${platformArch ? `\n${platformArch}\n` : ""}
 `;
 
     return {
@@ -301,5 +304,262 @@ function generateContextSection(context: RuleGenerationContext): string {
       section += `- Use existing Context providers — do not introduce external state management libraries without discussion\n`;
     }
     section += `- Keep Context values focused; split into multiple Contexts if unrelated concerns are grouped\n\n`;
+    return section;
+}
+
+interface CanonicalReference {
+  name: string;
+  path: string;
+  coverage: Set<string>;
+}
+
+function generateCanonicalReferencesSection(context: RuleGenerationContext): string {
+    const inDirRefs = findCanonicalReferences(context);
+    const crossDirRefs = findCrossDirectoryCanonicalReferences(context);
+
+    const seenNames = new Set(inDirRefs.map((r) => r.name.toLowerCase()));
+    const merged = [
+      ...inDirRefs,
+      ...crossDirRefs.filter((r) => !seenNames.has(r.name.toLowerCase())),
+    ];
+    merged.sort((a, b) => b.coverage.size - a.coverage.size);
+    const topRefs = merged.slice(0, 3);
+
+    if (topRefs.length === 0) return "";
+
+    let section = `\n## Canonical References\n\n`;
+    section += `When adding a new feature, use these well-structured modules as references:\n\n`;
+    section += `| Reference | Path | What to imitate |\n`;
+    section += `|-----------|------|-----------------|\n`;
+
+    for (const ref of topRefs) {
+      const imitate = describeCanonicalCoverage(ref.coverage);
+      section += `| ${ref.name} | \`${ref.path}\` | ${imitate} |\n`;
+    }
+    section += `\n`;
+    return section;
+}
+
+function describeCanonicalCoverage(coverage: Set<string>): string {
+    const labels: string[] = [];
+    if (coverage.has("component")) labels.push("components");
+    if (coverage.has("store")) labels.push("store");
+    if (coverage.has("hook")) labels.push("hooks");
+    if (coverage.has("type")) labels.push("types");
+    if (coverage.has("api")) labels.push("API");
+    if (coverage.has("style")) labels.push("styles");
+    if (coverage.has("module")) labels.push("supporting modules");
+    if (coverage.has("test")) labels.push("tests");
+
+    if (labels.length === 0) return "Complete feature structure";
+    return `Feature structure with ${labels.join(", ")}`;
+}
+
+function findCanonicalReferences(context: RuleGenerationContext): CanonicalReference[] {
+    const PAGE_DIR_KW = new Set(["views", "pages", "screens"]);
+    const deepAnalysis = context.deepAnalysis ?? [];
+    const files = context.files ?? [];
+    const projectPath = context.projectPath;
+
+    const candidates = deepAnalysis.filter((d) => {
+      if (d.depth < 2) return false;
+      const parentName = d.path.split("/").slice(-2, -1)[0]?.toLowerCase() ?? "";
+      if (!PAGE_DIR_KW.has(parentName)) return false;
+      const dirName = d.path.split("/").pop() ?? "";
+      return /^[a-zA-Z]/.test(dirName);
+    });
+
+    const scored: CanonicalReference[] = [];
+
+    for (const dir of candidates) {
+      const dirPath = dir.path;
+      const prefix = dirPath.endsWith("/") ? dirPath : `${dirPath}/`;
+      const coverage = new Set<string>();
+
+      for (const file of files) {
+        const rel = path.relative(projectPath, file).replace(/\\/g, "/");
+        if (!rel.startsWith(prefix)) continue;
+
+        const base = path.basename(file);
+        const ext = path.extname(file).toLowerCase();
+
+        if (/\.(test|spec)\.(ts|tsx|js|jsx)$/.test(base)) {
+          coverage.add("test");
+        } else if (/\.(tsx|jsx|vue)$/.test(ext)) {
+          coverage.add("component");
+        } else if (/\/store\//i.test(rel) || /Store\.(ts|js)$/.test(base)) {
+          coverage.add("store");
+        } else if (/\/hooks?\//i.test(rel) || /^use[A-Z]/.test(base)) {
+          coverage.add("hook");
+        } else if (
+          /\/(types?|interfaces?)\//i.test(rel) ||
+          /\.types?\.(ts|js)$/.test(base)
+        ) {
+          coverage.add("type");
+        } else if (/\/api\//i.test(rel) && /\.(ts|js)$/.test(ext)) {
+          coverage.add("api");
+        } else if (/\.(css|scss|less|styl|sass|module\.styl)$/.test(base)) {
+          coverage.add("style");
+        } else if (/\.(ts|js)$/.test(ext)) {
+          coverage.add("module");
+        }
+      }
+
+      if (coverage.size >= 3) {
+        const name = path.basename(dirPath)
+          .replace(/[-_]/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+          .replace(/\s/g, "");
+        scored.push({ name, path: dirPath, coverage });
+      }
+    }
+
+    scored.sort((a, b) => b.coverage.size - a.coverage.size);
+    return scored.slice(0, 2);
+}
+
+/**
+ * Cross-directory canonical reference detection.
+ * For flat-structure projects where a feature's files are spread across
+ * api/, store/, hooks/, types/, views/ etc., we find business entity names
+ * that appear in 3+ of these functional directories.
+ */
+function findCrossDirectoryCanonicalReferences(context: RuleGenerationContext): CanonicalReference[] {
+    const files = context.files ?? [];
+    const projectPath = context.projectPath;
+    const org = context.fileOrganization;
+    if (!org) return [];
+
+    const locationSets: Array<{ category: string; dirs: string[] }> = [
+      { category: "api", dirs: org.apiLocation ?? [] },
+      { category: "hook", dirs: org.hooksLocation ?? [] },
+      { category: "type", dirs: org.typesLocation ?? [] },
+      { category: "component", dirs: org.componentLocation ?? [] },
+    ];
+
+    const storeDirs = (context.deepAnalysis ?? [])
+      .filter((d) => /^stores?$/i.test(path.basename(d.path)))
+      .map((d) => d.path);
+    if (storeDirs.length > 0) {
+      locationSets.push({ category: "store", dirs: storeDirs });
+    }
+
+    const entityMap = new Map<string, { coverage: Set<string>; paths: string[] }>();
+
+    for (const { category, dirs } of locationSets) {
+      for (const dir of dirs) {
+        const prefix = dir.endsWith("/") ? dir : `${dir}/`;
+        for (const file of files) {
+          const rel = path.relative(projectPath, file).replace(/\\/g, "/");
+          if (!rel.startsWith(prefix)) continue;
+          const rest = rel.slice(prefix.length);
+          if (rest.includes("/")) continue;
+
+          const baseName = path.basename(file, path.extname(file))
+            .replace(/\.(test|spec|types?|api|service|store|slice)$/i, "")
+            .replace(/^use/i, "")
+            .replace(/Store$/i, "")
+            .replace(/Slice$/i, "");
+
+          const normalized = baseName.replace(/[-_]/g, "").toLowerCase();
+          if (!normalized || normalized === "index" || normalized === "base") continue;
+
+          if (!entityMap.has(normalized)) {
+            entityMap.set(normalized, { coverage: new Set(), paths: [] });
+          }
+          const entry = entityMap.get(normalized)!;
+          entry.coverage.add(category);
+          const dirPath = path.dirname(rel);
+          if (!entry.paths.includes(dirPath)) {
+            entry.paths.push(dirPath);
+          }
+        }
+      }
+    }
+
+    const results: CanonicalReference[] = [];
+    for (const [normalized, entry] of entityMap) {
+      if (entry.coverage.size >= 3) {
+        const displayName = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        results.push({
+          name: displayName,
+          path: entry.paths.join(", "),
+          coverage: entry.coverage,
+        });
+      }
+    }
+
+    results.sort((a, b) => b.coverage.size - a.coverage.size);
+    return results.slice(0, 3);
+}
+
+interface PatternBoundary {
+  area: string;
+  legacy: string;
+  modern: string;
+  guidance: string;
+}
+
+function generatePatternBoundarySection(context: RuleGenerationContext): string {
+    const boundaries: PatternBoundary[] = [];
+
+    const compType = context.projectPractice?.componentPattern?.type;
+    if (compType === "mixed") {
+      boundaries.push({
+        area: "Components",
+        legacy: "Class components",
+        modern: "Function components + Hooks",
+        guidance: "New code: function components only. Do not convert existing class components unless the task requires it.",
+      });
+    }
+
+    const deps = context.techStack.dependencies;
+    const hasMobxReact = deps.some((d) => d.name === "mobx-react");
+    const hasMobxReactLite = deps.some((d) => d.name === "mobx-react-lite");
+    if (hasMobxReact && hasMobxReactLite) {
+      boundaries.push({
+        area: "MobX Observer",
+        legacy: "`mobx-react` (class-based `@observer`)",
+        modern: "`mobx-react-lite` (`observer` HOF)",
+        guidance: "New code: import `observer` from `mobx-react-lite`. Existing `@observer` classes stay as-is.",
+      });
+    }
+
+    const exportStyle = context.projectPractice?.componentPattern?.exportStyle;
+    if (exportStyle === "mixed") {
+      boundaries.push({
+        area: "Export Style",
+        legacy: "Default exports",
+        modern: "Named exports",
+        guidance: "New code: prefer named exports for better refactoring support. Match existing file's style when editing.",
+      });
+    }
+
+    const hasReactRouter = deps.find((d) => d.name === "react-router-dom" || d.name === "react-router");
+    if (hasReactRouter) {
+      const major = hasReactRouter.version ? parseInt(hasReactRouter.version.replace(/^[\^~>=<]+/, ""), 10) : 0;
+      if (major >= 6) {
+        const hasV5Patterns = (context.codeFeatures?.["legacy-routing"]?.frequency ?? 0) > 0;
+        if (hasV5Patterns) {
+          boundaries.push({
+            area: "Routing",
+            legacy: "React Router v5 (`<Switch>`, `component` prop)",
+            modern: "React Router v6+ (`<Routes>`, `element` prop)",
+            guidance: "New routes: v6 API only. Migrate v5 routes only when the surrounding module is being refactored.",
+          });
+        }
+      }
+    }
+
+    if (boundaries.length === 0) return "";
+
+    let section = `\n## Legacy vs Modern Patterns\n\n`;
+    section += `This project contains both legacy and modern patterns. Follow the guidance below:\n\n`;
+    section += `| Area | Legacy | Modern (use for new code) | Guidance |\n`;
+    section += `|------|--------|---------------------------|----------|\n`;
+    for (const b of boundaries) {
+      section += `| ${b.area} | ${b.legacy} | ${b.modern} | ${b.guidance} |\n`;
+    }
+    section += `\n`;
     return section;
 }

@@ -43,6 +43,9 @@ export function generateGlobalOverviewRule(
     const techVersions = generateVersionedTechStack(context);
     const commandsSection = generateCommandsSection(context);
     const platformGlobal = getPlatformSections(context, "global-overview");
+    const taskWorkflow = generateTaskWorkflow(context);
+    const priorityRules = generatePriorityRules();
+    const completionChecklist = generateCompletionChecklist(context);
 
     const content =
       metadata +
@@ -58,8 +61,7 @@ ${commandsSection}
 
 ${isJsTsProject(context) && !isAnyAllowed(context) ? `- NEVER use \`any\` type. Use \`unknown\` and narrow with type guards.\n` : ""}- NEVER swallow errors with empty catch blocks. Log and re-throw or handle explicitly.
 - NEVER create duplicate utilities. Check @custom-tools.mdc before writing helpers.
-- NEVER generate markdown documentation files — express intent through code, types, and naming.
-- Before creating files, consult @project-structure.mdc for correct location.
+${isDocumentationProject(context) ? "" : "- NEVER generate markdown documentation files — express intent through code, types, and naming.\n"}- Before creating files, consult @project-structure.mdc for correct location.
 - Reuse existing project tools — do not re-implement what already exists.
 - Follow the project's established patterns and conventions.
 ${generatePostCodingConstraint(context)}
@@ -69,6 +71,9 @@ ${
     ? `\n${generateFrameworkPrinciples(context)}\n`
     : ""
 }${platformGlobal ? `\n${platformGlobal}\n` : ""}
+${taskWorkflow}
+${priorityRules}
+${completionChecklist}
 ## Rule Index
 
 | Rule | Scope |
@@ -93,14 +98,17 @@ ${hasArchitectureValue(context) ? "| @architecture.mdc | Module structure and de
  */
 function generateFrameworkPrinciples(context: RuleGenerationContext): string {
     const frameworks = context.techStack.frameworks;
+    const compType = context.projectPractice?.componentPattern?.type;
     let principles = "";
 
     if (frameworks.includes("React")) {
+      const compGuidance = compType === "mixed"
+        ? "Prefer function components + Hooks for **new** code; do not convert existing class components"
+        : "Use function components and Hooks; avoid class components";
       principles += `- **React**: 
-  - Use function components and Hooks; avoid class components
+  - ${compGuidance}
   - Keep components focused on a single responsibility
   - Use \`useMemo\` and \`useCallback\` judiciously for performance
-  - Use TypeScript for type checking
 `;
     }
     if (frameworks.includes("Vue")) {
@@ -108,7 +116,6 @@ function generateFrameworkPrinciples(context: RuleGenerationContext): string {
   - Use Composition API (Vue 3)
   - Keep component templates concise
   - Extract complex logic into composables
-  - Use TypeScript for stronger type safety
 `;
     }
     if (frameworks.includes("Next.js")) {
@@ -116,26 +123,23 @@ function generateFrameworkPrinciples(context: RuleGenerationContext): string {
   - Prefer App Router when the project uses it
   - Fetch data in Server Components
   - Use \`next/image\` for image optimization
-  - Configure appropriate metadata for SEO
   - Minimize \`use client\`; prefer Server Components
 `;
     }
     if (frameworks.includes("Angular")) {
       principles += `- **Angular**: 
-  - Use components and a modular architecture
-  - Follow the Angular style guide
-  - Use TypeScript and dependency injection
+  - Follow the Angular style guide and modular architecture
+  - Use dependency injection for services
 `;
     }
     if (frameworks.includes("Svelte")) {
       principles += `- **Svelte**: 
   - Leverage Svelte's compile-time optimizations
   - Use reactive declarations and statements
-  - Keep components concise and efficient
 `;
     }
 
-    return principles || "- Follow the framework's official best practices";
+    return principles || "";
 }
 
 /**
@@ -146,6 +150,25 @@ function isAnyAllowed(context: RuleGenerationContext): boolean {
     const rule = context.projectConfig?.eslint?.rules?.["@typescript-eslint/no-explicit-any"];
     if (rule === "off" || rule === 0) return true;
     if (Array.isArray(rule) && (rule[0] === "off" || rule[0] === 0)) return true;
+    return false;
+}
+
+/**
+ * Projects whose primary output IS documentation (e.g., doc sites, knowledge bases)
+ * should NOT be told to never generate markdown.
+ */
+function isDocumentationProject(context: RuleGenerationContext): boolean {
+    const deps = context.techStack.dependencies;
+    const hasDocFramework = deps.some((d) =>
+      ["docusaurus", "vitepress", "nextra", "@docusaurus/core", "gitbook", "mkdocs", "sphinx"].some(
+        (lib) => d.name.toLowerCase() === lib
+      )
+    );
+    if (hasDocFramework) return true;
+
+    const primaryLower = context.techStack.primary.map((p) => p.toLowerCase());
+    if (primaryLower.some((p) => p.includes("documentation") || p.includes("docs"))) return true;
+
     return false;
 }
 
@@ -166,5 +189,84 @@ function hasArchitectureValue(context: RuleGenerationContext): boolean {
       context.modules.length > 1 ||
       meaningfulDirCategories.size >= 3
     );
+}
+
+function generateTaskWorkflow(context: RuleGenerationContext): string {
+    const customToolsHint = hasCustomTools(context)
+      ? "- Reuse existing hooks/utils from @custom-tools.mdc\n"
+      : "";
+    const featureRecipeHint = isFrontendProject(context)
+      ? "- For full feature work, follow @feature-recipe.mdc step order\n"
+      : "";
+
+    return `## Task Workflow
+
+### Before Coding
+- Search for similar implementations in the codebase before writing new code
+- Read adjacent files in the same module to understand local patterns
+- Check @project-structure.mdc for correct file placement
+${featureRecipeHint}
+### Modifying Existing Features
+- Read the module's existing tests, types, and store/hooks before editing
+- Identify the existing pattern (hook style, API convention, component pattern) and **match it**
+- Update or add tests for changed behavior — never remove existing assertions without justification
+- When the module uses a legacy pattern, follow that pattern locally; propose migration in a separate task
+
+### During Coding
+- Match the style of surrounding code (imports, naming, error handling)
+- Handle loading, empty, and error states for async operations
+${customToolsHint}
+### After Coding
+- Run verification commands (lint, typecheck, tests)
+- Review all modified files for unintended changes
+- Summarize: changed files, assumptions made, risks or unresolved items
+
+`;
+}
+
+function generatePriorityRules(): string {
+    return `## Priority and Conflict Resolution
+
+When rules conflict, follow this precedence:
+1. Hard Constraints in this file (highest priority)
+2. Project-specific patterns in existing code
+3. Rule-file-specific guidelines (@code-style, @architecture, etc.)
+4. Framework official best practices (lowest priority)
+
+### Common Conflicts
+- **Shared vs feature-local**: Default to feature-local; promote to shared only when 3+ features use it
+- **Existing pattern vs best practice**: Follow the existing pattern in the same module; propose improvements in PR description, not inline
+- **Legacy code**: Do not refactor surrounding legacy code unless the task explicitly requires it
+
+`;
+}
+
+function generateCompletionChecklist(context: RuleGenerationContext): string {
+    const cmds = context.projectConfig?.commands;
+    const testFramework = detectTestFramework(context);
+    const items: string[] = [];
+
+    if (cmds?.lintFix) {
+      items.push(`- [ ] Run \`${cmds.lintFix}\` — no new warnings`);
+    } else if (cmds?.lint) {
+      items.push(`- [ ] Run \`${cmds.lint}\` — no new warnings`);
+    }
+    if (cmds?.typeCheck) {
+      items.push(`- [ ] Run \`${cmds.typeCheck}\` — no errors`);
+    }
+    if (cmds?.test) {
+      items.push(`- [ ] Run \`${cmds.test}\` — all tests pass`);
+    } else if (testFramework) {
+      items.push(`- [ ] Run the project's test command — all tests pass`);
+    }
+    items.push("- [ ] No unintended file changes outside the task scope");
+    items.push("- [ ] Summarize: files changed, assumptions, and open questions");
+
+    return `## Completion Checklist
+
+Before considering a task done:
+${items.join("\n")}
+
+`;
 }
 

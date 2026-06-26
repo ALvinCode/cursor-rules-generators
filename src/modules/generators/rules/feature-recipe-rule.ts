@@ -10,6 +10,7 @@ import { CursorRule, RuleGenerationContext } from "../../../types.js";
 import { buildRuleMetadata } from "./rule-metadata.js";
 import { detectMobXPattern } from "./state-management-rule.js";
 import { generateApiConventionsContent } from "./api-patterns-rule.js";
+import { detectTestFramework } from "./rule-helpers.js";
 
 /**
  * Feature Recipe — 端到端功能创建指南
@@ -193,11 +194,12 @@ export const ${sampleBizLower}Store = new ${sampleBizName}Store();
 ### 3. Store（Redux Toolkit）
 
 \`\`\`${ext}
-// ${storeDir}/featureSlice.${ext}
+// ${storeDir}/${sampleBizLower}Slice.${ext}
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
+import { fetch${sampleBizName}List } from "${apiAlias}/${sampleBizFile}";
 
-export const load${sampleBizName}s = createAsyncThunk("${sampleBizLower}/load", fetch${sampleBizName}List);
+export const load${sampleBizName}s = createAsyncThunk("${sampleBizLower}/load", () => fetch${sampleBizName}List({ page: 1, pageSize: 20 }));
 
 const ${sampleBizLower}Slice = createSlice({
   name: "${sampleBizLower}",
@@ -220,6 +222,7 @@ export default ${sampleBizLower}Slice.reducer;
 // ${storeDir}/${sampleBizLower}Store.${ext}
 import { create } from "zustand";
 import type { ${sampleBizName}Item } from "${typeAlias}/${sampleBizFile}";
+import { fetch${sampleBizName}List } from "${apiAlias}/${sampleBizFile}";
 
 interface ${sampleBizName}Store {
   items: ${sampleBizName}Item[];
@@ -246,6 +249,34 @@ export const use${sampleBizName}Store = create<${sampleBizName}Store>((set) => (
     const apiConventions = (hasApiClient || hasAxiosDep)
       ? await generateApiConventionsContent(context)
       : "";
+
+    const hookStep = generateHookStepTemplate({
+      ext,
+      hookDir,
+      sampleBizName,
+      sampleBizFile,
+      sampleBizLower,
+      typeAlias,
+      apiAlias,
+      hasMobX: !!hasMobX,
+      hasRedux: !!hasRedux,
+      hasZustand: !!hasZustand,
+      storeDir,
+      isTS,
+    });
+
+    const componentStep = generateComponentStepTemplate({
+      extx,
+      pageDir,
+      sampleBizName,
+      sampleBizLower,
+      hasMobX: !!hasMobX,
+      hasRedux: !!hasRedux,
+      hasZustand: !!hasZustand,
+      hasAntd: (context.uiLibraries?.active ?? []).some((l) => l.name === "Ant Design"),
+    });
+
+    const verificationSection = generateFeatureVerificationSection(context);
 
     const content = metadata + `
 # End-to-End Feature Creation Guide
@@ -283,28 +314,8 @@ export ${isTS ? "const" : "async function"} fetch${sampleBizName}List${isTS ? " 
 }${isTS ? ";" : ""}
 \`\`\`
 ${storeStep}
-### ${stateLib ? "4" : "3"}. Reusable Hook (Optional)
-
-\`\`\`${ext}
-// ${hookDir}/use${sampleBizName}.${ext}
-export function use${sampleBizName}(id: string) {
-  // Encapsulate data fetching, loading state, and error handling
-  // Components call this directly; don't duplicate fetch logic
-}
-\`\`\`
-
-### ${stateLib ? "5" : "4"}. Page Component
-
-\`\`\`${extx}
-// ${pageDir}/${sampleBizName}List/${sampleBizName}List.${extx}
-// Rendering only; business logic lives in Hook / Store
-export function ${sampleBizName}List() {
-  // 1. Get data from store/hook
-  // 2. Handle loading / error states
-  // 3. Render the list
-}
-\`\`\`
-
+${hookStep}
+${componentStep}
 ### ${stateLib ? "6" : "5"}. Route Registration
 
 ${(() => {
@@ -332,10 +343,11 @@ After adding a feature, confirm the following files were created/updated:
 
 - [ ] \`${typeDir}/${sampleBizFile}.${ext}\` — Type definitions
 - [ ] \`${apiDir}/${sampleBizFile}.${ext}\` — API functions
-${stateLib ? `- [ ] \`${storeDir}/${sampleBizFile}Store.${ext}\` — Store\n` : ""}- [ ] \`${hookDir}/use${sampleBizName}.${ext}\` — Data hook (optional)
-- [ ] \`${pageDir}/${sampleBizName}List/\` — Page component
+${stateLib ? (hasRedux ? `- [ ] \`${storeDir}/${sampleBizLower}Slice.${ext}\` — Redux slice\n` : `- [ ] \`${storeDir}/${sampleBizLower}Store.${ext}\` — Store\n`) : ""}- [ ] \`${hookDir}/use${sampleBizName}List.${ext}\` — Data hook (optional)
+- [ ] \`${pageDir}/${sampleBizName}List/${sampleBizName}List.${extx}\` — Page component
 - [ ] Route config updated
 
+${verificationSection}
 ---
 
 *Follow this pattern for project consistency. See @project-structure.mdc for actual directory locations.*
@@ -350,4 +362,219 @@ ${stateLib ? `- [ ] \`${storeDir}/${sampleBizFile}Store.${ext}\` — Store\n` : 
       type: "guideline",
       depends: ["global-rules", "project-structure", "architecture"],
     };
+}
+
+interface HookTemplateParams {
+  ext: string;
+  hookDir: string;
+  sampleBizName: string;
+  sampleBizFile: string;
+  sampleBizLower: string;
+  typeAlias: string;
+  apiAlias: string;
+  hasMobX: boolean;
+  hasRedux: boolean;
+  hasZustand: boolean;
+  storeDir: string;
+  isTS: boolean;
+}
+
+function generateHookStepTemplate(params: HookTemplateParams): string {
+  const {
+    ext, hookDir, sampleBizName, sampleBizFile, sampleBizLower,
+    typeAlias, apiAlias, hasMobX, hasRedux, hasZustand, storeDir, isTS,
+  } = params;
+  const stepNum = hasMobX || hasRedux || hasZustand ? "4" : "3";
+
+  let body = "";
+  if (hasMobX) {
+    body = `import { useEffect } from "react";
+import { ${sampleBizLower}Store } from "@/${storeDir.replace(/^src\//, "")}/${sampleBizLower}Store";
+
+export function use${sampleBizName}List() {
+  useEffect(() => {
+    ${sampleBizLower}Store.fetchItems();
+  }, []);
+
+  return {
+    items: ${sampleBizLower}Store.items,
+    loading: ${sampleBizLower}Store.loading,
+    error: ${sampleBizLower}Store.error,
+  };
+}`;
+  } else if (hasZustand) {
+    body = `import { useEffect } from "react";
+import { use${sampleBizName}Store } from "@/${storeDir.replace(/^src\//, "")}/${sampleBizLower}Store";
+
+export function use${sampleBizName}List() {
+  const { items, loading, fetchItems } = use${sampleBizName}Store();
+
+  useEffect(() => {
+    void fetchItems();
+  }, [fetchItems]);
+
+  return { items, loading, error: null };
+}`;
+  } else if (hasRedux) {
+    body = `import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { load${sampleBizName}s } from "@/${storeDir.replace(/^src\//, "")}/${sampleBizLower}Slice";
+
+export function use${sampleBizName}List() {
+  const dispatch = useDispatch();
+  const { items, loading, error } = useSelector((state: { ${sampleBizLower}: { items: unknown[]; loading: boolean; error: string | null } }) => state.${sampleBizLower});
+
+  useEffect(() => {
+    dispatch(load${sampleBizName}s());
+  }, [dispatch]);
+
+  return { items, loading, error };
+}`;
+  } else {
+    body = `import { useEffect, useState } from "react";
+import type { ${sampleBizName}Item, ${sampleBizName}ListParams } from "${typeAlias}/${sampleBizFile}";
+import { fetch${sampleBizName}List } from "${apiAlias}/${sampleBizFile}";
+
+export function use${sampleBizName}List(params${isTS ? `: ${sampleBizName}ListParams` : ""}) {
+  const [items, setItems] = useState${isTS ? `<${sampleBizName}Item[]>` : ""}([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState${isTS ? "<string | null>" : ""}(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch${sampleBizName}List(params)
+      .then((data) => {
+        if (!cancelled) setItems(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.page, params.pageSize]);
+
+  return { items, loading, error };
+}`;
+  }
+
+  return `
+### ${stepNum}. Reusable Hook (Optional)
+
+\`\`\`${ext}
+// ${hookDir}/use${sampleBizName}List.${ext}
+${body}
+\`\`\`
+`;
+}
+
+interface ComponentTemplateParams {
+  extx: string;
+  pageDir: string;
+  sampleBizName: string;
+  sampleBizLower: string;
+  hasMobX: boolean;
+  hasRedux: boolean;
+  hasZustand: boolean;
+  hasAntd: boolean;
+}
+
+function generateComponentStepTemplate(params: ComponentTemplateParams): string {
+  const {
+    extx, pageDir, sampleBizName, sampleBizLower,
+    hasMobX, hasRedux, hasZustand, hasAntd,
+  } = params;
+  const stepNum = hasMobX || hasRedux || hasZustand ? "5" : "4";
+  const hookName = `use${sampleBizName}List`;
+
+  const loadingBlock = hasAntd
+    ? `if (loading) return <Spin />;`
+  : `if (loading) return <div>Loading...</div>;`;
+  const errorBlock = hasAntd
+    ? `if (error) return <Alert type="error" message={error} />;`
+    : `if (error) return <div>{error}</div>;`;
+  const emptyBlock = hasAntd
+    ? `if (!items.length) return <Empty />;`
+    : `if (!items.length) return <div>No data</div>;`;
+  const columnsDecl = hasAntd
+    ? `\n  const columns = [{ title: "Name", dataIndex: "name", key: "name" }];\n`
+    : "";
+  const returnJsx = hasAntd
+    ? `return <Table dataSource={items} rowKey="id" columns={columns} />`
+    : `return <ul>{items.map((item) => <li key={item.id}>{item.name}</li>)}</ul>`;
+
+  const antdImports = hasAntd
+    ? `import { Table, Spin, Alert, Empty } from "antd";\n`
+    : "";
+
+  let dataSource = "";
+  if (hasMobX) {
+    dataSource = `import { observer } from "mobx-react-lite";
+import { useEffect } from "react";
+import { ${sampleBizLower}Store } from "@/store/${sampleBizLower}Store";
+${antdImports}
+export const ${sampleBizName}List = observer(() => {
+  const { items, loading, error } = ${sampleBizLower}Store;
+
+  useEffect(() => {
+    ${sampleBizLower}Store.fetchItems();
+  }, []);
+
+  ${loadingBlock}
+  ${errorBlock}
+  ${emptyBlock}
+${columnsDecl}  ${returnJsx};
+});`;
+  } else {
+    dataSource = `import { ${hookName} } from "@/hooks/${hookName}";
+${antdImports}
+export function ${sampleBizName}List() {
+  const { items, loading, error } = ${hookName}({ page: 1, pageSize: 20 });
+
+  ${loadingBlock}
+  ${errorBlock}
+  ${emptyBlock}
+${columnsDecl}  ${returnJsx};
+}`;
+  }
+
+  return `
+### ${stepNum}. Page Component
+
+\`\`\`${extx}
+// ${pageDir}/${sampleBizName}List/${sampleBizName}List.${extx}
+${dataSource}
+\`\`\`
+`;
+}
+
+function generateFeatureVerificationSection(context: RuleGenerationContext): string {
+  const cmds = context.projectConfig?.commands;
+  const testFramework = detectTestFramework(context);
+  const checks: string[] = [
+    "- [ ] All files from the checklist above exist at the expected paths",
+    "- [ ] Route is registered and navigable",
+    "- [ ] Loading, empty, and error states are handled in the page component",
+  ];
+
+  if (cmds?.lintFix || cmds?.lint) {
+    checks.push(`- [ ] Run \`${cmds.lintFix ?? cmds.lint}\` — no new warnings`);
+  }
+  if (cmds?.typeCheck) {
+    checks.push(`- [ ] Run \`${cmds.typeCheck}\` — no errors`);
+  }
+  if (cmds?.test) {
+    checks.push(`- [ ] Run \`${cmds.test}\` — all tests pass`);
+  } else if (testFramework) {
+    checks.push("- [ ] Run the project's test command — all tests pass");
+  }
+
+  return `### Verification
+
+${checks.join("\n")}
+`;
 }

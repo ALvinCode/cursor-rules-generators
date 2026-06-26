@@ -1010,7 +1010,62 @@ function generateNewFileGuidelines(
       content += `Use aliases instead of relative paths: ${aliases.map(a => `\`${a}\``).join(", ")}\n\n`;
     }
 
+    const protectedNote = detectProtectedDirectories(context);
+    if (protectedNote) {
+      content += protectedNote;
+    }
+
     return content;
+}
+
+const LEGACY_DIR_KEYWORDS = new Set([
+  "legacy", "old", "deprecated", "v1", "v2", "archive", "archived",
+  "compat", "compatibility", "obsolete", "backup",
+]);
+
+const GENERATED_DIR_KEYWORDS = new Set([
+  "generated", "__generated__", "codegen", "proto", "graphql-generated",
+  "openapi-generated", "swagger-generated", "gen", "auto-generated",
+]);
+
+function detectProtectedDirectories(context: RuleGenerationContext): string {
+    const deepAnalysis = context.deepAnalysis ?? [];
+    const legacyDirs: string[] = [];
+    const generatedDirs: string[] = [];
+
+    for (const dir of deepAnalysis) {
+      const dirName = path.basename(dir.path).toLowerCase();
+      if (LEGACY_DIR_KEYWORDS.has(dirName)) {
+        legacyDirs.push(dir.path);
+      }
+      if (GENERATED_DIR_KEYWORDS.has(dirName)) {
+        generatedDirs.push(dir.path);
+      }
+    }
+
+    if (legacyDirs.length === 0 && generatedDirs.length === 0) return "";
+
+    let note = "";
+
+    if (legacyDirs.length > 0) {
+      note += `### Legacy Directories (Read-Only)\n\n`;
+      note += `> Do **not** add new files to these directories. They exist for backward compatibility.\n\n`;
+      for (const d of legacyDirs) {
+        note += `- \`${d}/\`\n`;
+      }
+      note += `\n`;
+    }
+
+    if (generatedDirs.length > 0) {
+      note += `### Generated Directories (Do Not Edit)\n\n`;
+      note += `> These directories contain auto-generated code. Do **not** manually edit files here — they will be overwritten.\n\n`;
+      for (const d of generatedDirs) {
+        note += `- \`${d}/\`\n`;
+      }
+      note += `\n`;
+    }
+
+    return note;
 }
 
 /**
