@@ -5,6 +5,33 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-06-26
+
+### 新增
+
+- ✨ **main-check-rules 对齐**：按 10 维审计标准增强规则生成质量
+  - `global-rules.mdc`：Task Workflow（含 Modifying Existing Features）、Priority and Conflict Resolution、Completion Checklist
+  - `architecture.mdc`：Canonical References（目录内 + 跨目录聚合）、Legacy vs Modern Patterns 边界表
+  - `project-structure.mdc`：Legacy / Generated 目录自动检测与只读警告
+  - `feature-recipe.mdc`：可执行代码模板（Hook / Page Component）、File Checklist、Verification 清单
+- ✨ **规则文件合并优化**：减少生成文件数量，提升单文件信息密度
+  - `error-handling` + `ui-ux` → 合并入 `code-style.mdc`
+  - `api-patterns` → 合并入 `feature-recipe.mdc`
+- ✨ **项目类型识别扩展**：`detectProjectType` 区分 web-frontend / web-backend / mobile 等，状态管理库检测范围扩大
+- ✨ **CLI + Skill 支持**：`cursor-rules-gen` 命令行入口与 `skill/` 目录
+
+### 改进
+
+- ⚡ **Framework Principles 去泛化**：移除 "Use TypeScript" 等低价值条目；mixed 项目条件化 React class/function 指引
+- ⚡ **Hard Constraints 条件化**：`NEVER generate markdown` 仅对非文档项目输出；`any` 约束尊重 ESLint 配置
+- ⚡ **feature-recipe 模板质量**：修复 antd 场景 `return const` 语法错误；统一 Checklist 与模板文件命名；Redux slice 路径对齐
+
+### 修复
+
+- 🐛 规则生成准确性：文件命名约定检测、路由语法版本匹配、MobX 模式检测、API client 广度校验
+- 🐛 Prettier 默认值与 ESLint 配置解析
+- 🐛 移除硬编码模式（useTable、src/views glob、无条件 any 约束）
+
 ## [0.2.7] - 2025-01-07
 
 ### 文档更新
