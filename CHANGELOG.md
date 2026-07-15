@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-07-15
+
+### 改进
+
+- ⚡ **main-check-rules 生成器修复**：修复 generator 与 main-check-rules 的对齐问题
+- ⚡ **规则文件生成优化**：优化 rules file generator 的生成逻辑
+
 ## [0.3.0] - 2026-06-26
 
 ### 新增
